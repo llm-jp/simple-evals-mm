@@ -18,12 +18,7 @@ dependencies = [
     "torch==2.8.0",
     "transformers==4.57.0",
     "flask>=3.1.0",
-    "accelerate>=1.12.0",
-    "flash-attn>=2.8.3",
     "torchvision>=0.23.0",
-    "timm>=1.0.25",
-    "protobuf>=7.34.0",
-    "sentencepiece>=0.2.1",
     "scipy>=1.17.1",
 ]
 
@@ -32,10 +27,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/simple_evals_mm", "llmjpvl"]
+packages = ["src/simple_evals_mm"]
 
-[tool.uv]
-no-build-isolation-package = ["flash-attn"]
 
 [dependency-groups]
 dev = [
