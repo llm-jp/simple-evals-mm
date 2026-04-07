@@ -8,7 +8,7 @@
   &nbsp;|
   <a href="https://arxiv.org/abs/2604.00909" target="_blank">📄 Paper</a>
   &nbsp;|
-  <a href="https://github.com/llm-jp/simple-evals-mm" target="_blank">🧑‍💻 Code</a>
+  <a href="https://speed1313.github.io/posts/simple-evals-mm/" target="_blank">📝 Blog</a>
   &nbsp;|
 
   <br/>
