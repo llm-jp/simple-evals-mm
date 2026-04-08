@@ -135,7 +135,7 @@ This project is released under the MIT license.
   - The evaluation logic for the English tasks was implemented with reference to the evaluation code provided in the InternVL repository.
 
 ## Citation
-If you use simple-evals-mm or JAMMEval in your research, please cite our work.
+If you find simple-evals-mm useful, please consider citing our work and giving the repository a ⭐️ :)
 ```bibtex
 @misc{sugiura2026jammevalrefinedcollectionjapanese,
       title={JAMMEval: A Refined Collection of Japanese Benchmarks for Reliable VLM Evaluation},
