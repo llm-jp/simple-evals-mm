@@ -122,7 +122,7 @@ Some English benchmarks are implemented based on the [code from InternVL](https:
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add custom tasks and samplers.
 
 ## LICENSE
-This project is released under the MIT license.
+This project is released under the Apache 2.0 license.
 
 ## References
 - https://github.com/openai/simple-evals
