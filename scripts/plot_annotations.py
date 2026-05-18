@@ -17,7 +17,7 @@ from simple_evals_mm.viewer.annotations import (
     load_annotations,
 )
 from simple_evals_mm.viewer.result_loader import RunInfo, discover_runs, load_results
-from simple_evals_mm.visualize import EVAL_DISPLAY_NAMES, EVAL_ORDER
+from simple_evals_mm.visualize import EVAL_DISPLAY_NAMES, _eval_sort_key
 
 # Publication-quality defaults
 plt.rcParams["font.size"] = 12
@@ -84,8 +84,7 @@ def plot_annotations(
     if eval_filter:
         eval_names_ordered = [e for e in eval_filter if e in latest]
     else:
-        _order_map = {name: i for i, name in enumerate(EVAL_ORDER)}
-        eval_names_ordered = sorted(latest, key=lambda e: (_order_map.get(e, len(EVAL_ORDER)), e))
+        eval_names_ordered = sorted(latest, key=_eval_sort_key)
 
     # Collect annotation stats, error counts, and total example counts per eval
     eval_data: dict[str, tuple[dict[str, int], int, int]] = {}
