@@ -13,6 +13,14 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 import numpy as np
 
+from simple_evals_mm.visualize import (
+    EVAL_DISPLAY_NAMES,
+    _sort_key,
+    deduplicate_summaries,
+    get_model_series_label,
+    load_summaries,
+)
+
 # Use a Japanese-capable font (macOS: Hiragino Sans, fallback to sans-serif)
 matplotlib.rcParams["font.family"] = ["Hiragino Sans", "Hiragino Maru Gothic Pro", "sans-serif"]
 matplotlib.rcParams["pdf.fonttype"] = 42  # TrueType embedding for PDF CJK support
@@ -32,16 +40,6 @@ PASTEL_COLORS = [
     "#D090A8",  # soft pink
     "#A890D8",  # soft violet
 ]
-
-from simple_evals_mm.visualize import (
-    EVAL_DISPLAY_NAMES,
-    MODEL_COLORS,
-    _sort_key,
-    deduplicate_summaries,
-    get_model_series_label,
-    load_summaries,
-)
-
 
 def _sort_key_asc(model_name: str) -> tuple[float, str]:
     """Sort key for models: by parameter size ascending (bigger = right)."""
@@ -153,7 +151,6 @@ def plot_compact(
 
     model_names = sorted(set(s["model_name"] for s in summaries), key=_sort_key_asc)
     n_models = len(model_names)
-    n_evals = len(eval_names)
 
     # Build lookup
     lookup: dict[tuple[str, str], dict] = {}
@@ -251,7 +248,7 @@ def plot_compact(
                 stds_vals.append(0)
 
         yerr = [stds_vals, stds_vals] if show_std and any(v > 0 for v in stds_vals) else None
-        bars = ax.bar(
+        ax.bar(
             x + offsets[i],
             scores,
             width=bar_width,
