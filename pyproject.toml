@@ -20,6 +20,7 @@ dependencies = [
     "flask>=3.1.0",
     "torchvision>=0.23.0",
     "scipy>=1.17.1",
+    "latex2sympy2_extended>=1.11.0",
 ]
 
 [build-system]
