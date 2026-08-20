@@ -1,42 +1,43 @@
-"""Unit tests for CoTSampler: prompt injection and answer extraction."""
+"""Unit tests for CoTSampler: reasoning/answer splitting (no extraction),
+budget raising, and delegation."""
 
-import pytest
-
-from simple_evals_mm.sampler.cot_sampler import COT_SUFFIX, CoTSampler
+from simple_evals_mm.common import SamplerResponse
+from simple_evals_mm.sampler.cot_sampler import CoTSampler
 
 
 class FakeSampler:
     """Minimal stub that records pack_message calls and returns canned responses."""
 
+    max_new_tokens = 1024
+    temperature = 0.0
+
     def __init__(self, response=""):
+        if isinstance(response, str):
+            response = SamplerResponse(response_text=response, raw=response)
         self.response = response
         self.last_pack_args = None
-        self.last_call_args = None
+        self.last_message_list = None
 
     def pack_message(self, images=None, instruction="", role="user"):
         self.last_pack_args = {"images": images, "instruction": instruction, "role": role}
         return {"role": role, "content": instruction}
 
-    def __call__(self, message_list, max_new_tokens=1024, temperature=0.0):
-        self.last_call_args = {
-            "message_list": message_list,
-            "max_new_tokens": max_new_tokens,
-            "temperature": temperature,
-        }
+    def __call__(self, message_list):
+        self.last_message_list = message_list
         return self.response
 
 
 # ---------------------------------------------------------------------------
-# Prompt injection tests
+# pack_message delegation tests
 # ---------------------------------------------------------------------------
 
 
 class TestPackMessage:
-    def test_appends_cot_suffix(self):
+    def test_delegates_instruction(self):
         fake = FakeSampler()
         cot = CoTSampler(fake)
         cot.pack_message(instruction="What is 2+2?")
-        assert fake.last_pack_args["instruction"] == "What is 2+2?" + COT_SUFFIX
+        assert fake.last_pack_args["instruction"] == "What is 2+2?"
 
     def test_preserves_images(self):
         fake = FakeSampler()
@@ -53,60 +54,87 @@ class TestPackMessage:
 
 
 # ---------------------------------------------------------------------------
-# Answer extraction tests
+# Reasoning/answer splitting (NOT extraction: the Answer: line is kept)
 # ---------------------------------------------------------------------------
 
 
-class TestAnswerExtraction:
-    def test_extracts_last_answer_line(self):
+class TestReasoningSplit:
+    def test_splits_at_last_answer_line(self):
         fake = FakeSampler(response="Let me think...\nAnswer: B\nAnswer: C")
-        cot = CoTSampler(fake)
-        result = cot([])
-        assert result == "C"
+        out = CoTSampler(fake)([])
+        assert out.response_text == "Answer: C"
+        assert out.reasoning == "Let me think...\nAnswer: B"
+        assert out.raw == "Let me think...\nAnswer: B\nAnswer: C"
 
-    def test_single_answer_line(self):
+    def test_answer_line_kept_for_task_extraction(self):
         fake = FakeSampler(response="Step 1... Step 2...\nAnswer: 42")
-        cot = CoTSampler(fake)
-        assert cot([]) == "42"
-
-    def test_strips_whitespace(self):
-        fake = FakeSampler(response="Thinking...\nAnswer:   hello world   ")
-        cot = CoTSampler(fake)
-        assert cot([]) == "hello world"
+        out = CoTSampler(fake)([])
+        assert out.response_text == "Answer: 42"
+        assert out.reasoning == "Step 1... Step 2..."
 
     def test_fullwidth_colon(self):
         fake = FakeSampler(response="考えます...\nAnswer： A")
-        cot = CoTSampler(fake)
-        assert cot([]) == "A"
+        out = CoTSampler(fake)([])
+        assert out.response_text == "Answer： A"
+        assert out.reasoning == "考えます..."
 
-    def test_fallback_when_no_answer_line(self):
-        fake = FakeSampler(response="I don't know the answer.")
-        cot = CoTSampler(fake)
-        assert cot([]) == "I don't know the answer."
+    def test_no_answer_line_passthrough(self):
+        fake = FakeSampler(response="I don't know the answer to this.")
+        out = CoTSampler(fake)([])
+        assert out.response_text == "I don't know the answer to this."
+        assert out.reasoning == ""
 
-    def test_empty_response_fallback(self):
+    def test_empty_response_passthrough(self):
         fake = FakeSampler(response="")
-        cot = CoTSampler(fake)
-        assert cot([]) == ""
+        out = CoTSampler(fake)([])
+        assert out.response_text == ""
+
+    def test_thinking_model_passthrough(self):
+        # Inner sampler already separated the reasoning: do not re-split.
+        inner = SamplerResponse(
+            response_text="short answer with Answer: X inside",
+            reasoning="native thinking trace",
+            raw="<think>native thinking trace</think>short answer",
+            input_tokens=100,
+            output_tokens=50,
+            reasoning_tokens=30,
+            finish_reason="stop",
+        )
+        out = CoTSampler(FakeSampler(response=inner))([])
+        assert out is inner
+
+    def test_metadata_preserved_on_split(self):
+        inner = SamplerResponse(
+            response_text="thinking...\nAnswer: X",
+            raw="thinking...\nAnswer: X",
+            input_tokens=100,
+            output_tokens=50,
+            finish_reason="stop",
+        )
+        out = CoTSampler(FakeSampler(response=inner))([])
+        assert out.input_tokens == 100 and out.output_tokens == 50
+        assert out.finish_reason == "stop"
 
 
 # ---------------------------------------------------------------------------
-# max_new_tokens bump
+# max_new_tokens budget raising (applied to the inner sampler at wrap time)
 # ---------------------------------------------------------------------------
 
 
-class TestMaxNewTokens:
-    def test_bumps_small_value(self):
+class TestBudgetRaise:
+    def test_raises_small_budget(self):
         fake = FakeSampler(response="Answer: ok")
+        fake.max_new_tokens = 512
         cot = CoTSampler(fake)
-        cot([], max_new_tokens=512)
-        assert fake.last_call_args["max_new_tokens"] == 2048
+        assert fake.max_new_tokens == 8192
+        assert cot.max_new_tokens == 8192
 
-    def test_keeps_large_value(self):
+    def test_keeps_large_budget(self):
         fake = FakeSampler(response="Answer: ok")
+        fake.max_new_tokens = 16384
         cot = CoTSampler(fake)
-        cot([], max_new_tokens=4096)
-        assert fake.last_call_args["max_new_tokens"] == 4096
+        assert fake.max_new_tokens == 16384
+        assert cot.max_new_tokens == 16384
 
 
 # ---------------------------------------------------------------------------
@@ -125,3 +153,9 @@ class TestDelegation:
         fake = FakeSampler()
         cot = CoTSampler(fake)
         assert cot.is_local is False
+
+    def test_temperature_delegates(self):
+        fake = FakeSampler()
+        fake.temperature = 1.0
+        cot = CoTSampler(fake)
+        assert cot.temperature == 1.0
