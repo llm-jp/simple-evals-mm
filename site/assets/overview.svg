@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 256" width="1000" height="256" role="img" aria-label="simple-evals-mm: a Sampler (any model behind one interface) times a Task (30+ Japanese and English vision and text benchmarks) gives a Run: reproducible results with the frozen config, answers, score, cost and output tokens">
+  <!-- Icons: Lucide (https://lucide.dev), ISC License, Copyright (c) Lucide Icons and Contributors. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies. THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
+  <style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif; } .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }</style>
+  <rect width="1000" height="256" fill="#ffffff"/>
+  <text class="mono" x="12" y="28" font-size="18" font-weight="700" fill="#111111">simple-evals-mm</text>
+  <text x="12" y="50" font-size="12.5" fill="#6f6e69">A lightweight, extensible evaluation framework for vision-language models</text>
+  <g>
+    <rect x="12" y="66" width="296" height="178" rx="16" fill="#eef4ff" stroke="#cfdcf5"/>
+    <g transform="translate(32 84) scale(1.75)" fill="none" stroke="#2a5db0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2" /> <rect width="20" height="8" x="2" y="14" rx="2" ry="2" /> <line x1="6" x2="6.01" y1="6" y2="6" /> <line x1="6" x2="6.01" y1="18" y2="18" /></g>
+    <text x="90" y="100" font-size="11" font-weight="700" letter-spacing="0.12em" fill="#2a5db0">SAMPLER</text>
+    <text x="90" y="124" font-size="19" font-weight="700" fill="#111111" letter-spacing="-0.01em">Any model</text>
+    <text x="32" y="156" font-size="12.5" fill="#5a5955">API and local models behind one interface</text>
+      <rect x="32" y="172" width="44" height="24" rx="12" fill="#ffffff" stroke="#cfdcf5"/><text x="54" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2a5db0">API</text>
+      <rect x="82" y="172" width="96" height="24" rx="12" fill="#ffffff" stroke="#cfdcf5"/><text x="130" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2a5db0">OpenRouter</text>
+      <rect x="184" y="172" width="66" height="24" rx="12" fill="#ffffff" stroke="#cfdcf5"/><text x="217" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2a5db0">SGLang</text>
+      <rect x="32" y="202" width="110" height="24" rx="12" fill="#ffffff" stroke="#cfdcf5"/><text x="87" y="218" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2a5db0">Hugging Face</text>
+  </g>
+  <g>
+    <rect x="344" y="66" width="296" height="178" rx="16" fill="#f3eeff" stroke="#ded1f7"/>
+    <g transform="translate(364 84) scale(1.75)" fill="none" stroke="#6a46c2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16" /> <path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2" /> <circle cx="13" cy="7" r="1" fill="currentColor" /> <rect x="8" y="2" width="14" height="14" rx="2" /></g>
+    <text x="422" y="100" font-size="11" font-weight="700" letter-spacing="0.12em" fill="#6a46c2">TASK</text>
+    <text x="422" y="124" font-size="19" font-weight="700" fill="#111111" letter-spacing="-0.01em">30+ tasks · JA / EN</text>
+    <text x="364" y="156" font-size="12.5" fill="#5a5955">Vision and text benchmarks</text>
+      <rect x="364" y="172" width="44" height="24" rx="12" fill="#ffffff" stroke="#ded1f7"/><text x="386" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#6a46c2">VQA</text>
+      <rect x="414" y="172" width="81" height="24" rx="12" fill="#ffffff" stroke="#ded1f7"/><text x="454" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#6a46c2">Document</text>
+      <rect x="501" y="172" width="59" height="24" rx="12" fill="#ffffff" stroke="#ded1f7"/><text x="530" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#6a46c2">Chart</text>
+      <rect x="566" y="172" width="44" height="24" rx="12" fill="#ffffff" stroke="#ded1f7"/><text x="588" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#6a46c2">OCR</text>
+      <rect x="364" y="202" width="51" height="24" rx="12" fill="#ffffff" stroke="#ded1f7"/><text x="390" y="218" text-anchor="middle" font-size="11.5" font-weight="600" fill="#6a46c2">Math</text>
+      <rect x="421" y="202" width="88" height="24" rx="12" fill="#ffffff" stroke="#ded1f7"/><text x="465" y="218" text-anchor="middle" font-size="11.5" font-weight="600" fill="#6a46c2">Text-only</text>
+  </g>
+  <g>
+    <rect x="676" y="66" width="312" height="178" rx="16" fill="#fff7ee" stroke="#f3d8b8"/>
+    <g transform="translate(696 84) scale(1.75)" fill="none" stroke="#b35a12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16" /> <path d="M18 17V9" /> <path d="M13 17V5" /> <path d="M8 17v-3" /></g>
+    <text x="754" y="100" font-size="11" font-weight="700" letter-spacing="0.12em" fill="#b35a12">RUN</text>
+    <text x="754" y="124" font-size="19" font-weight="700" fill="#111111" letter-spacing="-0.01em">Reproducible results</text>
+    <text x="696" y="156" font-size="12.5" fill="#5a5955">One run = one frozen configuration</text>
+      <rect x="696" y="172" width="66" height="24" rx="12" fill="#ffffff" stroke="#f3d8b8"/><text x="729" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#b35a12">config</text>
+      <rect x="768" y="172" width="73" height="24" rx="12" fill="#ffffff" stroke="#f3d8b8"/><text x="804" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#b35a12">answers</text>
+      <rect x="847" y="172" width="59" height="24" rx="12" fill="#ffffff" stroke="#f3d8b8"/><text x="876" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#b35a12">score</text>
+      <rect x="912" y="172" width="51" height="24" rx="12" fill="#ffffff" stroke="#f3d8b8"/><text x="938" y="188" text-anchor="middle" font-size="11.5" font-weight="600" fill="#b35a12">cost</text>
+      <rect x="696" y="202" width="118" height="24" rx="12" fill="#ffffff" stroke="#f3d8b8"/><text x="755" y="218" text-anchor="middle" font-size="11.5" font-weight="600" fill="#b35a12">output tokens</text>
+  </g>
+  <text x="326" y="164" text-anchor="middle" font-size="26" fill="#b3b2ad">×</text>
+  <line x1="646" y1="155" x2="668" y2="155" stroke="#b3b2ad" stroke-width="1.8"/><path d="M663 150 L670 155 L663 160" fill="none" stroke="#b3b2ad" stroke-width="1.8"/>
+</svg>
