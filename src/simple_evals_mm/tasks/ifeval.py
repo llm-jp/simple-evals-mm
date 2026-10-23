@@ -104,6 +104,7 @@ def check(
 
 
 class IFEvalEval(Eval):
+    rescore_needs_dataset = True  # rescore looks rows up in self.dataset
     prompt_suffix = ""
 
     def __init__(
