@@ -28,6 +28,10 @@ def bwrap_cmd(python: str, workdir: str, argv: list[str]) -> list[str] | None:
     bw = shutil.which("bwrap")
     if not bw:
         return None
+    # Normalise ".." / relative parts (keep symlinks: the venv path is what selects the venv's site-packages).
+    # A path like <repo>/../other/.venv/bin/python does not exist inside the sandbox, which binds only the
+    # resolved directories (every program then failed and scored 0).
+    python = os.path.abspath(python)
     prefix = os.path.dirname(os.path.dirname(os.path.realpath(python)))
     venv = (
         sys.prefix if sys.prefix != sys.base_prefix else None
