@@ -1,8 +1,8 @@
 """Minimal OpenAI-compatible server for in-process HF samplers (data parallel).
 
 Serves models that sglang/vLLM cannot (custom remote-code archs: llm-jp-VL
-checkpoints, sarashina) behind the same interface as an sglang server, so
-the eval client is the unchanged SGLangSampler:
+checkpoints, sarashina) behind the same interface as an sglang
+server, so the eval client is the unchanged SGLangSampler:
 
     python -m simple_evals_mm.serving.hf_server \\
         --model llm-jp/llm-jp-4-vl-9b-beta --dp-size 8 --port 30050
@@ -51,6 +51,10 @@ MAX_CONSECUTIVE_FAILURES = 3
 MONITOR_INTERVAL_S = 5
 RESPAWN_DELAY_S = 10
 REQUEST_TIMEOUT_S = int(os.environ.get("HF_SERVER_REQUEST_TIMEOUT", "3600"))
+# Requests per generate() call per GPU (1 = old sequential behaviour) and how
+# long a worker waits to fill a batch after the first request arrives.
+BATCH_SIZE = int(os.environ.get("HF_SERVER_BATCH", "8"))
+BATCH_WAIT_S = float(os.environ.get("HF_SERVER_BATCH_WAIT", "0.2"))
 
 
 # ---------------------------------------------------------------------------
@@ -139,11 +143,37 @@ def build_openai_response(resp, model_id: str, req_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _req_key(body: dict):
+    """Requests that can share one generate() call: same decoding params."""
+    ctk = body.get("chat_template_kwargs") or {}
+    return (
+        int(body.get("max_tokens") or 0),
+        float(body["temperature"]) if body.get("temperature") is not None else None,
+        ctk.get("reasoning_effort") or body.get("reasoning_effort"),
+    )
+
+
+def _apply_params(sampler, body: dict):
+    if body.get("max_tokens"):
+        sampler.max_new_tokens = int(body["max_tokens"])
+    if body.get("temperature") is not None:
+        sampler.temperature = float(body["temperature"])
+    # --reasoning-effort from the client (SGLangSampler puts it in
+    # extra_body.chat_template_kwargs or top-level reasoning_effort)
+    effort = (body.get("chat_template_kwargs") or {}).get("reasoning_effort") or body.get(
+        "reasoning_effort"
+    )
+    if effort and hasattr(sampler, "set_reasoning_effort"):
+        sampler.set_reasoning_effort(effort)
+
+
 def worker_main(model_id: str, gpu_id: int, task_q, result_q):
     # Pin the GPU BEFORE anything imports torch; drop SGLANG_BASE_URL so
     # get_sampler resolves the in-process HF sampler, not SGLangSampler.
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     os.environ.pop("SGLANG_BASE_URL", None)
+
+    import queue as _queue
 
     from simple_evals_mm.common import SamplerAPIError
     from simple_evals_mm.sampler.sampler import get_sampler
@@ -151,38 +181,64 @@ def worker_main(model_id: str, gpu_id: int, task_q, result_q):
     sampler = get_sampler(model_id)(model_id=model_id)
     result_q.put(("ready", gpu_id, None))
     consecutive_failures = 0
+    # Batched generation: HF generate() decodes one token per step for the
+    # whole batch at nearly the cost of one sequence (decode is memory-bound),
+    # so grouping up to BATCH_SIZE queued requests with identical decoding
+    # params gives ~BATCH_SIZE x throughput on long (CoT) outputs. Requests
+    # are gathered for at most BATCH_WAIT_S after the first one arrives.
+    can_batch = BATCH_SIZE > 1 and hasattr(sampler, "batch_call")
+
+    def _run(group):
+        """group: list of (req_id, body) sharing _req_key -> list of payloads"""
+        _apply_params(sampler, group[0][1])
+        msgs = [
+            openai_messages_to_sampler_messages(sampler, body.get("messages") or [])
+            for _, body in group
+        ]
+        if len(group) > 1 and can_batch:
+            resps = sampler.batch_call(msgs)
+        else:
+            resps = [sampler(m) for m in msgs]
+        return [
+            {"status": 200, "json": build_openai_response(resp, model_id, req_id)}
+            for (req_id, _), resp in zip(group, resps)
+        ]
 
     while True:
-        req_id, body = task_q.get()
-        result_q.put(("start", gpu_id, req_id))
-        try:
-            if body.get("max_tokens"):
-                sampler.max_new_tokens = int(body["max_tokens"])
-            if body.get("temperature") is not None:
-                sampler.temperature = float(body["temperature"])
-            messages = openai_messages_to_sampler_messages(
-                sampler, body.get("messages") or []
-            )
-            resp = sampler(messages)
-            payload = {
-                "status": 200,
-                "json": build_openai_response(resp, model_id, req_id),
-            }
-            consecutive_failures = 0
-        except (ValueError, KeyError, SamplerAPIError) as e:
-            # Malformed request / deterministic model failure: 400 so the
-            # client records model_failed instead of retrying forever.
-            payload = {"status": 400, "json": {"error": {"message": str(e)}}}
-        except Exception as e:  # noqa: BLE001 — worker must survive & report
-            consecutive_failures += 1
-            payload = {"status": 500, "json": {"error": {"message": str(e)}}}
+        items = [task_q.get()]
+        if can_batch:
+            deadline = time.time() + BATCH_WAIT_S
+            while len(items) < BATCH_SIZE:
+                remaining = deadline - time.time()
+                try:
+                    items.append(task_q.get(timeout=max(remaining, 0.001)))
+                except _queue.Empty:
+                    break
+        for req_id, _ in items:
+            result_q.put(("start", gpu_id, req_id))
+        # group by decoding params (normally a single group)
+        groups: dict = {}
+        for it in items:
+            groups.setdefault(_req_key(it[1]), []).append(it)
+        for group in groups.values():
             try:
-                import torch
+                payloads = _run(group)
+                consecutive_failures = 0
+            except (ValueError, KeyError, SamplerAPIError) as e:
+                # Malformed request / deterministic model failure: 400 so the
+                # client records model_failed instead of retrying forever.
+                payloads = [{"status": 400, "json": {"error": {"message": str(e)}}}] * len(group)
+            except Exception as e:  # noqa: BLE001 — worker must survive & report
+                consecutive_failures += 1
+                payloads = [{"status": 500, "json": {"error": {"message": str(e)}}}] * len(group)
+                try:
+                    import torch
 
-                torch.cuda.empty_cache()
-            except Exception:
-                pass
-        result_q.put(("done", gpu_id, (req_id, payload)))
+                    torch.cuda.empty_cache()
+                except Exception:
+                    pass
+            for (req_id, _), payload in zip(group, payloads):
+                result_q.put(("done", gpu_id, (req_id, payload)))
         if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
             # Likely a poisoned CUDA context: exit and let the monitor
             # respawn a fresh process on this GPU.
@@ -210,7 +266,7 @@ class WorkerPool:
         self.result_q = ctx.Queue()
         self.lock = threading.Lock()
         self.pending: dict = {}  # req_id -> {"event", "payload"}
-        self.inflight: dict = {}  # gpu_id -> req_id
+        self.inflight: dict = {}  # gpu_id -> set of in-flight req_ids (batched)
         self.ready: set = set()
         self.workers: dict = {}  # gpu_id -> Process
         self.shutting_down = False
@@ -237,10 +293,10 @@ class WorkerPool:
                     self.ready.add(gpu)
                     print(f"[front] worker {gpu} ready", flush=True)
                 elif kind == "start":
-                    self.inflight[gpu] = data
+                    self.inflight.setdefault(gpu, set()).add(data)
                 elif kind == "done":
-                    self.inflight.pop(gpu, None)
                     req_id, payload = data
+                    self.inflight.get(gpu, set()).discard(req_id)
                     slot = self.pending.get(req_id)
                     if slot is not None:
                         slot["payload"] = payload
@@ -254,9 +310,11 @@ class WorkerPool:
                     continue
                 with self.lock:
                     self.ready.discard(gpu)
-                    req_id = self.inflight.pop(gpu, None)
-                    slot = self.pending.get(req_id) if req_id else None
-                if slot is not None:
+                    req_ids = self.inflight.pop(gpu, set())
+                    slots = [self.pending.get(r) for r in req_ids]
+                for slot in slots:
+                    if slot is None:
+                        continue
                     slot["payload"] = {
                         "status": 500,
                         "json": {
