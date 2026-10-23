@@ -45,3 +45,7 @@ Sessionx.vim
 
 # run-centric results
 runs/
+
+# campaign launcher records and job logs
+campaigns/submitted/
+logs/
