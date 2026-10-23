@@ -51,7 +51,9 @@ def card(x, y, w, h, fill, border, kcolor, icon, key, title, sub, labels):
 
 def main():
     cw, gap, y, h = 296, 36, 66, 178
-    x1 = 12; x2 = x1 + cw + gap; x3 = x2 + cw + gap
+    x1 = 12
+    x2 = x1 + cw + gap
+    x3 = x2 + cw + gap
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="simple-evals-mm: a Sampler (any model behind one interface) times a Task (30+ Japanese and English vision and text benchmarks) gives a Run: reproducible results with the frozen config, answers, score, cost and output tokens">',
            '  <!-- Icons: Lucide (https://lucide.dev), ISC License, Copyright (c) Lucide Icons and Contributors. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies. THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->',
            '  <style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif; } .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }</style>',
