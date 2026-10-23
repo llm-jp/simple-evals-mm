@@ -228,7 +228,7 @@ runs/<run_id>/<task>/grades.jsonl     audit trail of (re)gradings
 
 ## Leaderboard site
 
-`site/` is a static page with the leaderboard: a score-versus-cost chart, a table, the task list and an overview figure. Open `site/index.html` directly or serve the directory with any static file server. Its numbers come from `site/data.js`, which is built from the leaderboard runs:
+`site/` is a static page with the leaderboard, published to GitHub Pages by `.github/workflows/pages.yml` whenever `site/` changes on main. It shows a score-versus-cost chart, a table, the task list and an overview figure. Open `site/index.html` directly or serve the directory with any static file server. Its numbers come from `site/data.js`, which is built from the leaderboard runs:
 
 ```bash
 uv run python scripts/build_leaderboard.py                 # campaigns/leaderboard.yaml + runs/ -> site/data.js
