@@ -1,7 +1,7 @@
 """Annotation CRUD: load, save, and delete error annotations.
 
 Annotations are stored as JSON files co-located with results:
-  results/{eval}/{model}/annotations_{timestamp}_r{N}.json
+  runs/<run_id>/<task>/annotations_r<k>.json
 
 Format: {"example_id": {"category": "...", "note": "..."}, ...}
 """
@@ -36,9 +36,7 @@ CATEGORY_COLORS: dict[str, str] = {
 
 def _annotations_path(run: RunInfo) -> Path:
     """Derive annotation file path from a run's results file path."""
-    stem = run.results_path.stem  # e.g. "results_20260303_135839_r1"
-    suffix = stem.replace("results_", "annotations_")
-    return run.output_dir / f"{suffix}.json"
+    return run.output_dir / f"annotations_r{run.repeat}.json"
 
 
 def load_annotations(run: RunInfo) -> dict[str, dict]:

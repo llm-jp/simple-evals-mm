@@ -82,8 +82,28 @@ def test_summarize_category_scores_over_repeats():
     assert s["a"]["scores"] == [0.4, 0.6] and s["a"]["num_examples"] == 5
 
 
-def test_rescore_score_path_for_both_layouts():
+def test_rescore_score_path_for():
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
     from rescore import _score_path_for
     assert _score_path_for("runs/x/ai2d/items_r2.jsonl") == "runs/x/ai2d/score_r2.json"
-    assert _score_path_for("results/ai2d/m/results_20260101_000000_r1.jsonl") == "results/ai2d/m/score_20260101_000000_r1.jsonl"
+
+
+def test_viewer_discovers_runs(runs):
+    from pathlib import Path
+
+    from simple_evals_mm.viewer.annotations import load_annotations, save_annotation
+    from simple_evals_mm.viewer.result_loader import get_available_evals, get_available_models, get_runs_for_eval_model
+
+    runs.write_config("r1", _cfg())
+    d = Path(runs.task_dir("r1", "ai2d"))
+    d.mkdir(parents=True)
+    for k in (1, 2):
+        (d / f"items_r{k}.jsonl").write_text(json.dumps({"id": "0", "score": 1.0}) + "\n")
+    (d / "score_r1.json").write_text(json.dumps({"score": 1.0}) + "\n")
+    root = Path(runs.RUNS_DIR)
+    assert get_available_evals(root) == ["ai2d"] and get_available_models(root, "ai2d") == ["r1"]
+    reps = get_runs_for_eval_model(root, "ai2d", "r1")
+    assert [r.repeat for r in reps] == [1, 2] and reps[0].timestamp == "2026-01-01T00:00:00"
+    assert reps[0].score_path is not None and reps[1].score_path is None
+    save_annotation(reps[0], "0", "OCR", "note")
+    assert (d / "annotations_r1.json").exists() and load_annotations(reps[0])["0"]["category"] == "OCR"
