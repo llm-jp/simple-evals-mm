@@ -53,7 +53,6 @@ dev = [
 testpaths = ["tests"]
 markers = [
     "network: tests that require network access (HuggingFace downloads)",
-    "local_data: tests that require local data files",
     "api: tests that require API keys (OpenAI, Gemini, etc.)",
     "local_model: tests that require GPU and local HF models",
 ]
