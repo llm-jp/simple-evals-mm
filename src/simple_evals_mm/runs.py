@@ -241,8 +241,22 @@ def collect_config(args, sampler, tasks: Iterable[str], extra: dict | None = Non
     return cfg
 
 
+def _drop_empty_date(x):
+    """`conversation_start_date: ""` renders no date line, the same prompt as leaving the key out (what runs made
+    before it was always passed recorded), so the two compare equal; a real date still makes the config different."""
+    if isinstance(x, dict):
+        return {k: _drop_empty_date(v) for k, v in x.items() if not (k == "conversation_start_date" and v == "")}
+    return x
+
+
 def _core(cfg: dict) -> dict:
-    return {k: cfg.get(k) for k in CORE_FIELDS}
+    return {k: _drop_empty_date(cfg.get(k)) for k in CORE_FIELDS}
+
+
+def core_diff(old: dict, new: dict) -> dict:
+    """Core fields whose values differ between two run configs: {field: (old, new)}."""
+    a, b = _core(old), _core(new)
+    return {k: (a[k], b[k]) for k in CORE_FIELDS if a[k] != b[k]}
 
 
 def write_config(run_id: str, cfg: dict) -> dict:
@@ -258,8 +272,8 @@ def write_config(run_id: str, cfg: dict) -> dict:
 def _write_config_locked(p: str, run_id: str, cfg: dict) -> dict:
     if os.path.exists(p):
         old = json.load(open(p))
-        if _core(old) != _core(cfg):
-            diff = {k: (old.get(k), cfg.get(k)) for k in CORE_FIELDS if old.get(k) != cfg.get(k)}
+        diff = core_diff(old, cfg)
+        if diff:
             raise RuntimeError(f"run {run_id} already exists with a different config: {json.dumps(diff, default=str)[:800]}")
         old.setdefault("tasks", [])
         old["tasks"] = sorted(set(old["tasks"]) | set(cfg.get("tasks", [])))
