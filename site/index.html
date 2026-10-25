@@ -22,7 +22,7 @@
 <meta name="twitter:description" content="Leaderboard of vision-language models on Japanese and English benchmarks: score, cost and output tokens per question, with the provider and inference settings of every run.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=fc0a0ed9f4">
+<link rel="stylesheet" href="style.css?v=424760dd8f">
 </head>
 <body>
 
@@ -57,18 +57,9 @@
       <div class="meta" id="lb-meta">Loading results…</div>
 
       <div class="controls" role="toolbar" aria-label="Chart options">
-        <div><span class="control-label">Score</span>
+        <div>
           <select class="pick" id="pick-subject" aria-label="Score shown on the chart and in the table"></select></div>
-        <div><span class="control-label">X axis</span>
-          <span class="seg" data-key="x">
-            <button data-v="cost" aria-pressed="true">Cost</button>
-            <button data-v="tok" aria-pressed="false">Output tokens</button>
-          </span>
-          <span class="seg" data-key="scale" style="margin-left:6px">
-            <button data-v="log" aria-pressed="true">Log</button>
-            <button data-v="linear" aria-pressed="false">Linear</button>
-          </span></div>
-        <div class="filter-wrap" data-filter="cfg"><span class="control-label">Filter</span>
+        <div class="filter-wrap" data-filter="cfg">
           <button class="filter-btn" aria-expanded="false">Configs &#9662;</button>
           <div class="panel" hidden>
             <div class="presets">
@@ -88,9 +79,21 @@
           </svg>
           <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
         </div>
-        <div class="legend">
-          <span><i class="ring"></i>Highest effort</span>
-          <span><i class="ring dashed"></i>Lowest effort</span>
+        <div class="chart-foot">
+          <div class="legend">
+            <span><i class="ring"></i>Highest effort</span>
+            <span><i class="ring dashed"></i>Lowest effort</span>
+          </div>
+          <div class="axis-controls" role="toolbar" aria-label="X axis">
+            <span class="seg" data-key="x">
+              <button data-v="cost" aria-pressed="true">Cost</button>
+              <button data-v="tok" aria-pressed="false">Output tokens</button>
+            </span>
+            <span class="seg" data-key="scale">
+              <button data-v="log" aria-pressed="true">Log</button>
+              <button data-v="linear" aria-pressed="false">Linear</button>
+            </span>
+          </div>
         </div>
       </div>
 
