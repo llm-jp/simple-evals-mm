@@ -202,8 +202,7 @@
                   ...MEMBERS.map(t => ({ key: "t:" + t.key, label: t.label }))];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-  const REL = SITE.version ? ` · <a href="https://github.com/llm-jp/simple-evals-mm/releases/tag/v${esc(SITE.version)}" target="_blank" rel="noopener">simple-evals-mm v${esc(SITE.version)}</a>` : "";
-  document.getElementById("lb-meta").innerHTML = `${TASKS.length} tasks${REL} · mean over ${SITE.n_runs} runs · last updated ${esc(D.updated)}`;
+  document.getElementById("lb-meta").innerHTML = `${TASKS.length} tasks · mean over ${SITE.n_runs} runs · last updated ${esc(D.updated)}`;
 
   const state = { view: "best", subject: SCOPES[0].key, x: "cost", scale: "log", sortKey: null, sortDir: -1, cfg: new Set() };
   const effLabel = (m, e) => e === "max" ? m.maxLabel : m.lowLabel;
