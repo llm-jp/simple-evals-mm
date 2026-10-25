@@ -58,7 +58,7 @@
 
       <div class="controls" role="toolbar" aria-label="Chart options">
         <div><span class="control-label">Score</span>
-          <select class="pick" id="pick-subject" aria-label="Score shown on the chart"></select></div>
+          <select class="pick" id="pick-subject" aria-label="Score shown on the chart and in the table"></select></div>
         <div><span class="control-label">X axis</span>
           <span class="seg" data-key="x">
             <button data-v="cost" aria-pressed="true">Cost</button>
@@ -95,8 +95,6 @@
       </div>
 
       <div class="controls table-controls">
-        <div><span class="control-label">Score</span>
-          <select class="pick" id="pick-table" aria-label="Score shown in the table"></select></div>
         <div class="filter-wrap right" data-filter="cfg"><button class="filter-btn" aria-expanded="false">Configs &#9662;</button>
           <div class="panel" hidden>
             <div class="presets">
@@ -201,7 +199,7 @@
   const REL = SITE.version ? ` · <a href="https://github.com/llm-jp/simple-evals-mm/releases/tag/v${esc(SITE.version)}" target="_blank" rel="noopener">simple-evals-mm v${esc(SITE.version)}</a>` : "";
   document.getElementById("lb-meta").innerHTML = `${D.models.length} models · ${TASKS.length} tasks${REL} · mean over ${SITE.n_runs} runs · last updated ${esc(D.updated)} · results on more of the framework's tasks will be added`;
 
-  const state = { subject: SCOPES[0].key, tsubject: SCOPES[0].key, x: "cost", scale: "log", sortKey: null, sortDir: -1, cfg: new Set() };
+  const state = { subject: SCOPES[0].key, x: "cost", scale: "log", sortKey: null, sortDir: -1, cfg: new Set() };
   const effLabel = (m, e) => e === "max" ? m.maxLabel : m.lowLabel;
   const effText = (m, e) => ({ thinking: "thinking enabled", default: "default setting" })[effLabel(m, e)] || effLabel(m, e) + " effort";
   const CFGS = m => [["max", m.maxLabel], ...(m.low ? [["low", m.lowLabel]] : [])];
@@ -211,15 +209,14 @@
   const scopeLabel = () => SCOPES.find(s => s.key === state.subject).label;
 
   // ---- score pulldown + segmented controls ----
-  const pick = document.getElementById("pick-subject"), pickT = document.getElementById("pick-table");
+  const pick = document.getElementById("pick-subject");  // one score for the chart and the table
   const OPTS = SCOPES.map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join("");
-  pick.innerHTML = OPTS; pickT.innerHTML = OPTS;
-  pick.addEventListener("change", () => { state.subject = pick.value; render(); });
-  pickT.addEventListener("change", () => { state.tsubject = pickT.value; state.sortKey = null; renderTable(); });
+  pick.innerHTML = OPTS;
+  pick.addEventListener("change", () => { state.subject = pick.value; state.sortKey = null; render(); });
   function syncSegs() {
     document.querySelectorAll(".seg[data-key]").forEach(seg => seg.querySelectorAll("button").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.v === state[seg.dataset.key]))));
-    pick.value = state.subject; pickT.value = state.tsubject;
+    pick.value = state.subject;
   }
   document.querySelectorAll(".seg[data-key]").forEach(seg => seg.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
@@ -462,8 +459,8 @@
 
   // ---- table: the score chosen in its own pulldown (with its spread over repeats), cost and tokens on that task ----
   const thead = document.querySelector("#lb thead tr");
-  const tScope = () => SCOPES.find(s => s.key === state.tsubject);
-  const tVal = lvl => state.tsubject.startsWith("t:") ? lvl.tasks[state.tsubject.slice(2)] : lvl.benchmarks[state.tsubject.slice(2)];
+  const tScope = () => SCOPES.find(s => s.key === state.subject);
+  const tVal = pickVal;
   const cols = () => [{ key: "name", label: "Model" }, { key: "bar", label: "", cls: "barcol" }, { key: "score", label: tScope().label, cls: "overall" }, { key: "cost", label: "Cost / Q", cls: "sep" }, { key: "tok", label: "Tokens / Q" }];
   thead.addEventListener("click", e => {
     const th = e.target.closest("th"); if (!th) return;
@@ -509,7 +506,7 @@
     if (!state.sortKey || !cs.some(c => c.key === state.sortKey)) { state.sortKey = "score"; state.sortDir = -1; }
     thead.innerHTML = cs.map(c => `<th data-k="${esc(c.key)}" class="${c.key === state.sortKey ? "sorted" : ""} ${c.key === "score" ? "hl" : ""} ${c.cls === "sep" ? "sep" : ""}">${esc(c.label)}</th>`).join("");
     // Overall: only configurations evaluated on every task of the set; the others are listed in the note instead of "-" rows
-    const isTotal = TOTAL.some(b => "b:" + b.key === state.tsubject);
+    const isTotal = TOTAL.some(b => "b:" + b.key === state.subject);
     const all = rowsNow();
     const omitted = isTotal ? all.filter(r => (tVal(r.lvl) || {}).score == null) : [];
     if (omitted.length) document.getElementById("table-note").textContent += ` Not in ${tScope().label} (missing tasks): `
@@ -600,11 +597,10 @@
     else if (k === "off") val_.split(",").forEach(c => state.cfg.delete(c));
     else if (k === "bench") state.subject = "b:" + val_;
     else if (k === "subject") state.subject = SCOPES.some(s => s.key === val_) ? val_ : (TASK_LABEL[val_] ? "t:" + val_ : state.subject);
-    else if (k === "table") state.tsubject = SCOPES.some(x => x.key === val_) ? val_ : state.tsubject;
+    else if (k === "table") state.subject = SCOPES.some(x => x.key === val_) ? val_ : state.subject;  // old links
     else if (k in state && k !== "cfg") state[k] = val_;
   }
   if (!SCOPES.some(s => s.key === state.subject)) state.subject = SCOPES[0].key;
-  if (!SCOPES.some(s => s.key === state.tsubject)) state.tsubject = SCOPES[0].key;
   syncSegs();
   buildPanels();
   renderPanels();
