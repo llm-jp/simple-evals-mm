@@ -117,6 +117,20 @@ def test_rescore_script_reproduces_scores(cli):
     assert os.path.exists(os.path.join(runs.task_dir("r1", "arith"), "grades.jsonl"))
 
 
+def test_rescore_refreshes_failure_counts_in_the_summary(cli):
+    """A generation-only run (--grader-model dummy) used to keep its generation-time grader-failure count in the
+    summary after the real grading."""
+    import rescore
+
+    cli()
+    sp = os.path.join(runs.task_dir("r1", "arith"), "summary.json")
+    s = json.load(open(sp))
+    s["num_grader_failed_per_repeat"], s["total_grader_failed"] = [3, 3], 6  # as left by a dummy-judge generation
+    json.dump(s, open(sp, "w"))
+    rescore.rescore_model_eval("arith", runs.task_dir("r1", "arith"), grader=None, grader_id="none")
+    assert _summary()["num_grader_failed_per_repeat"] == [0, 0] and _summary()["total_grader_failed"] == 0
+
+
 def test_fill_missing_ids_and_merge(cli, tmp_path):
     """A task gained an item after the run: generate only that id under a fill run, merge it in, and re-score."""
     import merge_runs
