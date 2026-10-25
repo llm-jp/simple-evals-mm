@@ -66,8 +66,8 @@ header.site .wrap { display: flex; align-items: center; justify-content: space-b
 .brand { white-space: nowrap; font-weight: 700; font-size: 18px; color: var(--text-primary); letter-spacing: -0.01em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .brand:hover { text-decoration: none; }
 .brand-wrap { display: flex; align-items: center; gap: 12px; }
-.org { color: var(--text-primary); display: inline-flex; }
-.org-mark { display: block; height: 26px; width: 26px; }
+.org { display: inline-flex; }
+.org img { display: block; height: 26px; width: 26px; border-radius: 6px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .divider { width: 1px; height: 20px; background: var(--border); }
 nav.links { display: flex; gap: 6px; }
@@ -251,3 +251,12 @@ dl.settings pre { margin: 2px 0 0; padding: 8px 10px; font-size: 12px; backgroun
   .lc-settings dl.settings { grid-template-columns: 1fr; gap: 2px; }
   .lc-settings dl.settings dd { margin-bottom: 6px; }
 }
+
+/* desktop table: score bar column (0-100%) with a +/- std whisker, like DeepSWE */
+table.lb th.barcol { cursor: default; }
+table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-right: 4px; }
+.sbar { position: relative; height: 10px; background: var(--surface-2); border-radius: 3px; }
+.sbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; opacity: 0.85; }
+.sbar .err { position: absolute; top: 50%; height: 0; border-top: 1px solid var(--text-secondary); }
+.sbar .err::before, .sbar .err::after { content: ""; position: absolute; top: -5px; height: 9px; border-left: 1px solid var(--text-secondary); }
+.sbar .err::before { left: 0; } .sbar .err::after { right: 0; }
