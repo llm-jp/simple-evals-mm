@@ -22,7 +22,7 @@
 <meta name="twitter:description" content="Leaderboard of vision-language models on Japanese and English benchmarks: score, cost and output tokens per question, with the provider and inference settings of every run.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=23b56fde01">
+<link rel="stylesheet" href="style.css?v=fc0a0ed9f4">
 </head>
 <body>
 
@@ -464,10 +464,11 @@
   const thead = document.querySelector("#lb thead tr");
   const tScope = () => SCOPES.find(s => s.key === state.tsubject);
   const tVal = lvl => state.tsubject.startsWith("t:") ? lvl.tasks[state.tsubject.slice(2)] : lvl.benchmarks[state.tsubject.slice(2)];
-  const cols = () => [{ key: "name", label: "Model" }, { key: "score", label: tScope().label, cls: "overall" }, { key: "cost", label: "Cost / Q", cls: "sep" }, { key: "tok", label: "Tokens / Q" }];
+  const cols = () => [{ key: "name", label: "Model" }, { key: "bar", label: "", cls: "barcol" }, { key: "score", label: tScope().label, cls: "overall" }, { key: "cost", label: "Cost / Q", cls: "sep" }, { key: "tok", label: "Tokens / Q" }];
   thead.addEventListener("click", e => {
     const th = e.target.closest("th"); if (!th) return;
     const k = th.dataset.k;
+    if (k === "bar") return;  // the score-bar column is not sortable
     state.sortDir = state.sortKey === k ? -state.sortDir : (["name", "cost", "tok"].includes(k) ? 1 : -1);
     state.sortKey = k; renderTable();
   });
@@ -522,7 +523,10 @@
     for (const r of rows) {
       const tr = document.createElement("tr");
       const d = tVal(r.lvl) || {};
+      const pct = d.score != null ? Math.max(0, Math.min(100, d.score)) : null;
+      const whisk = pct != null && d.std != null ? `<span class="err" style="left:${Math.max(0, pct - d.std)}%;width:${Math.min(100, pct + d.std) - Math.max(0, pct - d.std)}%"></span>` : "";
       tr.innerHTML = `<td><span class="mname">${logoHTML(r.m)}${esc(r.m.name)} <span class="effort-tag">${esc(effLabel(r.m, r.effort))}</span></span></td>`
+        + `<td class="barcol">${pct != null ? `<div class="sbar"><i style="width:${pct}%;background:${nameColor(r.m)}"></i>${whisk}</div>` : ""}</td>`
         + `<td class="hl overall">${d.score != null ? d.score.toFixed(1) : "–"}${d.std != null ? ` <span class="pm">± ${d.std.toFixed(1)}</span>` : ""}${d.n_repeats && d.n_repeats < SITE.n_runs ? ` <span class="pm" title="fewer generations than the other configurations (provider block)">(${d.n_repeats} runs)</span>` : ""}</td>`
         + `<td class="sep">${d.cost != null ? fmtCost(d.cost) : "–"}</td><td>${d.tok != null ? fmtTok(d.tok) : "–"}</td>`;
       const key = r.m.key + "|" + r.effort;
