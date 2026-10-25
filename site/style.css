@@ -66,8 +66,8 @@ header.site .wrap { display: flex; align-items: center; justify-content: space-b
 .brand { white-space: nowrap; font-weight: 700; font-size: 18px; color: var(--text-primary); letter-spacing: -0.01em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .brand:hover { text-decoration: none; }
 .brand-wrap { display: flex; align-items: center; gap: 12px; }
-.org { color: var(--text-primary); display: inline-flex; }
-.org-mark { display: block; height: 26px; width: 26px; }
+.org { display: inline-flex; }
+.org img { display: block; height: 26px; width: 26px; border-radius: 6px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .divider { width: 1px; height: 20px; background: var(--border); }
 nav.links { display: flex; gap: 6px; }
