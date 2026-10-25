@@ -95,6 +95,10 @@
       </div>
 
       <div class="controls table-controls">
+        <span class="seg" data-key="view" title="Best: each model at its higher-scoring effort level on this score">
+          <button data-v="best" aria-pressed="true">Best</button>
+          <button data-v="all" aria-pressed="false">All effort levels</button>
+        </span>
         <div class="filter-wrap right" data-filter="cfg"><button class="filter-btn" aria-expanded="false">Configs &#9662;</button>
           <div class="panel" hidden>
             <div class="presets">
@@ -199,7 +203,7 @@
   const REL = SITE.version ? ` · <a href="https://github.com/llm-jp/simple-evals-mm/releases/tag/v${esc(SITE.version)}" target="_blank" rel="noopener">simple-evals-mm v${esc(SITE.version)}</a>` : "";
   document.getElementById("lb-meta").innerHTML = `${D.models.length} models · ${TASKS.length} tasks${REL} · mean over ${SITE.n_runs} runs · last updated ${esc(D.updated)} · results on more of the framework's tasks will be added`;
 
-  const state = { subject: SCOPES[0].key, x: "cost", scale: "log", sortKey: null, sortDir: -1, cfg: new Set() };
+  const state = { view: "best", subject: SCOPES[0].key, x: "cost", scale: "log", sortKey: null, sortDir: -1, cfg: new Set() };
   const effLabel = (m, e) => e === "max" ? m.maxLabel : m.lowLabel;
   const effText = (m, e) => ({ thinking: "thinking enabled", default: "default setting" })[effLabel(m, e)] || effLabel(m, e) + " effort";
   const CFGS = m => [["max", m.maxLabel], ...(m.low ? [["low", m.lowLabel]] : [])];
@@ -472,8 +476,13 @@
   function rowsNow() {
     const rows = [];
     for (const m of D.models) {
-      if (on(m, "max")) rows.push({ m, effort: "max", lvl: m.max });
-      if (m.low && on(m, "low")) rows.push({ m, effort: "low", lvl: m.low });
+      const lv = [];
+      if (on(m, "max")) lv.push({ m, effort: "max", lvl: m.max });
+      if (m.low && on(m, "low")) lv.push({ m, effort: "low", lvl: m.low });
+      if (state.view === "best" && lv.length > 1) {  // Best: the higher-scoring effort level on the selected score
+        const sc = r => { const d = tVal(r.lvl); return d && d.score != null ? d.score : -Infinity; };
+        rows.push(lv.reduce((a, b) => (sc(b) > sc(a) ? b : a)));
+      } else rows.push(...lv);
     }
     return rows;
   }
@@ -598,6 +607,7 @@
     else if (k === "bench") state.subject = "b:" + val_;
     else if (k === "subject") state.subject = SCOPES.some(s => s.key === val_) ? val_ : (TASK_LABEL[val_] ? "t:" + val_ : state.subject);
     else if (k === "table") state.subject = SCOPES.some(x => x.key === val_) ? val_ : state.subject;  // old links
+    else if (k === "view" && (val_ === "best" || val_ === "all")) state.view = val_;
     else if (k in state && k !== "cfg") state[k] = val_;
   }
   if (!SCOPES.some(s => s.key === state.subject)) state.subject = SCOPES[0].key;
