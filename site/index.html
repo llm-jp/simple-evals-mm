@@ -21,15 +21,15 @@
 <meta name="twitter:title" content="simple-evals-mm leaderboard">
 <meta name="twitter:description" content="Leaderboard of vision-language models on Japanese and English benchmarks: score, cost and output tokens per question, with the provider and inference settings of every run.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png">
-<script>/* saved theme before first paint */ try { const t = localStorage.getItem("theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch (e) {}</script>
-<link rel="stylesheet" href="style.css">
+<script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
+<link rel="stylesheet" href="style.css?v=5aa74a8622">
 </head>
 <body>
 
 <header class="site">
   <div class="wrap">
     <div class="brand-wrap">
-      <a class="org" href="https://llm-jp.nii.ac.jp/en/home-en/" target="_blank" rel="noopener" title="LLM-jp"><img src="assets/llm-jp-logo.png" alt="LLM-jp"></a>
+      <a class="org" href="https://llm-jp.nii.ac.jp/en/home-en/" target="_blank" rel="noopener" title="LLM-jp"><svg class="org-mark" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><rect x="24" y="23" width="148" height="463" rx="10"/><rect x="179" y="23" width="151" height="152" rx="10"/><path d="M181 181h146l-73 100z"/><rect x="179" y="334" width="151" height="152" rx="10"/><rect x="336" y="23" width="149" height="463" rx="10"/></svg><span class="sr-only">LLM-jp</span></a>
       <span class="divider" aria-hidden="true"></span>
       <a class="brand" href="#top">simple-evals-mm</a>
     </div>
@@ -37,9 +37,9 @@
       <a href="#leaderboard">Leaderboard</a>
       <a href="#data">Data</a>
       <a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">Code</a>
-      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch between light and dark theme" title="Light / dark theme">
-        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Theme: system" title="Theme: system">
+        <svg class="ic-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg class="ic-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
       </button>
     </nav>
   </div>
@@ -88,7 +88,6 @@
           </svg>
           <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
         </div>
-        <p class="chart-scroll-hint">Swipe sideways to see the whole chart.</p>
         <div class="legend">
           <span><i class="ring"></i>Highest effort</span>
           <span><i class="ring dashed"></i>Lowest effort</span>
@@ -113,6 +112,7 @@
           <tbody></tbody>
         </table>
       </div>
+      <div class="lb-list" id="lb-list"></div>
       <p class="note" id="table-note"></p>
     </div>
   </section>
@@ -155,16 +155,28 @@
   <div class="wrap">© 2026 <a href="https://llm-jp.nii.ac.jp/en/home-en/" target="_blank" rel="noopener">LLM-jp</a> · Results produced with <a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">simple-evals-mm</a>.</div>
 </footer>
 
-<script src="logos.js"></script>
-<script src="data.js"></script>
+<script src="logos.js?v=80f1c72e09"></script>
+<script src="data.js?v=2120861ab5"></script>
 <script>
 (function () {
-  document.getElementById("theme-toggle").addEventListener("click", () => {
-    const root = document.documentElement;
-    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-    root.dataset.theme = dark ? "light" : "dark";
-    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+  // theme: each click shows the other theme; when that equals the system setting the page follows the system again
+  const themeBtn = document.getElementById("theme-toggle");
+  const sysTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  function showTheme() {
+    const root = document.documentElement, shown = root.dataset.theme || sysTheme();
+    root.dataset.themeShown = shown;
+    const other = shown === "dark" ? "light" : "dark";
+    const label = `Theme: ${shown}${root.dataset.theme ? "" : " (system)"} (click for ${other})`;
+    themeBtn.title = label; themeBtn.setAttribute("aria-label", label);
+  }
+  themeBtn.addEventListener("click", () => {
+    const root = document.documentElement, next = (root.dataset.theme || sysTheme()) === "dark" ? "light" : "dark";
+    if (next === sysTheme()) delete root.dataset.theme; else root.dataset.theme = next;
+    try { root.dataset.theme ? localStorage.setItem("theme", root.dataset.theme) : localStorage.removeItem("theme"); } catch (e) {}
+    showTheme();
   });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", showTheme);
+  showTheme();
   const D = window.LB;
   if (!D || !D.tasks || !D.models) {
     document.getElementById("lb-meta").textContent = "No results yet: site/data.js is missing. Generate it with scripts/build_leaderboard.py after grading finishes.";
@@ -308,11 +320,20 @@
   // ---- chart ----
   const svg = document.getElementById("chart");
   const tip = document.getElementById("tooltip");
-  const W = 960, H = 560, M = { l: 64, r: 28, t: 30, b: 58 };
+  // Chart geometry: wide (desktop) or portrait (phones, like DeepSWE: fits the screen, no sideways scroll).
+  let W = 960, H = 560, M = { l: 64, r: 28, t: 30, b: 58 };
+  const NARROW = matchMedia("(max-width: 760px)");
+  function setDims() {
+    if (NARROW.matches && FS_BASE === 1) { W = 440; H = 540; M = { l: 50, r: 16, t: 40, b: 54 }; FS = 1.25; }
+    else { W = 960; H = 560; M = { l: 64, r: 28, t: 30, b: 58 }; FS = FS_BASE; }
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    document.body.classList.toggle("narrow", NARROW.matches && FS_BASE === 1);
+  }
+  NARROW.addEventListener("change", () => render());
   function logTicks(lo, hi) {
     const out = [];
     for (let p = Math.floor(Math.log10(lo)) - 1; p <= Math.ceil(Math.log10(hi)) + 1; p++)
-      for (const m of [1, 2, 5]) { const v = m * Math.pow(10, p); if (v >= lo && v <= hi) out.push(v); }
+      for (const m of (W < 600 ? [1] : [1, 2, 5])) { const v = m * Math.pow(10, p); if (v >= lo && v <= hi) out.push(v); }  // portrait: one tick per decade
     return out;
   }
   function linTicks(hi) {
@@ -322,11 +343,13 @@
     for (let v = 0; v <= hi + 1e-12; v += step) out.push(+v.toPrecision(6));
     return out;
   }
-  const FS = /(^|[#&])thumb=1(&|$)/.test(location.hash) ? 1.45 : 1;
-  if (FS !== 1) document.body.classList.add("thumb");
+  const FS_BASE = /(^|[#&])thumb=1(&|$)/.test(location.hash) ? 1.45 : 1;
+  let FS = FS_BASE;
+  if (FS_BASE !== 1) document.body.classList.add("thumb");
   const EMPTY_MSG = "No configurations match the current filters.";
 
   function render() {
+    setDims();
     while (svg.lastChild && svg.lastChild.tagName !== "desc") svg.removeChild(svg.lastChild);
     const pts = points().map(p => ({ ...p, x: p.d[state.x], y: p.d.score }));
     if (!pts.length) {
@@ -355,7 +378,8 @@
     }
     el("text", { class: "axis-title", x: (M.l + W - M.r) / 2, y: H - 14, "text-anchor": "middle" }, svg).textContent =
       (state.x === "cost" ? "API cost per question (USD" + (LOG ? ", log scale)" : ")") : "Output tokens per question" + (LOG ? " (log scale)" : ""));
-    el("text", { class: "axis-title", x: 16, y: (M.t + H - M.b) / 2, "text-anchor": "middle", transform: `rotate(-90 16 ${(M.t + H - M.b) / 2})` }, svg).textContent = scopeLabel() + " score";
+    if (W < 600) el("text", { class: "axis-title", x: M.l, y: M.t - 10, "text-anchor": "start" }, svg).textContent = scopeLabel() + " score";  // portrait: title above the plot
+    else el("text", { class: "axis-title", x: 16, y: (M.t + H - M.b) / 2, "text-anchor": "middle", transform: `rotate(-90 16 ${(M.t + H - M.b) / 2})` }, svg).textContent = scopeLabel() + " score";
 
     const boxes = pts.map(p => ({ x0: p.cx - 13, x1: p.cx + 13, y0: p.cy - 13, y1: p.cy + 13 }));
     const placed = [];
@@ -464,17 +488,18 @@
     const st = lvl.settings || {};
     const row = (k, v) => v ? `<dt>${esc(k)}</dt><dd>${v}</dd>` : "";
     const code = v => `<code>${esc(v)}</code>`;
-    const samp = st.sampling ? Object.entries(st.sampling).map(([k, v]) => code(`${k}=${v}`)).join(" ") : "provider default (no sampling parameters sent)";
+    const samp = st.sampling ? Object.entries(st.sampling).map(([k, v]) => code(`${k}=${v}`)).join(" ") : "not sent (provider defaults)";
     const prov = st.provider ? esc(st.provider) + (st.quantization && st.quantization !== "unknown" ? ` (${esc(st.quantization)})` : "")
       + (st.provider_pin ? ` · pinned, no fallbacks` : "") : "";
     const img = st.image_policy ? `${esc(st.image_policy.format || "png")}, longest side ≤ ${esc(st.image_policy.max_px)} px` : "";
     const run = [st.run_id && code(st.run_id), st.created_at && esc(st.created_at.slice(0, 10)), st.code && `code ${code(st.code)}`].filter(Boolean).join(" · ");
     return `<dl class="settings">${row("Model", code(st.model || m.model))}${row("Provider", prov)}`
-      + row("Reasoning effort", (st.effort ? code(st.effort) : "not set") + (st.note ? ` <span class="pm">(${esc(st.note)})</span>` : ""))
+      + row("Reasoning effort", (st.effort ? code(st.effort) : "not sent (model default)") + (st.note ? ` <span class="pm">(${esc(st.note)})</span>` : ""))
       + row("Sampling", samp) + row("Max output tokens", st.max_tokens ? esc(st.max_tokens.toLocaleString()) : "")
       + row("Images", img) + row("Judge", st.judge ? st.judge.map(code).join(", ") + " (judge-graded tasks; others are scored by rules or option match)" : "")
       + row("Generations", st.repeats ? `${esc(st.repeats)} per question` : "") + row("Run", run)
-      + (st.command ? `<dt>Reproduce</dt><dd><pre>${esc(st.command.join("\n"))}</pre></dd>` : "") + `</dl>`;
+      + row("simple-evals-mm", SITE.version ? `${code("v" + SITE.version)} (<a href="https://github.com/llm-jp/simple-evals-mm/releases/tag/v${esc(SITE.version)}" target="_blank" rel="noopener">release</a>)` : "")
+      + (st.command ? `<dt>Reproduce</dt><dd><pre>${esc([...(SITE.version ? [`git clone https://github.com/llm-jp/simple-evals-mm && cd simple-evals-mm && git checkout v${SITE.version} && uv sync`] : []), ...st.command].join("\n"))}</pre></dd>` : "") + `</dl>`;
   }
   function renderTable() {
     document.getElementById("table-note").textContent = `${tScope().label}: % judged correct, mean over ${SITE.n_runs} runs (± standard deviation across runs); "–" = not evaluated. Cost and output tokens are per question on this task. Click a row for its provider, inference settings and the commands that reproduce it.`;
@@ -509,6 +534,22 @@
         sr.innerHTML = `<td colspan="${cs.length}">${settingsHTML(r.m, r.lvl)}</td>`;
         tb.appendChild(sr);
       }
+    }
+    // phones: the same rows as cards (name, score with a bar, cost and tokens); tap for the settings
+    const list = document.getElementById("lb-list"); list.innerHTML = "";
+    if (!rows.length) list.innerHTML = `<p class="note">${EMPTY_MSG}</p>`;
+    for (const r of rows) {
+      const d = tVal(r.lvl) || {}, key = r.m.key + "|" + r.effort;
+      const card = document.createElement("div");
+      card.className = "lb-card" + (openRows.has(key) ? " open" : "");
+      const pct = d.score != null ? Math.max(0, Math.min(100, d.score)) : 0;
+      card.innerHTML = `<div class="lc-head"><span class="mname">${logoHTML(r.m)}${esc(r.m.name)} <span class="effort-tag">${esc(effLabel(r.m, r.effort))}</span></span>`
+        + `<span class="lc-score">${d.score != null ? d.score.toFixed(1) : "–"}${d.std != null ? ` <span class="pm">± ${d.std.toFixed(1)}</span>` : ""}</span></div>`
+        + `<div class="lc-bar"><i style="width:${pct}%;background:${nameColor(r.m)}"></i></div>`
+        + `<div class="lc-meta"><span>Cost / Q <b>${d.cost != null ? fmtCost(d.cost) : "–"}</b></span><span>Tokens / Q <b>${d.tok != null ? fmtTok(d.tok) : "–"}</b></span></div>`
+        + (openRows.has(key) ? `<div class="lc-settings">${settingsHTML(r.m, r.lvl)}</div>` : "");
+      card.addEventListener("click", e => { if (e.target.closest(".lc-settings")) return; openRows.has(key) ? openRows.delete(key) : openRows.add(key); renderTable(); });
+      list.appendChild(card);
     }
   }
 

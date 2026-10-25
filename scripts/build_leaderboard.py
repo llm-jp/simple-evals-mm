@@ -228,6 +228,34 @@ def run_settings(c: dict, rd: str, tasks: list[str]) -> dict:
     return out
 
 
+def project_version() -> str | None:
+    """simple-evals-mm release the published results correspond to (pyproject.toml); reproduce with `git checkout v<it>`."""
+    import re
+
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pyproject.toml")
+    m = re.search(r'^version\s*=\s*"([^"]+)"', open(p).read(), re.M) if os.path.exists(p) else None
+    return m.group(1) if m else None
+
+
+def stamp_assets(site_dir: str) -> None:
+    """Version the asset URLs in index.html (style.css, logos.js, data.js -> ?v=<content hash>), so a browser that
+    cached an older copy (GitHub Pages: max-age=600) cannot pair the new page with stale data or styles."""
+    import hashlib
+    import re
+
+    p = os.path.join(site_dir, "index.html")
+    if not os.path.exists(p):
+        return
+    html = open(p).read()
+    for name in ("style.css", "logos.js", "data.js"):
+        f = os.path.join(site_dir, name)
+        if os.path.exists(f):
+            v = hashlib.sha256(open(f, "rb").read()).hexdigest()[:10]
+            html = re.sub(rf'(["\']){re.escape(name)}(\?v=[0-9a-f]+)?(["\'])', rf"\g<1>{name}?v={v}\g<3>", html)
+    with open(p, "w") as fh:
+        fh.write(html)
+
+
 def mock_models(seed: int = 1) -> list[dict]:
     """Synthetic (model, effort) entries in the real schema, clearly labelled, for checking site/index.html."""
     import random
@@ -334,7 +362,7 @@ def main():
     bench_out = [dict(b, tasks=[t["key"] for t in b["tasks"]]) for b in BENCHMARKS]
     tasks_out = [dict(t, n=n_by_task.get(t["key"]), jammeval=(t["key"] != "hakushobench")) for t in TASKS_META]
     data = {
-        "site": {"name": "simple-evals-mm", "org": "LLM-jp", "org_url": "https://llm-jp.nii.ac.jp/",
+        "site": {"name": "simple-evals-mm", "org": "LLM-jp", "org_url": "https://llm-jp.nii.ac.jp/", "version": project_version(),
                  "code_url": "https://github.com/llm-jp/simple-evals-mm", "n_runs": 3},
         "updated": dt.date.today().isoformat() + (" (MOCK DATA)" if a.mock else ""), "benchmarks": bench_out,
         "tasks": tasks_out, "categories": CATEGORIES, "jammeval_note": JAMMEVAL_NOTE, "jammeval_url": JAMMEVAL_URL, "jammeval_paper": JAMMEVAL_PAPER, "models": models,
@@ -343,6 +371,7 @@ def main():
     with open(a.out, "w") as f:
         f.write("window.LB = " + json.dumps(data, ensure_ascii=False, indent=1) + ";\n")
     print(f"wrote {a.out}: {len(models)} models")
+    stamp_assets(os.path.dirname(os.path.abspath(a.out)))
 
 
 if __name__ == "__main__":

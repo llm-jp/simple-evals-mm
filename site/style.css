@@ -66,7 +66,9 @@ header.site .wrap { display: flex; align-items: center; justify-content: space-b
 .brand { white-space: nowrap; font-weight: 700; font-size: 18px; color: var(--text-primary); letter-spacing: -0.01em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .brand:hover { text-decoration: none; }
 .brand-wrap { display: flex; align-items: center; gap: 12px; }
-.org img { display: block; height: 26px; width: 26px; border-radius: 6px; }
+.org { color: var(--text-primary); display: inline-flex; }
+.org-mark { display: block; height: 26px; width: 26px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .divider { width: 1px; height: 20px; background: var(--border); }
 nav.links { display: flex; gap: 6px; }
 nav.links a { color: var(--text-secondary); font-size: 14px; padding: 6px 10px; border-radius: 6px; }
@@ -214,29 +216,38 @@ dl.settings dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere;
 dl.settings code { font-size: 12px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 dl.settings pre { margin: 2px 0 0; padding: 8px 10px; font-size: 12px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* light / dark toggle (top right) */
-.theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-left: 6px;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); color: var(--text-secondary); cursor: pointer; padding: 0; }
+/* theme toggle (top right): icon only; shows the current theme, a click switches to the other */
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin-left: 4px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); cursor: pointer; padding: 0; }
 .theme-toggle:hover { color: var(--text-primary); background: var(--surface-2); }
-.theme-toggle svg { width: 16px; height: 16px; }
-.theme-toggle .moon { display: none; }
-:root[data-theme="dark"] .theme-toggle .sun { display: none; }
-:root[data-theme="dark"] .theme-toggle .moon { display: inline; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .theme-toggle .sun { display: none; }
-  :root:not([data-theme="light"]) .theme-toggle .moon { display: inline; }
-}
+.theme-toggle svg { width: 17px; height: 17px; display: none; }
+:root[data-theme-shown="light"] .theme-toggle .ic-light, :root[data-theme-shown="dark"] .theme-toggle .ic-dark { display: block; }
 
-/* phones: keep the chart at a readable size and scroll it sideways */
-@media (max-width: 760px) {
-  .chart-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  svg.chart { min-width: 760px; }
-  .chart-scroll-hint { display: block; }
-}
-.chart-scroll-hint { display: none; font-size: 12px; color: var(--text-muted); margin: 6px 0 0; }
+/* phones: the chart is redrawn in a portrait layout (body.narrow); axis text is in viewBox units */
+.narrow .axis text { font-size: 15px; }
+.narrow .axis-title { font-size: 15px; }
 
 /* narrow phones: keep the header on one line (the in-page links are reachable by scrolling) */
 @media (max-width: 520px) {
   nav.links a[href^="#"] { display: none; }
   .brand { font-size: 16px; }
+}
+
+/* phones: results as cards instead of the table (like DeepSWE) */
+.lb-list { display: none; }
+@media (max-width: 760px) {
+  .table-wrap { display: none; }
+  .lb-list { display: block; border: 1px solid var(--border); border-radius: 10px; padding: 4px 14px; background: var(--surface-1); }
+  .lb-card { padding: 12px 0; border-top: 1px solid var(--border); cursor: pointer; }
+  .lb-card:first-child { border-top: 0; }
+  .lc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .lc-head .mname { font-size: 15px; }
+  .lc-score { font-weight: 700; font-size: 16px; white-space: nowrap; }
+  .lc-bar { height: 8px; margin: 8px 0 6px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+  .lc-bar i { display: block; height: 100%; border-radius: 4px; opacity: 0.85; }
+  .lc-meta { display: flex; gap: 16px; font-size: 13px; color: var(--text-muted); }
+  .lc-meta b { color: var(--text-secondary); font-weight: 600; }
+  .lc-settings { margin-top: 10px; cursor: auto; }
+  .lc-settings dl.settings { grid-template-columns: 1fr; gap: 2px; }
+  .lc-settings dl.settings dd { margin-bottom: 6px; }
 }
