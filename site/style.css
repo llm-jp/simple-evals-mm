@@ -63,14 +63,15 @@ header.site {
   backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
 }
 header.site .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
-.brand { white-space: nowrap; font-weight: 700; font-size: 18px; color: var(--text-primary); letter-spacing: -0.01em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.brand { line-height: 1; white-space: nowrap; font-weight: 700; font-size: 18px; color: var(--text-primary); letter-spacing: -0.01em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .brand:hover { text-decoration: none; }
 .brand-wrap { display: flex; align-items: center; gap: 12px; }
 .org { display: inline-flex; }
 .org img { display: block; height: 26px; width: 26px; border-radius: 6px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .divider { width: 1px; height: 20px; background: var(--border); }
-nav.links { display: flex; gap: 6px; }
+nav.links { display: flex; align-items: center; gap: 6px; }
+nav.links a { line-height: 1; }
 nav.links a { color: var(--text-secondary); font-size: 14px; padding: 6px 10px; border-radius: 6px; }
 nav.links a:hover, nav.links a[aria-current="page"] { background: var(--surface-2); color: var(--text-primary); text-decoration: none; }
 
@@ -260,3 +261,17 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 .sbar .err { position: absolute; top: 50%; height: 0; border-top: 1px solid var(--text-secondary); }
 .sbar .err::before, .sbar .err::after { content: ""; position: absolute; top: -5px; height: 9px; border-left: 1px solid var(--text-secondary); }
 .sbar .err::before { left: 0; } .sbar .err::after { right: 0; }
+
+/* x-axis controls sit under the chart, next to the axis; the legend on the left */
+.chart-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-top: 6px; }
+.chart-foot .legend { margin: 0; }
+.axis-controls { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.axis-controls .seg button { font-size: 13px; padding: 4px 10px; }
+
+/* phones: the category filter of the Data section wraps onto several lines instead of running off-screen */
+@media (max-width: 760px) {
+  #seg-cat { flex-wrap: wrap; border: 0; background: transparent; gap: 6px; overflow: visible; }
+  #seg-cat button { border: 1px solid var(--border) !important; border-radius: 999px; background: var(--surface-1); }
+  #seg-cat button[aria-pressed="true"] { background: var(--text-primary); }
+  #cat-filter { flex-wrap: wrap; }
+}
