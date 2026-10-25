@@ -481,7 +481,13 @@
     const cs = cols();
     if (!state.sortKey || !cs.some(c => c.key === state.sortKey)) { state.sortKey = "score"; state.sortDir = -1; }
     thead.innerHTML = cs.map(c => `<th data-k="${esc(c.key)}" class="${c.key === state.sortKey ? "sorted" : ""} ${c.key === "score" ? "hl" : ""} ${c.cls === "sep" ? "sep" : ""}">${esc(c.label)}</th>`).join("");
-    const rows = rowsNow().sort((a, b) => {
+    // Overall: only configurations evaluated on every task of the set; the others are listed in the note instead of "-" rows
+    const isTotal = TOTAL.some(b => "b:" + b.key === state.tsubject);
+    const all = rowsNow();
+    const omitted = isTotal ? all.filter(r => (tVal(r.lvl) || {}).score == null) : [];
+    if (omitted.length) document.getElementById("table-note").textContent += ` Not in ${tScope().label} (missing tasks): `
+      + omitted.map(r => `${r.m.name} (${effLabel(r.m, r.effort)})`).join(", ") + "; see the single-task scores.";
+    const rows = all.filter(r => !omitted.includes(r)).sort((a, b) => {
       const va = val(a, state.sortKey), vb = val(b, state.sortKey);
       return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * state.sortDir;
     });
