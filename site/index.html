@@ -22,7 +22,7 @@
 <meta name="twitter:description" content="Leaderboard of vision-language models on Japanese and English benchmarks: score, cost and output tokens per question, with the provider and inference settings of every run.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=424760dd8f">
+<link rel="stylesheet" href="style.css?v=fa850a3f0a">
 </head>
 <body>
 
@@ -54,11 +54,10 @@
   <section id="leaderboard">
     <div class="wrap">
       <h2>Leaderboard</h2>
-      <div class="meta" id="lb-meta">Loading results…</div>
-
-      <div class="controls" role="toolbar" aria-label="Chart options">
-        <div>
+      <div class="controls lb-top" role="toolbar" aria-label="Chart options">
+        <div class="pick-wrap">
           <select class="pick" id="pick-subject" aria-label="Score shown on the chart and in the table"></select></div>
+        <div class="meta" id="lb-meta">Loading results…</div>
         <div class="filter-wrap right" data-filter="cfg">
           <button class="filter-btn" aria-expanded="false">Configs &#9662;</button>
           <div class="panel" hidden>
@@ -204,7 +203,7 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   const REL = SITE.version ? ` · <a href="https://github.com/llm-jp/simple-evals-mm/releases/tag/v${esc(SITE.version)}" target="_blank" rel="noopener">simple-evals-mm v${esc(SITE.version)}</a>` : "";
-  document.getElementById("lb-meta").innerHTML = `${D.models.length} models · ${TASKS.length} tasks${REL} · mean over ${SITE.n_runs} runs · last updated ${esc(D.updated)} · results on more of the framework's tasks will be added`;
+  document.getElementById("lb-meta").innerHTML = `${D.models.length} models · ${TASKS.length} tasks${REL} · mean over ${SITE.n_runs} runs · last updated ${esc(D.updated)}`;
 
   const state = { view: "best", subject: SCOPES[0].key, x: "cost", scale: "log", sortKey: null, sortDir: -1, cfg: new Set() };
   const effLabel = (m, e) => e === "max" ? m.maxLabel : m.lowLabel;

@@ -275,3 +275,16 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
   #seg-cat button[aria-pressed="true"] { background: var(--text-primary); }
   #cat-filter { flex-wrap: wrap; }
 }
+
+/* top controls: score selector (left), summary line (middle, like DeepSWE), Configs (right); on phones the
+   selector and Configs share one line and the summary goes below them */
+.lb-top { flex-wrap: nowrap; gap: 16px; }
+.lb-top .pick-wrap { flex: 0 1 auto; min-width: 0; }
+.lb-top select.pick { max-width: 100%; text-overflow: ellipsis; }
+.lb-top #lb-meta { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13px; text-align: center; }
+.lb-top .filter-wrap.right { margin-left: 0; flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .lb-top { flex-wrap: wrap; gap: 10px 12px; }
+  .lb-top .pick-wrap { flex: 1 1 0; }
+  .lb-top #lb-meta { order: 3; flex-basis: 100%; text-align: left; }
+}
