@@ -1,6 +1,6 @@
 """Generate site/assets/og-image.png (1200x630), the link-preview image (Open Graph / Twitter card) of the site: a
-brand card in the style of DeepSWE's -- the LLM-jp logo and "simple-evals-mm" over a soft blur of the logo's colours,
-with "LLM-jp" below. It does not depend on the results, so it only needs regenerating when the design changes.
+brand card in the style of DeepSWE's -- the LLM-jp logo above "simple-evals-mm" and "LLM-jp", over a soft blur of the
+logo's colours, all inside the central square so that cropped previews (Slack, square thumbnails) keep them whole. It does not depend on the results, so it only needs regenerating when the design changes.
 
     uv run python scripts/build_og_image.py
 """
@@ -42,18 +42,18 @@ def background() -> Image.Image:
 def main():
     img = background()
     d = ImageDraw.Draw(img)
-    title, sub = font(FONT_BOLD, 104), font(FONT_REG, 30)
+    title, sub = font(FONT_BOLD, 62), font(FONT_REG, 26)
     logo = Image.open(SITE / "assets" / "llm-jp-logo.png").convert("RGBA")
-    logo.thumbnail((124, 124))
+    logo.thumbnail((120, 120))
     plate = Image.new("RGBA", (logo.width + 28, logo.height + 28), (0, 0, 0, 0))  # light plate: the colour logo on a dark card
     ImageDraw.Draw(plate).rounded_rectangle((0, 0, plate.width - 1, plate.height - 1), 24, fill=(255, 255, 255, 235))
     plate.paste(logo, (14, 14), logo)
-    text = "simple-evals-mm"
-    x0 = (W - (plate.width + 34 + d.textlength(text, font=title))) / 2
-    yc = H / 2 - 22
-    img.paste(plate, (int(x0), int(yc - plate.height / 2)), plate)
-    d.text((x0 + plate.width + 34, yc), text, font=title, fill=(250, 250, 248), anchor="lm")
-    d.text((W / 2, yc + 118), "LLM-jp", font=sub, fill=(232, 232, 228), anchor="mm")
+    # stacked and centred inside the middle 630 x 630 square: previews that crop the card (Slack, square thumbnails)
+    # keep the whole logo and name
+    top = (H - (plate.height + 34 + 62 + 30 + 26)) / 2
+    img.paste(plate, (int((W - plate.width) / 2), int(top)), plate)
+    d.text((W / 2, top + plate.height + 34), "simple-evals-mm", font=title, fill=(250, 250, 248), anchor="mt")
+    d.text((W / 2, top + plate.height + 34 + 62 + 30), "LLM-jp", font=sub, fill=(232, 232, 228), anchor="mt")
     out = SITE / "assets" / "og-image.png"
     img.save(out, optimize=True)
     print(f"wrote {out}")
