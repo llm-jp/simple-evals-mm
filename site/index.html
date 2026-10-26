@@ -10,19 +10,19 @@
 <link rel="apple-touch-icon" href="assets/favicon-192.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="simple-evals-mm">
-<meta property="og:title" content="simple-evals-mm leaderboard">
-<meta property="og:description" content="Leaderboard of vision-language models on Japanese and English benchmarks: score, cost and output tokens per question, with the provider and inference settings of every run.">
+<meta property="og:title" content="simple-evals-mm">
+<meta property="og:description" content="simple-evals-mm: a leaderboard of vision-language models on English and Japanese benchmarks.">
 <meta property="og:url" content="https://llm-jp.github.io/simple-evals-mm/">
 <meta property="og:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="simple-evals-mm leaderboard: vision-language models on Japanese and English benchmarks">
+<meta property="og:image:alt" content="simple-evals-mm">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="simple-evals-mm leaderboard">
-<meta name="twitter:description" content="Leaderboard of vision-language models on Japanese and English benchmarks: score, cost and output tokens per question, with the provider and inference settings of every run.">
+<meta name="twitter:title" content="simple-evals-mm">
+<meta name="twitter:description" content="simple-evals-mm: a leaderboard of vision-language models on English and Japanese benchmarks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=3917c51faa">
+<link rel="stylesheet" href="style.css?v=0dd62242aa">
 </head>
 <body>
 
@@ -324,10 +324,10 @@
   let W = 960, H = 560, M = { l: 64, r: 28, t: 30, b: 58 };
   const NARROW = matchMedia("(max-width: 760px)");
   function setDims() {
-    if (NARROW.matches && FS_BASE === 1) { W = 440; H = 540; M = { l: 50, r: 16, t: 40, b: 54 }; FS = 1.25; }
-    else { W = 960; H = 560; M = { l: 64, r: 28, t: 30, b: 58 }; FS = FS_BASE; }
+    if (NARROW.matches) { W = 440; H = 540; M = { l: 50, r: 16, t: 40, b: 54 }; FS = 1.25; }
+    else { W = 960; H = 560; M = { l: 64, r: 28, t: 30, b: 58 }; FS = 1; }
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    document.body.classList.toggle("narrow", NARROW.matches && FS_BASE === 1);
+    document.body.classList.toggle("narrow", NARROW.matches);
   }
   NARROW.addEventListener("change", () => render());
   function logTicks(lo, hi) {
@@ -343,9 +343,7 @@
     for (let v = 0; v <= hi + 1e-12; v += step) out.push(+v.toPrecision(6));
     return out;
   }
-  const FS_BASE = /(^|[#&])thumb=1(&|$)/.test(location.hash) ? 1.45 : 1;
-  let FS = FS_BASE;
-  if (FS_BASE !== 1) document.body.classList.add("thumb");
+  let FS = 1;
   const EMPTY_MSG = "No configurations match the current filters.";
 
   function render() {

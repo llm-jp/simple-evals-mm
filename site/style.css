@@ -108,8 +108,6 @@ svg.chart { width: 100%; height: auto; display: block; font-family: inherit; }
 .gridline { stroke: var(--grid); stroke-width: 1; }
 .mlabel { fill: var(--text-primary); font-size: 12px; font-weight: 600; pointer-events: none; paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; }
 .elabel { fill: var(--text-muted); font-size: 10.5px; pointer-events: none; paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; }
-.thumb .axis text { font-size: 17px; }
-.thumb .axis-title { font-size: 19px; }
 .note { font-size: 13px; color: var(--text-muted); margin: 8px 4px 0; }
 .tooltip {
   position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);

@@ -1,24 +1,22 @@
-"""Generate site/assets/og-image.png (1200x630), the link-preview image (Open Graph / Twitter card) of the site:
-a header (LLM-jp logo, title, counts) above the site's own Overall chart (score vs API cost per question), rendered
-from site/index.html#thumb=1 (larger chart labels) in the light theme with headless Chromium.
+"""Generate site/assets/og-image.png (1200x630), the link-preview image (Open Graph / Twitter card) of the site: a
+brand card in the style of DeepSWE's -- the LLM-jp logo and "simple-evals-mm" over a soft blur of the logo's colours,
+with "LLM-jp" below. It does not depend on the results, so it only needs regenerating when the design changes.
 
-Needs Playwright with Chromium, which the project itself does not depend on:
-    uv run --with playwright python -m playwright install chromium
-    uv run --with playwright python scripts/build_og_image.py
+    uv run python scripts/build_og_image.py
 """
-import io
-import json
 import os
 import pathlib
+import random
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SITE = ROOT / "site"
 FONT_BOLD = os.environ.get("OG_FONT_BOLD", "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc")
 FONT_REG = os.environ.get("OG_FONT_REGULAR", "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc")
-W, H, HEADER = 1200, 630, 104
-BG, TEXT, MUTED, BORDER = (255, 255, 255), (11, 11, 11), (98, 97, 93), (230, 229, 224)
+W, H = 1200, 630
+LOGO_COLOURS = [(233, 132, 159), (169, 155, 230), (127, 178, 236), (111, 211, 176), (240, 176, 122)]  # pink, lavender, blue, mint, orange
+SPOTS = [(150, 120), (1050, 90), (300, 560), (950, 560), (620, 40), (80, 380), (1150, 380), (640, 620)]
 
 
 def font(path: str, size: int):
@@ -28,48 +26,34 @@ def font(path: str, size: int):
         return ImageFont.load_default(size)
 
 
-def chart_png() -> bytes:
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1180, "height": 900}, device_scale_factor=2, color_scheme="light")
-        page.goto((SITE / "index.html").as_uri() + "#thumb=1")
-        page.wait_for_selector("svg.chart circle")
-        page.wait_for_timeout(500)
-        png = page.locator("svg.chart").screenshot()
-        browser.close()
-    return png
-
-
-def counts() -> tuple[int, int]:
-    s = (SITE / "data.js").read_text()
-    d = json.loads(s[s.index("{"): s.rstrip().rstrip(";").rindex("}") + 1])
-    return len(d.get("models", [])), len(d.get("tasks", []))
+def background() -> Image.Image:
+    rnd = random.Random(7)  # fixed: the same image on every run
+    img = Image.new("RGB", (W, H), (20, 20, 26))
+    d = ImageDraw.Draw(img)
+    for k, (x, y) in enumerate(SPOTS):
+        r = rnd.randint(230, 330)
+        d.ellipse((x - r, y - r, x + r, y + r), fill=LOGO_COLOURS[k % len(LOGO_COLOURS)])
+    img = img.filter(ImageFilter.GaussianBlur(110))
+    img = Image.blend(img, Image.new("RGB", (W, H), (14, 14, 20)), 0.42)  # darken so white text reads
+    noise = Image.effect_noise((W, H), 30).convert("RGB")
+    return Image.blend(img, noise, 0.07)  # a little film grain
 
 
 def main():
-    img = Image.new("RGB", (W, H), BG)
+    img = background()
     d = ImageDraw.Draw(img)
-    x = 48
-    logo_path = SITE / "assets" / "llm-jp-logo.png"
-    if logo_path.exists():
-        logo = Image.open(logo_path).convert("RGBA")
-        logo.thumbnail((200, 52))
-        img.paste(logo, (x, (HEADER - logo.height) // 2), logo)
-        x += logo.width + 22
-        d.line((x, 30, x, HEADER - 30), fill=BORDER, width=2)
-        x += 22
-    d.text((x, 16), "simple-evals-mm leaderboard", font=font(FONT_BOLD, 38), fill=TEXT)
-    n_models, n_tasks = counts()
-    d.text((x, 64), f"Overall score vs API cost per question  ·  {n_models} models  ·  {n_tasks} tasks  ·  llm-jp.github.io/simple-evals-mm",
-           font=font(FONT_REG, 19), fill=MUTED)
-    d.line((0, HEADER, W, HEADER), fill=BORDER, width=2)
-
-    chart = Image.open(io.BytesIO(chart_png())).convert("RGB")
-    box_w, box_h = W - 40, H - HEADER - 16
-    chart.thumbnail((box_w, box_h), Image.LANCZOS)
-    img.paste(chart, ((W - chart.width) // 2, HEADER + 8 + (box_h - chart.height) // 2))
+    title, sub = font(FONT_BOLD, 104), font(FONT_REG, 30)
+    logo = Image.open(SITE / "assets" / "llm-jp-logo.png").convert("RGBA")
+    logo.thumbnail((124, 124))
+    plate = Image.new("RGBA", (logo.width + 28, logo.height + 28), (0, 0, 0, 0))  # light plate: the colour logo on a dark card
+    ImageDraw.Draw(plate).rounded_rectangle((0, 0, plate.width - 1, plate.height - 1), 24, fill=(255, 255, 255, 235))
+    plate.paste(logo, (14, 14), logo)
+    text = "simple-evals-mm"
+    x0 = (W - (plate.width + 34 + d.textlength(text, font=title))) / 2
+    yc = H / 2 - 22
+    img.paste(plate, (int(x0), int(yc - plate.height / 2)), plate)
+    d.text((x0 + plate.width + 34, yc), text, font=title, fill=(250, 250, 248), anchor="lm")
+    d.text((W / 2, yc + 118), "LLM-jp", font=sub, fill=(232, 232, 228), anchor="mm")
     out = SITE / "assets" / "og-image.png"
     img.save(out, optimize=True)
     print(f"wrote {out}")
