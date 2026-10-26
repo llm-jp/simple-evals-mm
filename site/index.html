@@ -211,7 +211,13 @@
 
   // ---- score pulldown + segmented controls ----
   const pick = document.getElementById("pick-subject");  // one score for the chart and the table
-  const OPTS = SCOPES.map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join("");
+  // Overall first, then the tasks grouped by category (the Data section's order), alphabetical within a category
+  const opt = s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`;
+  const OPTS = TOTAL.map(b => opt({ key: "b:" + b.key, label: b.label })).join("")
+    + (D.categories || []).map(c => {
+        const ts = TASKS.filter(t => t.category === c).sort((a, b) => a.label.localeCompare(b.label));
+        return ts.length ? `<optgroup label="${esc(c)}">${ts.map(t => opt({ key: "t:" + t.key, label: t.label })).join("")}</optgroup>` : "";
+      }).join("");
   pick.innerHTML = OPTS;
   pick.addEventListener("change", () => { state.subject = pick.value; state.sortKey = null; render(); });
   function syncSegs() {
