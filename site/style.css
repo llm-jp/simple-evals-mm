@@ -166,7 +166,7 @@ td.hl, th.hl { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .pm { color: var(--text-muted); font-size: 11px; }
 
 /* about */
-figure.overview-fig { margin: 20px 0 0; background: #ffffff; border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+figure.overview-fig { margin: 12px 0 18px; background: #ffffff; border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
 figure.overview-fig img { width: 100%; display: block; }
 
 /* data: task blocks (collapsed to the first two rows until expanded) */
@@ -310,3 +310,4 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 .about-list li + li { margin-top: 8px; }
 .about-list b { color: var(--text-primary); }
 .mrow .head .psize { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.about-list code { font-size: 13px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
