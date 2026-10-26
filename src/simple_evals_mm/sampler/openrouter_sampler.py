@@ -126,7 +126,8 @@ def fetch_endpoint_info(model_id: str, providers: list[str], quant: list[str] | 
         "model_id": model_id, "matched": True, "provider_name": e.get("provider_name"), "tag": e.get("tag"),
         "quantization": e.get("quantization"), "context_length": e.get("context_length"),
         "max_completion_tokens": e.get("max_completion_tokens"),
-        "price_per_mtok": {"prompt": float(p.get("prompt", 0)) * 1e6, "completion": float(p.get("completion", 0)) * 1e6,
+        # per-token price strings x 1e6, rounded: float("0.0000004") * 1e6 == 0.39999999999999997
+        "price_per_mtok": {"prompt": round(float(p.get("prompt", 0)) * 1e6, 6), "completion": round(float(p.get("completion", 0)) * 1e6, 6),
                            "image": float(p.get("image", 0) or 0)},
         "supported_parameters": e.get("supported_parameters"),
     }

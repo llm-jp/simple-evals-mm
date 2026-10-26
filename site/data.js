@@ -8086,7 +8086,7 @@ window.LB = {
      "quantization": "unknown",
      "price": {
       "prompt": 0.425,
-      "completion": 2.5500000000000003
+      "completion": 2.55
      },
      "provider_pin": [
       "alibaba"
@@ -8546,7 +8546,7 @@ window.LB = {
      "quantization": "unknown",
      "price": {
       "prompt": 0.425,
-      "completion": 2.5500000000000003
+      "completion": 2.55
      },
      "provider_pin": [
       "alibaba"
@@ -9018,7 +9018,7 @@ window.LB = {
      "quantization": "bf16",
      "price": {
       "prompt": 0.14,
-      "completion": 0.39999999999999997
+      "completion": 0.4
      },
      "provider_pin": [
       "crusoe"
@@ -9481,7 +9481,7 @@ window.LB = {
      "quantization": "bf16",
      "price": {
       "prompt": 0.14,
-      "completion": 0.39999999999999997
+      "completion": 0.4
      },
      "provider_pin": [
       "crusoe"
