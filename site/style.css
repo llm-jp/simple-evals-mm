@@ -106,15 +106,10 @@ svg.chart { width: 100%; height: auto; display: block; font-family: inherit; }
 .axis text { fill: var(--text-muted); font-size: 12px; }
 .axis-title { fill: var(--text-secondary); font-size: 13px; }
 .gridline { stroke: var(--grid); stroke-width: 1; }
-.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; color: var(--text-secondary); padding: 6px 4px 2px; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.ring { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 2px solid var(--text-secondary); background: var(--surface-1); }
-.ring.dashed { border-style: dashed; }
 .mlabel { fill: var(--text-primary); font-size: 12px; font-weight: 600; pointer-events: none; paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; }
 .elabel { fill: var(--text-muted); font-size: 10.5px; pointer-events: none; paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; }
 .thumb .axis text { font-size: 17px; }
 .thumb .axis-title { font-size: 19px; }
-.thumb .legend { font-size: 18px; }
 .note { font-size: 13px; color: var(--text-muted); margin: 8px 4px 0; }
 .tooltip {
   position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
@@ -263,8 +258,7 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 .sbar .err::before { left: 0; } .sbar .err::after { right: 0; }
 
 /* x-axis controls sit under the chart, next to the axis; the legend on the left */
-.chart-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-top: 6px; }
-.chart-foot .legend { margin: 0; }
+.chart-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 16px; margin-top: 6px; }
 .axis-controls { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .axis-controls .seg button { font-size: 13px; padding: 4px 10px; }
 
