@@ -269,6 +269,11 @@ def stamp_assets(site_dir: str) -> None:
         if os.path.exists(f):
             v = hashlib.sha256(open(f, "rb").read()).hexdigest()[:10]
             html = re.sub(rf'(["\']){re.escape(name)}(\?v=[0-9a-f]+)?(["\'])', rf"\g<1>{name}?v={v}\g<3>", html)
+    # link previews (Slack, X) cache by image URL: version the absolute og:image / twitter:image URL as well
+    og = os.path.join(site_dir, "assets", "og-image.png")
+    if os.path.exists(og):
+        v = hashlib.sha256(open(og, "rb").read()).hexdigest()[:10]
+        html = re.sub(r'(assets/og-image\.png)(\?v=[0-9a-f]+)?"', rf'\g<1>?v={v}"', html)
     with open(p, "w") as fh:
         fh.write(html)
 
