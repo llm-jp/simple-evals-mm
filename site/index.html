@@ -22,7 +22,7 @@
 <meta name="twitter:description" content="simple-evals-mm is a lightweight, highly extensible framework for evaluating vision-language models on 40+ tasks across English and Japanese benchmarks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=0e9ccc3bdc">
+<link rel="stylesheet" href="style.css?v=44c956b1f1">
 </head>
 <body>
 
@@ -140,13 +140,13 @@
   <section id="about">
     <div class="wrap">
       <h2>About simple-evals-mm</h2>
-      <p class="intro">simple-evals-mm is built on <a href="https://github.com/openai/simple-evals" target="_blank" rel="noopener">OpenAI's simple-evals</a> and extends it to vision-language models. It has three parts:</p>
-      <ul class="about-list">
-        <li><b>Sampler</b>: puts any model behind one interface. API models go through OpenRouter, pinned to a single provider so that cost and quantization are known; open-weight models are served locally with SGLang or Hugging Face.</li>
-        <li><b>Task</b>: one of 40+ tasks, centred on Japanese and English, from chart, document and multi-image VQA to OCR, math and text-only tasks. Each is scored by an LLM judge, option match or rules.</li>
-        <li><b>Run</b>: one frozen configuration, in the run-centric layout of <a href="https://github.com/laude-institute/harbor" target="_blank" rel="noopener">Harbor</a>. Every answer is stored with its score, cost, output tokens and the exact request parameters, so any number on this page can be traced back and reproduced.</li>
-      </ul>
       <figure class="overview-fig"><img src="assets/overview.svg" alt="Overview of simple-evals-mm: models and tasks go through samplers and frozen runs; answers are graded by an LLM judge, option match or rules; results give score, cost and tokens per question and feed the leaderboard."></figure>
+      <p class="intro">simple-evals-mm extends <a href="https://github.com/openai/simple-evals" target="_blank" rel="noopener">OpenAI's simple-evals</a>, a lightweight framework for evaluating language models, to multimodal tasks. It is built from three parts:</p>
+      <ul class="about-list">
+        <li><b>Sampler</b>: the interface that takes a task's input (text and images) and returns the model's output. API models are reached through OpenRouter, pinned to a single provider; open-weight models are served with SGLang or vLLM, or run with Hugging Face.</li>
+        <li><b>Task</b>: a benchmark. It defines the input given to the sampler, how the output is scored (LLM judge, option match, rules or code execution) and the metrics reported, overall and per category.</li>
+        <li><b>Run</b>: a reproducible record of one evaluation setting, stored as <code>runs/&lt;run_id&gt;/</code>. Its <code>config.json</code> freezes the setting (model, provider, request parameters, reasoning effort, token budget, code version); reusing a run id with a different setting is refused, while the same setting resumes. For every task it keeps each output with its reasoning, score, judge verdict, output tokens and cost, the per-repeat and mean scores, and a log of every (re)grading. Runs can be re-scored without generating again.</li>
+      </ul>
     </div>
   </section>
 
