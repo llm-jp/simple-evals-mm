@@ -288,3 +288,8 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
   .lb-top .pick-wrap { flex: 1 1 0; }
   .lb-top #lb-meta { order: 3; flex-basis: 100%; text-align: left; }
 }
+
+/* phones: a compact chart tooltip that fits the screen */
+.narrow .tooltip { min-width: 0; max-width: calc(100% - 8px); font-size: 12px; padding: 6px 8px; }
+.narrow .tooltip .tt-sub { font-size: 11px; }
+.narrow .tooltip .tt-row { gap: 10px; }
