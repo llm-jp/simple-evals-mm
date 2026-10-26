@@ -671,6 +671,10 @@ window.LB = {
      "model": "openrouter/anthropic/claude-fable-5",
      "provider": "Anthropic",
      "quantization": "unknown",
+     "price": {
+      "prompt": 10.0,
+      "completion": 50.0
+     },
      "provider_pin": [
       "anthropic"
      ],
@@ -1057,6 +1061,10 @@ window.LB = {
      "model": "openrouter/anthropic/claude-fable-5",
      "provider": "Anthropic",
      "quantization": "unknown",
+     "price": {
+      "prompt": 10.0,
+      "completion": 50.0
+     },
      "provider_pin": [
       "anthropic"
      ],
@@ -1514,6 +1522,10 @@ window.LB = {
      "model": "openrouter/openai/gpt-6-astra",
      "provider": "OpenAI",
      "quantization": "unknown",
+     "price": {
+      "prompt": 10.0,
+      "completion": 50.0
+     },
      "provider_pin": [
       "openai"
      ],
@@ -1963,6 +1975,10 @@ window.LB = {
      "model": "openrouter/openai/gpt-6-astra",
      "provider": "OpenAI",
      "quantization": "unknown",
+     "price": {
+      "prompt": 10.0,
+      "completion": 50.0
+     },
      "provider_pin": [
       "openai"
      ],
@@ -2421,6 +2437,10 @@ window.LB = {
      "model": "openrouter/google/gemini-3.8-flash",
      "provider": "Google AI Studio",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.75,
+      "completion": 3.75
+     },
      "provider_pin": [
       "google-ai-studio"
      ],
@@ -2870,6 +2890,10 @@ window.LB = {
      "model": "openrouter/google/gemini-3.8-flash",
      "provider": "Google AI Studio",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.75,
+      "completion": 3.75
+     },
      "provider_pin": [
       "google-ai-studio"
      ],
@@ -3160,6 +3184,10 @@ window.LB = {
      "model": "openrouter/meta/muse-wonder",
      "provider": "Meta",
      "quantization": "unknown",
+     "price": {
+      "prompt": 4.0,
+      "completion": 20.0
+     },
      "provider_pin": [
       "meta"
      ],
@@ -3447,6 +3475,10 @@ window.LB = {
      "model": "openrouter/meta/muse-wonder",
      "provider": "Meta",
      "quantization": "unknown",
+     "price": {
+      "prompt": 4.0,
+      "completion": 20.0
+     },
      "provider_pin": [
       "meta"
      ],
@@ -3904,6 +3936,10 @@ window.LB = {
      "model": "openrouter/qwen/qwen3.8-flash",
      "provider": "Alibaba",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.15,
+      "completion": 0.47
+     },
      "provider_pin": [
       "alibaba"
      ],
@@ -4366,6 +4402,10 @@ window.LB = {
      "model": "openrouter/moonshotai/kimi-k3",
      "provider": "Moonshot AI",
      "quantization": "mxfp4",
+     "price": {
+      "prompt": 3.0,
+      "completion": 15.0
+     },
      "provider_pin": [
       "moonshotai"
      ],
@@ -4815,6 +4855,10 @@ window.LB = {
      "model": "openrouter/moonshotai/kimi-k3",
      "provider": "Moonshot AI",
      "quantization": "mxfp4",
+     "price": {
+      "prompt": 3.0,
+      "completion": 15.0
+     },
      "provider_pin": [
       "moonshotai"
      ],
@@ -5272,6 +5316,10 @@ window.LB = {
      "model": "openrouter/moonshotai/kimi-k3.1-pro",
      "provider": "Moonshot AI",
      "quantization": "mxfp4",
+     "price": {
+      "prompt": 2.0,
+      "completion": 10.0
+     },
      "provider_pin": [
       "moonshotai"
      ],
@@ -5721,6 +5769,10 @@ window.LB = {
      "model": "openrouter/moonshotai/kimi-k3.1-pro",
      "provider": "Moonshot AI",
      "quantization": "mxfp4",
+     "price": {
+      "prompt": 2.0,
+      "completion": 10.0
+     },
      "provider_pin": [
       "moonshotai"
      ],
@@ -6181,6 +6233,10 @@ window.LB = {
      "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
      "provider": "Alibaba",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.33,
+      "completion": 1.32
+     },
      "provider_pin": [
       "alibaba"
      ],
@@ -6635,6 +6691,10 @@ window.LB = {
      "model": "openrouter/deepseek/deepseek-v4.1-flash-1017",
      "provider": "Alibaba",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.33,
+      "completion": 1.32
+     },
      "provider_pin": [
       "alibaba"
      ],
@@ -7098,6 +7158,10 @@ window.LB = {
      "model": "openrouter/z-ai/glm-5.3-flash",
      "provider": "Z.AI",
      "quantization": "fp8",
+     "price": {
+      "prompt": 0.15,
+      "completion": 0.5
+     },
      "provider_pin": [
       "z-ai"
      ],
@@ -7552,6 +7616,10 @@ window.LB = {
      "model": "openrouter/z-ai/glm-5.3-flash",
      "provider": "Z.AI",
      "quantization": "fp8",
+     "price": {
+      "prompt": 0.15,
+      "completion": 0.5
+     },
      "provider_pin": [
       "z-ai"
      ],
@@ -8016,6 +8084,10 @@ window.LB = {
      "model": "openrouter/qwen/qwen3.8-27b",
      "provider": "Alibaba",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.425,
+      "completion": 2.55
+     },
      "provider_pin": [
       "alibaba"
      ],
@@ -8472,6 +8544,10 @@ window.LB = {
      "model": "openrouter/qwen/qwen3.8-27b",
      "provider": "Alibaba",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.425,
+      "completion": 2.55
+     },
      "provider_pin": [
       "alibaba"
      ],
@@ -8940,6 +9016,10 @@ window.LB = {
      "model": "openrouter/google/gemma-4-31b-it",
      "provider": "Crusoe",
      "quantization": "bf16",
+     "price": {
+      "prompt": 0.14,
+      "completion": 0.4
+     },
      "provider_pin": [
       "crusoe"
      ],
@@ -9399,6 +9479,10 @@ window.LB = {
      "model": "openrouter/google/gemma-4-31b-it",
      "provider": "Crusoe",
      "quantization": "bf16",
+     "price": {
+      "prompt": 0.14,
+      "completion": 0.4
+     },
      "provider_pin": [
       "crusoe"
      ],
@@ -9861,6 +9945,10 @@ window.LB = {
      "model": "openrouter/meta/muse-glimmer-30b",
      "provider": "Together",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.35,
+      "completion": 1.5
+     },
      "provider_pin": [
       "together"
      ],
@@ -10310,6 +10398,10 @@ window.LB = {
      "model": "openrouter/meta/muse-glimmer-30b",
      "provider": "Together",
      "quantization": "unknown",
+     "price": {
+      "prompt": 0.35,
+      "completion": 1.5
+     },
      "provider_pin": [
       "together"
      ],
