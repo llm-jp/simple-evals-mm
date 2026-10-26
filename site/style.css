@@ -309,3 +309,4 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 .about-list { max-width: 820px; color: var(--text-secondary); font-size: 16px; margin: 10px 0 0; padding-left: 22px; }
 .about-list li + li { margin-top: 8px; }
 .about-list b { color: var(--text-primary); }
+.mrow .head .psize { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
