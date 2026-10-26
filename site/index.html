@@ -22,7 +22,7 @@
 <meta name="twitter:description" content="Leaderboard of vision-language models on Japanese and English benchmarks: score, cost and output tokens per question, with the provider and inference settings of every run.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=fa850a3f0a">
+<link rel="stylesheet" href="style.css?v=d192f5c5ad">
 </head>
 <body>
 
@@ -80,8 +80,8 @@
         </div>
         <div class="chart-foot">
           <div class="legend">
-            <span><i class="ring"></i>Highest effort</span>
             <span><i class="ring dashed"></i>Lowest effort</span>
+            <span><i class="ring"></i>Highest effort</span>
           </div>
           <div class="axis-controls" role="toolbar" aria-label="X axis">
             <span class="seg" data-key="x">
@@ -323,6 +323,7 @@
   // ---- chart ----
   const svg = document.getElementById("chart");
   const tip = document.getElementById("tooltip");
+  document.addEventListener("click", () => { tip.style.opacity = 0; });
   // Chart geometry: wide (desktop) or portrait (phones, like DeepSWE: fits the screen, no sideways scroll).
   let W = 960, H = 560, M = { l: 64, r: 28, t: 30, b: 58 };
   const NARROW = matchMedia("(max-width: 760px)");
@@ -444,6 +445,7 @@
       const c = el("circle", { cx: p.cx, cy: p.cy, r: 15, fill: "transparent", style: "cursor:pointer" }, gh);
       c.addEventListener("mouseenter", () => showTip(p));
       c.addEventListener("mouseleave", () => tip.style.opacity = 0);
+      c.addEventListener("click", e => { e.stopPropagation(); showTip(p); });  // touch: a tap shows it, a tap elsewhere hides it
     }
     renderTable();
   }
@@ -456,10 +458,26 @@
       <div class="tt-row"><span>${esc(scopeLabel())}</span><b>${p.d.score.toFixed(1)}%${p.d.std != null ? ` <span class="pm">± ${p.d.std.toFixed(1)}</span>` : ""}${p.d.n_repeats && p.d.n_repeats < SITE.n_runs ? ` <span class="pm">(${p.d.n_repeats} runs)</span>` : ""}</b></div>
       <div class="tt-row"><span>Cost / question</span><b>${p.d.cost != null ? fmtCost(p.d.cost) : "–"}</b></div>
       <div class="tt-row"><span>Output tokens / question</span><b>${p.d.tok != null ? fmtTok(p.d.tok) : "–"}</b></div>`;
-    const box = svg.getBoundingClientRect(), k = box.width / W;
-    let left = p.cx * k + 16, top = p.cy * k - 20;
-    if (left + 260 > box.width) left = p.cx * k - 270;
-    tip.style.left = left + "px"; tip.style.top = Math.max(0, top) + "px"; tip.style.opacity = 1;
+    placeTip(p);
+  }
+
+  // Put the tooltip next to the point without covering it (the hit circle has r=15 in viewBox units): right of the
+  // point, else left, else below / above; always inside the chart. Sizes are measured after the content is set.
+  function placeTip(p) {
+    const box = svg.getBoundingClientRect(), k = box.width / W, x = p.cx * k, y = p.cy * k;
+    const w = tip.offsetWidth, h = tip.offsetHeight, gap = 15 * k + 8, pad = 4;
+    const clampX = v => Math.max(pad, Math.min(box.width - w - pad, v)), clampY = v => Math.max(pad, Math.min(box.height - h - pad, v));
+    let left, top;
+    if (x + gap + w <= box.width - pad) { left = x + gap; top = clampY(y - h / 2); }
+    else if (x - gap - w >= pad) { left = x - gap - w; top = clampY(y - h / 2); }
+    else {
+      left = clampX(x - w / 2);
+      // below or above the point; when neither fits inside the chart, the side with more room (may leave the chart)
+      if (y + gap + h <= box.height - pad) top = y + gap;
+      else if (y - gap - h >= pad) top = y - gap - h;
+      else top = box.height - y > y ? y + gap : y - gap - h;
+    }
+    tip.style.left = left + "px"; tip.style.top = top + "px"; tip.style.opacity = 1;
   }
 
   // ---- table: the score chosen in its own pulldown (with its spread over repeats), cost and tokens on that task ----
