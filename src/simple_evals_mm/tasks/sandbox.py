@@ -7,7 +7,9 @@ work dir (mounted at /work; $HOME, /groups, the project tree are not visible), a
 private /tmp, minimal environment, no stdin, rlimits (4 GB address space, 64 MB
 files; RLIMIT_NPROC=64 is set inside the sandbox by PREAMBLE because setting it
 before the user-namespace creation makes unshare fail with EAGAIN) and a wall-clock
-timeout. Without bwrap it falls back to rlimits only (no isolation) and warns once.
+timeout. Without bwrap it refuses to run (`require_sandbox()` raises), unless
+SANDBOX_ALLOW_UNSAFE=1 opts in to rlimits only: no filesystem / network isolation, so
+model code could read $HOME, the project tree and .env API keys.
 """
 
 from __future__ import annotations
@@ -22,6 +24,18 @@ import warnings
 
 PREAMBLE = "import resource as _r\n_r.setrlimit(_r.RLIMIT_NPROC, (64, 64))\ndel _r\n"
 _warned = False
+
+
+def require_sandbox() -> None:
+    """Raise unless model code can run in bwrap (or SANDBOX_ALLOW_UNSAFE=1 opts in to running it unisolated).
+    Tasks call it before generation so a missing sandbox fails fast instead of after the model calls."""
+    if shutil.which("bwrap") or os.environ.get("SANDBOX_ALLOW_UNSAFE") == "1":
+        return
+    raise RuntimeError(
+        "bubblewrap (bwrap) not found: refusing to run model-generated code without a sandbox. "
+        "Install bubblewrap, or set SANDBOX_ALLOW_UNSAFE=1 to run it with resource limits only "
+        "(no filesystem/network isolation: it can read your files and .env API keys)."
+    )
 
 
 def bwrap_cmd(python: str, workdir: str, argv: list[str]) -> list[str] | None:
@@ -106,6 +120,7 @@ def run_sandboxed(
                 f.write(content)
         cmd = bwrap_cmd(sys.executable, d, argv)
         if cmd is None:
+            require_sandbox()
             if not _warned:
                 warnings.warn(
                     "bwrap not found: running model code with rlimits only (no filesystem/network isolation)"
