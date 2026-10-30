@@ -1,11 +1,17 @@
 """Per-example checkpoint of map_examples (set_checkpoint): finished examples are reused after an interruption."""
 import pytest
 
-from simple_evals_mm.common import SingleEvalResult, map_examples, set_checkpoint
+from simple_evals_mm.common import (
+    SingleEvalResult,
+    checkpoint_prior_usage,
+    map_examples,
+    merge_usage,
+    set_checkpoint,
+)
 
 
-def _row(i, error=None):
-    return SingleEvalResult(id=str(i), question=f"q{i}", correct_answer="a", response_text=f"r{i}",
+def _row(i, error=None, id=...):
+    return SingleEvalResult(id=str(i) if id is ... else id, question=f"q{i}", correct_answer="a", response_text=f"r{i}",
                             extracted_answer="", score=1.0, error=error)
 
 
@@ -66,3 +72,64 @@ def test_no_checkpoint_by_default(tmp_path):
     set_checkpoint(None)
     assert [r.id for r in map_examples(_row, range(2))] == ["0", "1"]
     assert list(tmp_path.iterdir()) == []
+
+
+def _interrupt_after(n):
+    def fn(item):
+        if fn.calls >= n:
+            raise KeyboardInterrupt
+        fn.calls += 1
+        return _row(item)
+    fn.calls = 0
+    return fn
+
+
+def test_a_changed_item_order_is_refused(ckpt):
+    set_checkpoint(ckpt)
+    with pytest.raises(KeyboardInterrupt):
+        map_examples(_interrupt_after(2), ["a", "b", "c", "d"])  # a, b checkpointed at positions 0, 1
+    set_checkpoint(ckpt)
+    with pytest.raises(RuntimeError, match="item order"):
+        map_examples(_row, ["c", "d", "a", "b"])  # positions 0, 1 now hold c, d: a and b would be generated twice
+
+
+def test_rows_without_id_and_duplicates_within_new_rows_are_not_flagged(tmp_path):
+    for i, (items, make) in enumerate([
+        (["x", "x", "x"], lambda it: _row(it, id=None)),  # ScienceQA-style rows without an id
+        (["y", "z", "z"], _row),  # the same id twice among the new rows (CharXiv-style)
+    ]):
+        path = str(tmp_path / f"partial_{i}.jsonl")
+        set_checkpoint(path)
+        with pytest.raises(KeyboardInterrupt):
+            map_examples(_interrupt_after(1), items)
+        set_checkpoint(path)
+        assert len(map_examples(make, items)) == 3
+    set_checkpoint(None)
+
+
+def test_usage_of_interrupted_attempts_is_kept(ckpt):
+    usage = {"call_count": 0, "cost_usd": 0.0}
+
+    def fn(i):
+        if i == 2 and usage["call_count"] == 2:
+            raise KeyboardInterrupt
+        usage["call_count"] += 1
+        usage["cost_usd"] += 0.5
+        return _row(i)
+
+    set_checkpoint(ckpt, lambda: {"model": dict(usage), "judge": None})
+    with pytest.raises(KeyboardInterrupt):
+        map_examples(fn, range(4))
+    usage.update(call_count=0, cost_usd=0.0)  # a new job: fresh counters
+    set_checkpoint(ckpt, lambda: {"model": dict(usage), "judge": None})
+    assert checkpoint_prior_usage() == [{"model": {"call_count": 2, "cost_usd": 1.0}, "judge": None}]
+    map_examples(fn, range(4))
+    total = merge_usage(dict(usage), checkpoint_prior_usage()[0]["model"])
+    assert total == {"call_count": 4, "cost_usd": 2.0}
+
+
+def test_merge_usage_sums_numbers_and_provider_counts():
+    a = {"input_tokens": 10, "call_count": 1, "cost_usd": 0.1, "providers": {"X": 1}}
+    b = {"input_tokens": 5, "call_count": 2, "cost_usd": None, "providers": {"X": 1, "Y": 1}}
+    assert merge_usage(a, b) == {"input_tokens": 15, "call_count": 3, "cost_usd": 0.1, "providers": {"X": 2, "Y": 1}}
+    assert merge_usage(None, b) == b

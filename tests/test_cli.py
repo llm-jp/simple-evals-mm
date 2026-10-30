@@ -128,6 +128,11 @@ def test_a_repeat_whose_scoring_failed_reuses_its_generations(cli, monkeypatch, 
     assert len(s.prompts) == len(QUESTIONS)  # repeat 1 came from the checkpoint, only repeat 2 was generated
     assert _summary()["scores"] == pytest.approx([2 / 3, 2 / 3])
     assert not any(f.startswith("partial_") for f in os.listdir(runs.task_dir("r1", "arith")))
+    with open(os.path.join(runs.task_dir("r1", "arith"), "score_r1.json")) as f:
+        r1 = json.load(f)
+    # the 3 calls were made by the failed attempt; the rerun made none for repeat 1, and they are still counted
+    assert r1["model_usage"]["call_count"] == 3
+    assert r1["resumed_from_checkpoint"] == {"examples": 3, "earlier_attempts": 1}
 
 
 def test_rescore_script_reproduces_scores(cli):
