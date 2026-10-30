@@ -1,4 +1,9 @@
-"""Per-example checkpoint of map_examples (set_checkpoint): finished examples are reused after an interruption."""
+"""Per-example checkpoint of map_examples (set_checkpoint): finished examples are reused after an interruption.
+Also the shared pool of concurrent repeats (set_shared_pool) and SamplerBase.fork."""
+import concurrent.futures
+import threading
+import time
+
 import pytest
 
 from simple_evals_mm.common import (
@@ -7,6 +12,7 @@ from simple_evals_mm.common import (
     map_examples,
     merge_usage,
     set_checkpoint,
+    set_shared_pool,
 )
 
 
@@ -133,3 +139,47 @@ def test_merge_usage_sums_numbers_and_provider_counts():
     b = {"input_tokens": 5, "call_count": 2, "cost_usd": None, "providers": {"X": 1, "Y": 1}}
     assert merge_usage(a, b) == {"input_tokens": 15, "call_count": 3, "cost_usd": 0.1, "providers": {"X": 2, "Y": 1}}
     assert merge_usage(None, b) == b
+
+
+def test_concurrent_repeats_share_the_pool_and_keep_their_own_checkpoints(tmp_path):
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+    lock, active, peak = threading.Lock(), [0], [0]
+
+    def fn(i):
+        with lock:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        time.sleep(0.01)
+        with lock:
+            active[0] -= 1
+        return _row(i)
+
+    def repeat(k):
+        set_checkpoint(str(tmp_path / f"partial_r{k}.jsonl"))
+        set_shared_pool(pool)
+        try:
+            return [r.id for r in map_examples(fn, range(8), 3)]
+        finally:
+            set_shared_pool(None)
+            set_checkpoint(None)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+        out = list(ex.map(repeat, (1, 2, 3)))
+    pool.shutdown()
+    assert out == [[str(i) for i in range(8)]] * 3
+    assert peak[0] <= 3  # 3 repeats x 3 threads requested, but the shared pool caps the total
+    for k in (1, 2, 3):  # every repeat checkpointed its own examples into its own file
+        with open(tmp_path / f"partial_r{k}.jsonl") as f:
+            assert len(f.read().splitlines()) == 8
+
+
+def test_fork_has_its_own_usage_counters():
+    from simple_evals_mm.sampler.cot_sampler import CoTSampler
+    from tests.helpers import EchoSampler
+
+    base = EchoSampler(reply="x")
+    wrapped = CoTSampler(base)
+    a, b = wrapped.fork(), wrapped.fork()
+    a._sampler([a._sampler.pack_message(instruction="q")])
+    assert a.get_usage()["call_count"] == 1 and b.get_usage()["call_count"] == 0
+    assert base.get_usage()["call_count"] == 0
