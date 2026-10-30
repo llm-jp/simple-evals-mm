@@ -171,6 +171,19 @@ def test_a_failed_overlapped_repeat_keeps_the_others(cli, monkeypatch):
     assert _summary()["scores"] == pytest.approx([2 / 3, 2 / 3])
 
 
+def test_generate_only_is_recorded_and_refuses_a_judge(cli, monkeypatch):
+    cli("--generate-only")
+    with open(os.path.join(runs.task_dir("r1", "arith"), "score_r1.json")) as f:
+        assert json.load(f)["run_flags"]["generate_only"] is True
+    assert _summary()["run_flags"]["generate_only"] is True
+    with open(os.path.join(runs.run_dir("r1"), "config.json")) as f:
+        assert json.load(f)["cli"]["generate_only"] is True
+    monkeypatch.setattr(sys, "argv", ["simple_evals.py", "--model", "fake-model", "--eval", "arith", "--run-id", "r2",
+                                      "--generate-only", "--grader-model", "gpt-4o-2024-11-20"])
+    with pytest.raises(SystemExit):
+        se.main()
+
+
 def test_rescore_script_reproduces_scores(cli):
     import rescore
 
