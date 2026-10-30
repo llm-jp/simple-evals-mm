@@ -34,7 +34,8 @@ def require_sandbox() -> None:
     raise RuntimeError(
         "bubblewrap (bwrap) not found: refusing to run model-generated code without a sandbox. "
         "Install bubblewrap, or set SANDBOX_ALLOW_UNSAFE=1 to run it with resource limits only "
-        "(no filesystem/network isolation: it can read your files and .env API keys)."
+        "(no filesystem/network isolation: it can read your files and .env API keys). "
+        "See https://github.com/llm-jp/simple-evals-mm/blob/main/docs/task_setup.md"
     )
 
 
