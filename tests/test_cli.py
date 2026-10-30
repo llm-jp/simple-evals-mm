@@ -159,6 +159,28 @@ def test_rescore_refreshes_failure_counts_in_the_summary(cli):
     assert _summary()["num_grader_failed_per_repeat"] == [0, 0] and _summary()["total_grader_failed"] == 0
 
 
+class BrokenRescoreEval(ArithmeticEval):
+    def rescore(self, rows):
+        raise ValueError("judge exploded")
+
+
+def test_rescore_script_grades_tasks_in_parallel_and_reports_failures(cli, monkeypatch, capsys):
+    import rescore
+
+    monkeypatch.setitem(se.EVAL_REGISTRY, "arith2", (ArithmeticEval, False))
+    monkeypatch.setitem(se.EVAL_REGISTRY, "broken", (BrokenRescoreEval, False))
+    for task in ("arith", "arith2", "broken"):
+        cli("--eval", task)
+    monkeypatch.setattr(sys, "argv", ["rescore.py", "--run", "r1", "--grader-model", "dummy", "--jobs", "3"])
+    assert rescore.main() == 1  # the broken task fails, the others are still graded
+    out = capsys.readouterr().out
+    assert "[r1/broken] ValueError: judge exploded" in out and "[FAIL] 1 task(s)" in out
+    for task in ("arith", "arith2"):
+        assert os.path.exists(os.path.join(runs.task_dir("r1", task), "grades.jsonl"))
+    assert not os.path.exists(os.path.join(runs.task_dir("r1", "broken"), "grades.jsonl"))
+    assert sys.stdout is not None and not isinstance(sys.stdout, rescore._PrefixedStdout)
+
+
 def test_fill_missing_ids_and_merge(cli, tmp_path):
     """A task gained an item after the run: generate only that id under a fill run, merge it in, and re-score."""
     import merge_runs
