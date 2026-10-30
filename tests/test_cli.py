@@ -182,6 +182,11 @@ def test_generate_only_is_recorded_and_refuses_a_judge(cli, monkeypatch):
                                       "--generate-only", "--grader-model", "gpt-4o-2024-11-20"])
     with pytest.raises(SystemExit):
         se.main()
+    # also the default judge when it is given explicitly: it would be silently ignored
+    monkeypatch.setattr(sys, "argv", ["simple_evals.py", "--model", "fake-model", "--eval", "arith", "--run-id", "r2",
+                                      "--generate-only", "--grader-model", se.DEFAULT_GRADER_MODEL])
+    with pytest.raises(SystemExit):
+        se.main()
 
 
 def test_rescore_script_reproduces_scores(cli):
