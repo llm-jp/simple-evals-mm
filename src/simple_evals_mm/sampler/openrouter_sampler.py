@@ -52,6 +52,9 @@ MODELS: dict[str, dict] = {
     # ---- API models: first-party endpoint, provider-default decoding -------------------------
     "anthropic/claude-fable-5": dict(provider=["anthropic"], efforts=("low", "medium", "high", "max"), open_weight=False),
     "openai/gpt-6-astra": dict(provider=["openai"], efforts=("low", "medium", "high", "xhigh", "max"), open_weight=False),  # OpenAI docs; reasoning mandatory, no none/minimal (2026-10-24)
+    # README usage example (model and judge); OpenRouter supported_efforts, reasoning optional (2026-10-30)
+    "openai/gpt-6.1-terra": dict(provider=["openai"], efforts=("none", "low", "medium", "high", "xhigh", "max"), open_weight=False),
+    "openai/gpt-6-luna": dict(provider=["openai"], efforts=("none", "low", "medium", "high", "xhigh", "max"), open_weight=False),
     "google/gemini-3.8-flash": dict(provider=["google-ai-studio"], efforts=("low", "medium", "high"), open_weight=False),  # Gemini docs: minimal unavailable on 3.8 (OpenRouter maps it to low)
     # muse-wonder: "none" rejected (reasoning mandatory); minimal/low/medium/high accepted (smoke 2026-10-21)
     "meta/muse-wonder": dict(provider=["meta"], efforts=("minimal", "low", "medium", "high", "xhigh", "max"), open_weight=False),  # OpenRouter supported_efforts / Cursor docs (2026-10-24)
