@@ -312,12 +312,11 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 .mrow .head .psize { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .about-list code { font-size: 13px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 
-/* leaderboard heading row: Changelog button */
-.lb-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
-.lb-head h2 { margin: 0; }
-.changelog-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); font-size: 14px; padding: 6px 12px; border-radius: 8px; text-decoration: none; }
+/* Changelog button, right after "last updated ..." in the summary line */
+.changelog-btn { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; vertical-align: middle; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); font-size: 13px; line-height: 1.4; padding: 2px 9px; border-radius: 999px; text-decoration: none; white-space: nowrap; }
 .changelog-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
-.changelog-btn svg { width: 15px; height: 15px; }
+.changelog-btn svg { width: 13px; height: 13px; }
+@media (max-width: 760px) { .changelog-btn { margin-left: 2px; } }  /* wrapped under the line: no indent */
 
 /* changelog page */
 #changelog { padding-top: 40px; padding-bottom: 56px; }
