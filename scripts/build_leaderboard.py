@@ -257,21 +257,36 @@ def project_version() -> str | None:
     return m.group(1) if m else None
 
 
-def stamp_assets(site_dir: str) -> None:
-    """Version the asset URLs in index.html (style.css, logos.js, data.js -> ?v=<content hash>), so a browser that
-    cached an older copy (GitHub Pages: max-age=600) cannot pair the new page with stale data or styles."""
+def _version_urls(html: str, site_dir: str, names: tuple[str, ...]) -> str:
     import hashlib
     import re
 
-    p = os.path.join(site_dir, "index.html")
-    if not os.path.exists(p):
-        return
-    html = open(p).read()
-    for name in ("style.css", "logos.js", "data.js"):
+    for name in names:
         f = os.path.join(site_dir, name)
         if os.path.exists(f):
             v = hashlib.sha256(open(f, "rb").read()).hexdigest()[:10]
             html = re.sub(rf'(["\']){re.escape(name)}(\?v=[0-9a-f]+)?(["\'])', rf"\g<1>{name}?v={v}\g<3>", html)
+    return html
+
+
+def stamp_assets(site_dir: str) -> None:
+    """Version the asset URLs in index.html and changelog.html (style.css, logos.js, data.js, changelog.js ->
+    ?v=<content hash>), so a browser that cached an older copy (GitHub Pages: max-age=600) cannot pair the new page
+    with stale data or styles."""
+    import hashlib
+    import re
+
+    for page in ("changelog.html",):
+        pp = os.path.join(site_dir, page)
+        if os.path.exists(pp):
+            with open(pp) as fh:
+                html = _version_urls(fh.read(), site_dir, ("style.css", "changelog.js"))
+            with open(pp, "w") as fh:
+                fh.write(html)
+    p = os.path.join(site_dir, "index.html")
+    if not os.path.exists(p):
+        return
+    html = _version_urls(open(p).read(), site_dir, ("style.css", "logos.js", "data.js"))
     # link previews (Slack, X) cache by image URL: version the absolute og:image / twitter:image URL as well
     og = os.path.join(site_dir, "assets", "og-image.png")
     if os.path.exists(og):

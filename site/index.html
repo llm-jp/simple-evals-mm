@@ -22,7 +22,7 @@
 <meta name="twitter:description" content="simple-evals-mm is a lightweight, highly extensible framework for evaluating vision-language models on 40+ tasks across English and Japanese benchmarks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=44c956b1f1">
+<link rel="stylesheet" href="style.css?v=1f66b51324">
 </head>
 <body>
 
@@ -213,7 +213,9 @@
                   ...MEMBERS.map(t => ({ key: "t:" + t.key, label: t.label }))];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-  document.getElementById("lb-meta").innerHTML = `${TASKS.length} tasks · mean over ${SITE.n_runs} runs · last updated ${esc(D.updated)}`;
+  document.getElementById("lb-meta").innerHTML = `${TASKS.length} tasks · mean over ${SITE.n_runs} runs · last updated ${esc(D.updated)}`
+    + ` <a class="changelog-btn" href="changelog.html" title="Models, tasks, scoring and reporting changes, by date">`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>Changelog</a>`;
 
   const state = { view: "best", subject: SCOPES[0].key, x: "cost", scale: "log", sortKey: null, sortDir: -1, cfg: new Set() };
   const effLabel = (m, e) => e === "max" ? m.maxLabel : m.lowLabel;

@@ -311,3 +311,33 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 .about-list b { color: var(--text-primary); }
 .mrow .head .psize { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .about-list code { font-size: 13px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+
+/* Changelog button, right after "last updated ..." in the summary line */
+.changelog-btn { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; vertical-align: middle; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); font-size: 13px; line-height: 1.4; padding: 2px 9px; border-radius: 999px; text-decoration: none; white-space: nowrap; }
+.changelog-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.changelog-btn svg { width: 13px; height: 13px; }
+@media (max-width: 760px) { .changelog-btn { margin-left: 2px; } }  /* wrapped under the line: no indent */
+
+/* changelog page */
+#changelog { padding-top: 40px; padding-bottom: 56px; }
+#changelog .back { margin: 0 0 14px; font-size: 14px; }
+#changelog .back a { color: var(--text-secondary); text-decoration: none; }
+#changelog .back a:hover { color: var(--text-primary); }
+.cl-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; }
+.changelog { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--border); }
+.cl-entry { position: relative; padding: 0 0 28px 22px; scroll-margin-top: 80px; }
+.cl-entry::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); }
+.cl-when { font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.cl-version { font-size: 12px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 8px; text-decoration: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cl-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.cl-items li { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: baseline; color: var(--text-secondary); line-height: 1.5; }
+.cl-tag { display: inline-block; font-size: 12px; font-weight: 600; text-align: center; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-secondary); }
+.cl-tag[data-cat="Release"] { background: rgba(42, 120, 214, 0.14); color: var(--accent); }
+.cl-tag[data-cat="Models"] { background: rgba(46, 160, 67, 0.15); color: #2e8a43; }
+.cl-tag[data-cat="Tasks"] { background: rgba(130, 80, 223, 0.14); color: #7a4fd0; }
+.cl-tag[data-cat="Scoring"] { background: rgba(219, 118, 20, 0.15); color: #b8620f; }
+.cl-tag[data-cat="Reporting"] { background: rgba(120, 120, 115, 0.16); color: var(--text-secondary); }
+:root[data-theme-shown="dark"] .cl-tag[data-cat="Models"] { color: #5cc177; }
+:root[data-theme-shown="dark"] .cl-tag[data-cat="Tasks"] { color: #a98bf0; }
+:root[data-theme-shown="dark"] .cl-tag[data-cat="Scoring"] { color: #eb9a4a; }
+@media (max-width: 640px) { .cl-items li { grid-template-columns: 1fr; gap: 3px; } .cl-tag { justify-self: start; } }
