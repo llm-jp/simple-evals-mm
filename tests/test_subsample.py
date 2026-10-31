@@ -31,8 +31,11 @@ def test_every_task_samples_through_subsample():
         tree = ast.parse(open(f).read())
         uses_n = any(isinstance(n, ast.Name) and n.id == "num_examples" for n in ast.walk(tree))
         calls = any(isinstance(n, ast.Call) and getattr(n.func, "id", None) == "subsample" for n in ast.walk(tree))
+        imported = any(isinstance(n, ast.ImportFrom) and any(a.name == "subsample" for a in n.names) for n in tree.body)
         if uses_n and not calls:
             missing.append(os.path.basename(f))
+        if calls and not imported:  # 2026-10-31: cvqaja / realworldqa called it without importing it (NameError)
+            missing.append(os.path.basename(f) + " (not imported)")
     assert not missing, f"tasks with num_examples that do not use subsample(): {missing}"
 
 
