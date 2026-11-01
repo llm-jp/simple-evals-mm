@@ -8,6 +8,7 @@ import pytest
 from simple_evals_mm import checks, errors, runner
 from simple_evals_mm.models import Response
 from simple_evals_mm.samplers import registry
+from simple_evals_mm.verifiers import trial_seed
 from tests.fakes import ANSWERS, Arith, FakeSampler
 
 
@@ -136,7 +137,10 @@ def test_trial_locks_and_dry_run(job_env, capsys):
     assert s["run"]("-k", "2") == 0
     st = s["store"]()
     a1, a2 = st.read_trials("arith", 1), st.read_trials("arith", 2)
-    assert [t.generation_lock for t in a1] == [t.generation_lock for t in a2]  # same request in both attempts
+    # the per-trial seed (sha256 of "<task_id>__a<k>") is sent and recorded per step: the attempts' requests differ
+    assert all(t1.generation_lock != t2.generation_lock for t1, t2 in zip(a1, a2, strict=True))
+    assert [t.trajectory.agent_steps[0].extra["seed"] for t in a2] == [trial_seed(f"{t.task_name}__a2") for t in a2]
+    assert s["sampler"].seeds and all(isinstance(x, int) for x in s["sampler"].seeds)
     assert len({t.generation_lock for t in a1}) == 3 and len({t.verifier_lock for t in a1 + a2}) == 1
     assert st.read_lock()["datasets"]["arith"]["verifier_lock"] == a1[0].verifier_lock
     capsys.readouterr()
@@ -285,3 +289,55 @@ def test_generate_only_trial_lock_has_no_unresolved_judge(job_env, monkeypatch):
     assert s["sem"]("job", "regrade", g.dir) == 0
     with open(os.path.join(g.verifier_dir("arith"), g.current_verification_id("arith"), "meta.json")) as f:
         assert json.load(f)["verifier_lock"] == tv.verifier_lock
+
+
+def test_breaker_counts_connection_failures_not_rate_limits(job_env, monkeypatch, tmp_path, capsys):
+    """503 / 429 after every retry are ordinary provider_failed (written, excluded, resumable with -f); connection
+    refusals (DNS, TLS, refused) and endpoint_unavailable trip the breaker."""
+    s = job_env
+    qs = [f"q{i}" for i in range(8)]
+    monkeypatch.setattr(Arith, "questions", qs)
+    monkeypatch.setattr(Arith, "truth", {q: "ok" for q in qs})
+    s["sampler"].reply = "ok"
+    s["sampler"].fail = {"q": errors.SamplerError("503 Service Unavailable")}
+    cfg = tmp_path / "job.yaml"
+    cfg.write_text(json.dumps({"retry": {"abort_after_consecutive": 3, "max_retries": 0}}))
+    assert s["run"]("-c", str(cfg), name="busy") == 0
+    assert len(s["store"]("busy").read_trials("arith", 1)) == 8  # all written as provider_failed
+    s["sampler"].fail = {"q": errors.SamplerError("gave up: ConnectError: [Errno 111] Connection refused",
+                                                  errors.PROVIDER_FAILED, connection=True)}
+    capsys.readouterr()
+    assert s["run"]("-c", str(cfg), name="down") == 2
+    assert "circuit breaker" in capsys.readouterr().err and s["store"]("down").read_trials("arith", 1) == []
+
+
+def test_endpoint_change_within_a_job_stops_it(job_env, monkeypatch, capsys):
+    """A response from another model / provider than the first one this sampler saw: the trial is not written and
+    the job stops like the circuit breaker; a system_fingerprint change is only recorded."""
+    s = job_env
+    qs = [f"q{i}" for i in range(6)]
+    monkeypatch.setattr(Arith, "questions", qs)
+    monkeypatch.setattr(Arith, "truth", {q: "ok" for q in qs})
+
+    def reply(q):
+        n = len(s["sampler"].calls)
+        return Response(text="ok", model="m1" if n <= 3 else "m2", system_fingerprint=f"fp{n}", finish_reason="stop")
+
+    s["sampler"].reply = reply
+    capsys.readouterr()
+    assert s["run"]() == 2
+    err = capsys.readouterr().err
+    assert "endpoint change" in err and "model 'm1' -> 'm2'" in err
+    written = s["store"]().read_trials("arith", 1)
+    assert len(written) == 3 and written[1].trajectory.agent_steps[0].extra["identity_change"] == {
+        "system_fingerprint": ["fp1", "fp2"]}
+
+
+def test_lock_records_identity_base_url_and_concurrency(job_env):
+    s = job_env
+    s["sampler"].endpoint = {"canonical_slug": "fake-2026", "tag": "x"}
+    assert s["run"]("-n", "2") == 0
+    st = s["store"]()
+    lock = st.read_lock()["sampler"]
+    assert lock["model_identity"] == "pinned" and lock["served_identity"] == {"canonical_slug": "fake-2026"}
+    assert st.read_trials("arith", 1)[0].trajectory.extra["n_concurrent"] == 2

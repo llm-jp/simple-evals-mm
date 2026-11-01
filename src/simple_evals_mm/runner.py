@@ -35,8 +35,10 @@ from simple_evals_mm.samplers.base import endpoint_lock, lock_config
 RUNTIME_ONLY = ("job_name", "jobs_dir", "n_concurrent", "retry", "generate_only", "judge_model", "allow_dirty",
                 "skip_preflight")
 RESUME_REFUSED = "job directory already exists and cannot be resumed with a different config"
-# Trial causes that mean the endpoint, not the task, failed: the circuit breaker counts them
-BREAKER_CAUSES = (errors.ENDPOINT_UNAVAILABLE, errors.PROVIDER_FAILED)
+# Trials that mean the endpoint, not the task, failed: the circuit breaker counts endpoint_unavailable and
+# connection-level failures (refused, DNS, TLS; provider_failed with exception_info.connection). Rate limits, 5xx and
+# timeouts keep retrying with backoff and end as ordinary provider_failed (excluded, `sem job resume -f`).
+BREAKER_CAUSES = (errors.ENDPOINT_UNAVAILABLE,)
 BREAKER_TRIPPED = ("the pinned endpoint is failing; resume later with `sem job resume`, or start a new job with another "
                    "--provider for the unfinished datasets (`sem job show` lists them)")
 
@@ -118,6 +120,15 @@ def sampler_spec(cfg: dict, slug: str | None = None, judge: bool = False, base_u
         api_key_name=cfg.get("api_key_name"), api_format=cfg.get("api_format"))
 
 
+def model_identity(spec, sconf: dict) -> dict:
+    """lock.json sampler.model_identity ("alias": an undated / alias id the API may move to another snapshot; else
+    "pinned") and the identity the provider reports (OpenRouter canonical_slug, Gemini model version, served model
+    id / root)."""
+    ep = (sconf or {}).get("endpoint") or {}
+    ident = {k: ep[k] for k in ("canonical_slug", "hugging_face_id", "version", "model_id", "root") if ep.get(k)}
+    return {"model_identity": "alias" if getattr(spec, "alias", False) else "pinned", "served_identity": ident or None}
+
+
 def _comparable(cfg: dict) -> dict:
     return {k: v for k, v in cfg.items() if k not in RUNTIME_ONLY}
 
@@ -129,7 +140,8 @@ def _lock_digest(lock: dict) -> dict:
     code = lock.get("code", {})
     sconf = (lock.get("sampler") or {}).get("config") or {}
     return {"commit": code.get("commit"), "dirty": code.get("dirty"), "diff_sha256": code.get("diff_sha256"),
-            "endpoint": endpoint_lock(sconf.get("endpoint")),
+            "python": code.get("python"), "endpoint": endpoint_lock(sconf.get("endpoint")),
+            "base_url": lock_config(sconf).get("base_url") if sconf else None,
             "settings": {k: (v or {}).get("value") for k, v in (sconf.get("settings") or {}).items()},
             "lock_check": {k: code.get("lock_check", {}).get(k) for k in ("ok", "lock_sha256", "mismatches")},
             "datasets": {n: {k: d.get(k) for k in ("revision", "task_ids_sha256", "tasks_sha256", "n_tasks")}
@@ -203,8 +215,10 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
                          "tasks_sha256": dataset_mod.tasks_sha256(job.checksums[name].items()),
                          "n_tasks": len(tasks), "config": ds.config(),
                          "verifier_lock": dataset_mod.verifier_lock(ds, judge_config, code.get("commit"))}
+    sconf = sampler.config()
     lock = {"format": store_mod.FORMAT, "job_id": None, "code": code, "datasets": lock_ds,
-            "sampler": {**spec.resolution(), "config": sampler.config()}, "judge": judge_spec.resolution() if judge_spec else None,
+            "sampler": {**spec.resolution(), "config": sconf, **model_identity(spec, sconf)},
+            "judge": judge_spec.resolution() if judge_spec else None,
             "agent": agent.config(), "skip_preflight": bool(cfg.get("skip_preflight"))}
 
     if st.exists():
@@ -252,6 +266,7 @@ def _run_trial(job: Job, name: str, k: int, task) -> TrialResult:
         if retry < rc["max_retries"]:
             print(f"[trial] {name}/{task.id} a{k}: {cause} ({(traj.failure or {}).get('error', '')[:120]}), retry {retry + 1}")
     traj.extra["retries"] = retry
+    traj.extra["n_concurrent"] = job.cfg["n_concurrent"]
     fm = traj.final_metrics
     failure = traj.failure
     trial = TrialResult(
@@ -262,7 +277,8 @@ def _run_trial(job: Job, name: str, k: int, task) -> TrialResult:
         usage={"prompt_tokens": fm.total_prompt_tokens or 0, "completion_tokens": fm.total_completion_tokens or 0,
                "cached_tokens": fm.total_cached_tokens or 0, "cost_usd": fm.total_cost_usd} if fm else {},
         exception_info={"exception_type": failure["error"].split(":", 1)[0], "message": failure["error"],
-                        "cause": failure["cause"]} if failure else None,
+                        "cause": failure["cause"],
+                        **{k: failure[k] for k in ("connection", "endpoint_changed") if failure.get(k)}} if failure else None,
         started_at=started, finished_at=_now(),
         generation_lock=dataset_mod.generation_lock(traj, job.sampler_config, commit=job.lock["code"].get("commit")),
         verifier_lock=job.lock["datasets"][name]["verifier_lock"])
@@ -271,6 +287,12 @@ def _run_trial(job: Job, name: str, k: int, task) -> TrialResult:
 
 def _cause(trial: TrialResult) -> str | None:
     return (trial.exception_info or {}).get("cause")
+
+
+def _breaker(trial: TrialResult) -> bool:
+    """The trial failed at the endpoint: endpoint_unavailable, or a connection-level failure after every retry."""
+    info = trial.exception_info or {}
+    return info.get("cause") in BREAKER_CAUSES or bool(info.get("connection"))
 
 
 def run_trials(job: Job) -> None:
@@ -300,7 +322,7 @@ def run_trials(job: Job) -> None:
 
     limit = int((job.cfg.get("retry") or {}).get("abort_after_consecutive", DEFAULTS["retry"]["abort_after_consecutive"]) or 0)
     streak: list[tuple[str, TrialResult]] = []  # the current run of breaker causes, not written yet
-    tripped, dropped = False, 0
+    tripped, dropped, endpoint_change = False, 0, None
 
     def write(name: str, trial: TrialResult) -> None:
         k = trial.attempt
@@ -329,14 +351,19 @@ def run_trials(job: Job) -> None:
                     name = running.pop(f)
                     trial = f.result()  # a fatal error (bug, ThinkLeakError) stops the job; finished trials are kept
                     bar.update(1)
-                    if _cause(trial) in BREAKER_CAUSES:
+                    if _breaker(trial):
                         if tripped:
                             dropped += 1
                             continue
                         streak.append((name, trial))
-                        if limit and len(streak) >= limit:
+                        changed = (trial.exception_info or {}).get("endpoint_changed")
+                        if changed or (limit and len(streak) >= limit):
+                            # a served model / provider change stops the job at once: no trial of the new endpoint
+                            # is mixed into the job
                             tripped, dropped = True, dropped + len(streak)
-                            print(f"[job] {len(streak)} consecutive trials ended in {'/'.join(BREAKER_CAUSES)} "
+                            if changed:
+                                endpoint_change = (trial.exception_info or {}).get("message")
+                            print(f"[job] {len(streak)} consecutive trial(s) failed at the endpoint "
                                   f"(last: {(trial.exception_info or {}).get('message', '')[:200]}); no new trials")
                             streak = []
                     else:
@@ -353,6 +380,8 @@ def run_trials(job: Job) -> None:
             raise
         finally:
             bar.close()
+    if tripped and endpoint_change:
+        raise JobError(f"endpoint change: {endpoint_change}; {dropped} trial(s) not written. {BREAKER_TRIPPED}")
     if tripped:
         raise JobError(f"circuit breaker: {limit} consecutive trials failed at the endpoint; {dropped} failed trial(s) "
                        f"not written. {BREAKER_TRIPPED}")

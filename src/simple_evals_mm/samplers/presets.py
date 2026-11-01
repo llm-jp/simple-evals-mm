@@ -137,6 +137,11 @@ MODEL_ARGS: dict[str, ModelArg] = {
                                env="OPENROUTER_MAX_REQUEST_MB"),
     # every chat-completions request
     "extra_body": ModelArg("body", dict, "JSON object merged into the request body (recorded)"),
+    # the per-trial seed (sha256 of "<task_id>__a<k>"; chat `seed`, Gemini GenerateContentConfig.seed)
+    "seed": ModelArg("spec", str, "'off': do not send the per-trial seed (recorded)", choices=("on", "off")),
+    # Vertex AI project / location (else GEMINI_PROJECT_ID / GEMINI_LOCATION; recorded)
+    "project": ModelArg("spec", str, "Vertex AI project", key="vertex_project", env="GEMINI_PROJECT_ID"),
+    "location": ModelArg("spec", str, "Vertex AI location", key="vertex_location", env="GEMINI_LOCATION"),
     # Responses API / Gemini
     "reasoning_summary": ModelArg("spec", str, "Responses API reasoning.summary (the summary becomes the reasoning)",
                                   choices=("auto", "concise", "detailed")),
@@ -156,9 +161,9 @@ MODEL_ARGS: dict[str, ModelArg] = {
 }
 SERVED_ARGS = ("presence_penalty", "repetition_penalty", "min_p")
 # per api format / provider (added to every preset of that format / provider)
-FORMAT_ARGS = {"openai_chat_completions": ("extra_body",), "openai_responses": ("reasoning_summary",),
-               "google_generate_content": ("include_thoughts",)}
-PROVIDER_ARGS = {"openrouter": ("sampling", "max_image_px", "max_image_b64_mb", "max_request_mb"),
+FORMAT_ARGS = {"openai_chat_completions": ("extra_body", "seed"), "openai_responses": ("reasoning_summary",),
+               "google_generate_content": ("include_thoughts", "seed")}
+PROVIDER_ARGS = {"openrouter": ("sampling", "max_image_px", "max_image_b64_mb", "max_request_mb"), "vertex": ("project", "location"),
                  "sglang": SERVED_ARGS, "vllm": SERVED_ARGS, "hf": SERVED_ARGS}
 SPECIAL_SAMPLING = {"decode": {"qwen": {"temperature": 1.0, "top_p": 1.0, "top_k": 40, "repetition_penalty": 1.3}}}
 
@@ -241,23 +246,33 @@ def _family(name: str, **over) -> dict:
     return {**FAMILIES[name], "family": name, **over}
 
 
+def _alias(slug: str, open_weight: bool = False) -> bool:
+    """An undated / alias model id: the API may serve another snapshot under it at any time (a -preview, or a closed
+    model without a dated id). Open-weight ids name released weights (hugging_face_id recorded). Recorded as
+    lock.json sampler.model_identity "alias"; not refused (most OpenRouter models have no dated id)."""
+    import re
+
+    return "-preview" in slug or (not open_weight and not re.search(r"\d{4}-\d{2}-\d{2}|-\d{4}$", slug))
+
+
 # Exact slugs only: a model released later never inherits settings silently (an unknown slug is an error).
 PRESETS: dict[str, dict] = {
     # ---- OpenRouter: every registry model, pinned; the default max_tokens is the pinned endpoint's maximum
     **{f"openrouter/{m}": {"provider_pin": list(s["provider"]), "quant": list(s["quant"]) if s.get("quant") else None,
-                           "sampling": dict(s.get("sampling") or {}), "efforts": s.get("efforts"), "toggle": bool(s.get("toggle"))}
+                           "sampling": dict(s.get("sampling") or {}), "efforts": s.get("efforts"), "toggle": bool(s.get("toggle")),
+                           "alias": _alias(m, s.get("open_weight", False))}
        for m, s in OPENROUTER_MODELS.items()},
     # v0.4 ResponsesSampler over OpenRouter sent reasoning {"effort": "none"} (not {"enabled": false}, the
     # OpenRouterSampler mapping of "none"): reasoning_none "effort"
     "openrouter/openai/gpt-5.1": {**{k: v for k, v in FAMILIES["gpt-5.1"].items() if k != "output_limit"},
                                   "family": "gpt-5.1", "provider_pin": ["openai"], "max_tokens_field": "max_tokens",
-                                  "reasoning_none": "effort"},
+                                  "reasoning_none": "effort", "alias": True},
     # planned judge (not the default yet: switch after a judge-agreement check): effort medium
     # ($0.10 / $0.50 per 1M tokens on OpenRouter, 2026-11-01)
     "openrouter/openai/gpt-6-luna": {"provider_pin": ["openai"], "effort": "medium",
                                      "efforts": ("none", "low", "medium", "high", "xhigh", "max"),
                                      "max_tokens_field": "max_tokens", "system_message": OPENAI_SYSTEM_MESSAGE,
-                                     "system_role": "developer"},
+                                     "system_role": "developer", "alias": True},
     # v0.4 OpenAISampler over OpenRouter: image detail "high" as on OpenAI
     "openrouter/openai/gpt-4o-2024-11-20": {**{k: v for k, v in FAMILIES["gpt-4o"].items() if k != "output_limit"},
                                             "family": "gpt-4o", "provider_pin": ["openai"], "image_detail": "high"},
@@ -267,8 +282,8 @@ PRESETS: dict[str, dict] = {
     "openai/gpt-4o-2024-11-20": _family("gpt-4o"),
     "azure/gpt-4o-2024-11-20": _family("gpt-4o"),
     # ---- Gemini (AI Studio key, or Vertex AI with GEMINI_PROJECT_ID / GEMINI_LOCATION)
-    "gemini/gemini-3.1-pro-preview": _family("gemini-3"),
-    "vertex/gemini-3.1-pro-preview": _family("gemini-3"),
+    "gemini/gemini-3.1-pro-preview": _family("gemini-3", alias=True),
+    "vertex/gemini-3.1-pro-preview": _family("gemini-3", alias=True),
     # ---- served models: one exact entry per engine and HF id
     **{f"{eng}/{mid}": _family(fam) for mid, fam in SERVED_MODELS.items() for eng in SERVED_ENGINES},
 }

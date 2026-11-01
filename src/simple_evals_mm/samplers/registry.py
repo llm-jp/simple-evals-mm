@@ -6,7 +6,9 @@ A model is named `PROVIDER/MODEL` (`openrouter/qwen/qwen3.8-27b`, `openai/gpt-5.
   API key   --api-key-name VAR  >  the preset's variable  >  the provider's (<PROVIDER>_API_KEY; Azure
             AZURE_OPENAI_KEY, the GPT-5 deployments AZURE_OPENAI_KEY_GPT5)   (served engines: optional)
   base URL  --base-url URL      >  the preset's / provider's variable (<PROVIDER>_BASE_URL; Azure AZURE_OPENAI_ENDPOINT
-            / AZURE_OPENAI_ENDPOINT_GPT5) when set  >  the provider's default
+            / AZURE_OPENAI_ENDPOINT_GPT5) when set  >  the provider's default. For openrouter / openai / gemini a set
+            <PROVIDER>_BASE_URL is refused unless --base-url is given (a stray variable must not redirect a public API);
+            the URL's identity (scheme + host + path) is recorded in the sampler config
   format    --api-format F      >  the preset's  >  the provider's (openai / azure: openai_responses for gpt-5*, else
             openai_chat_completions; gemini / vertex: google_generate_content)
 
@@ -65,6 +67,20 @@ PROVIDERS: dict[str, dict] = {
 }
 
 
+# providers whose <PROVIDER>_BASE_URL variable is refused (only --base-url may redirect them)
+PUBLIC_APIS = ("openrouter", "openai", "gemini")
+# google-genai reads these from the environment and would switch the backend / endpoint behind our back
+GOOGLE_ENV = ("GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_GENAI_USE_ENTERPRISE", "GOOGLE_GEMINI_BASE_URL", "GOOGLE_VERTEX_BASE_URL")
+
+
+def check_google_env() -> None:
+    bad = [v for v in GOOGLE_ENV if os.environ.get(v) is not None]
+    if bad:
+        raise ValueError(f"{', '.join(bad)} set: google-genai would switch the backend / endpoint from the environment. "
+                         f"Unset them (`unset {' '.join(bad)}`, and remove them from .env); choose the backend with the "
+                         "slug (gemini/ or vertex/) and the endpoint with --base-url")
+
+
 def default_api_format(provider: str, model: str) -> str:
     formats = PROVIDERS[provider]["formats"]
     if RESPONSES in formats and model.startswith("gpt-5"):
@@ -111,6 +127,10 @@ class SamplerSpec:
     max_request_mb: float | None = None
     max_tries: int = 60
     max_rate_limit_tries: int = 600
+    alias: bool = False  # undated / alias model id (presets._alias): lock.json sampler.model_identity "alias"
+    seed: str = "on"  # "off": the per-trial seed is not sent (--model-arg seed=off)
+    vertex_project: str | None = None  # Vertex AI project / location (--model-arg, else GEMINI_PROJECT_ID / _LOCATION)
+    vertex_location: str | None = None
     api_version: str = "2023-05-15"  # azure
     # machine-local / secret resolution: names only (never values)
     base_url_source: str = "default"  # "--base-url" / "<PROVIDER>_BASE_URL" / "default"
@@ -251,6 +271,8 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
     endpoint maximum of max_output_tokens are resolved later, at Sampler.prepare()."""
     provider, model = parse_slug(slug)
     pinfo = PROVIDERS[provider]
+    if provider in ("gemini", "vertex"):
+        check_google_env()
     if api_format and api_format not in pinfo["formats"]:
         raise ValueError(f"--api-format {api_format!r} is not available for provider {provider} "
                          f"(supported: {', '.join(pinfo['formats'])}; all formats: {', '.join(API_FORMATS)})")
@@ -301,12 +323,18 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
     env_url = url_var or pinfo.get("base_url_var") or f"{provider.upper()}_BASE_URL"
     if base_url:
         spec.base_url_source = "--base-url"
+    elif os.environ.get(env_url) and provider in PUBLIC_APIS:
+        raise ValueError(f"{env_url} is set: a {provider} base URL is taken from --base-url only (pass --base-url "
+                         f"explicitly, or unset {env_url} and remove it from .env)")
     elif os.environ.get(env_url):
         spec.base_url_source = env_url
     elif pinfo["base_url"] is None:
         raise ValueError(f"provider {provider!r} has no default base URL: pass --base-url or set {env_url}")
     else:
         spec.base_url_source = "default"
+    if provider == "vertex":  # explicit, recorded; never the SDK's ADC project / global location
+        spec.vertex_project = spec.vertex_project or os.environ.get("GEMINI_PROJECT_ID") or None
+        spec.vertex_location = spec.vertex_location or os.environ.get("GEMINI_LOCATION") or None
     return spec
 
 
@@ -348,5 +376,5 @@ def _row(slug: str, prov: str, model: str, p: dict) -> dict:
     fmt = p.get("api_format") or default_api_format(prov, model)
     return {"slug": slug, "family": p.get("family"), "api_format": fmt, "efforts": p.get("efforts"),
             "effort": p.get("effort"), "output_limit": p.get("output_limit"), "sampling": dict(p.get("sampling") or {}),
-            "pin": p.get("provider_pin"), "quant": p.get("quant"),
+            "pin": p.get("provider_pin"), "quant": p.get("quant"), "alias": bool(p.get("alias")),
             "args": allowed_model_args(SamplerSpec(provider=prov, model=model, api_format=fmt), p)}

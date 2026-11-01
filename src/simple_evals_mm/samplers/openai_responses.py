@@ -85,7 +85,8 @@ class OpenAIResponsesSampler(OpenAIChatSampler):
         return out
 
     # ------------------------------------------------------------------ call
-    def __call__(self, messages: list[Message], tools: list[dict] | None = None) -> Response:
+    def __call__(self, messages: list[Message], tools: list[dict] | None = None, seed: int | None = None) -> Response:
+        """seed: the Responses API has none; recorded as None (not sent)."""
         s = self.spec
         self.ensure_prepared()
         items = self.to_api_messages(messages)
@@ -101,7 +102,10 @@ class OpenAIResponsesSampler(OpenAIChatSampler):
             err = getattr(resp, "error", None)
             raise errors.SamplerError(f"response failed: {getattr(err, 'code', '')} {getattr(err, 'message', err)}",
                                       exc_type="ResponseFailed")
-        return self._parse(resp)
+        r = self._parse(resp)
+        r.extra = {"sent_images": self._sent_images(items), "max_tokens_sent": kwargs["max_output_tokens"], "seed": None,
+                   "response_id": getattr(resp, "id", None)}
+        return r
 
     def _parse(self, resp) -> Response:  # type: ignore[override]
         texts, summaries, tool_calls, refused = [], [], [], False

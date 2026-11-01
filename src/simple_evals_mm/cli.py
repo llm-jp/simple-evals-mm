@@ -302,10 +302,12 @@ def cmd_models(args) -> int:
         pin = f"  pin={','.join(r['pin'])}" + (f"/{','.join(r['quant'])}" if r["quant"] else "") if r["pin"] else ""
         limit = f" output_limit={r['output_limit']}" if r["output_limit"] else ""
         fam = f" [{r['family']}]" if r["family"] and not r["slug"].startswith("--preset") else ""
+        fam += " (alias)" if r.get("alias") else ""
         print(f"{r['slug'] + fam:56s} {r['api_format']:24s} effort={efforts(r):34s} {samp}{pin}{limit}"
               + (f"  args={','.join(r['args'])}" if r["args"] else ""))
     print(f"{len(rows)} rows: exact slugs (served ids under every engine prefix), then the families for --preset. "
-          "Any other slug needs --preset FAMILY or --preset none; max_output_tokens defaults to the endpoint maximum.")
+          "Any other slug needs --preset FAMILY or --preset none; max_output_tokens defaults to the endpoint maximum. "
+          "(alias) = an undated id the API may move to another snapshot (recorded as model_identity alias).")
     return 0
 
 

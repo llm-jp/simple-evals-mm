@@ -28,7 +28,7 @@ import threading
 from io import BytesIO
 
 from simple_evals_mm.models import Image, Message, Response, Text, ToolCall
-from simple_evals_mm.samplers.base import Sampler, retry_call
+from simple_evals_mm.samplers.base import Sampler, describe_image, retry_call
 from simple_evals_mm.samplers.openai_chat import (
     TRANSIENT_400,
     _encode_file,
@@ -69,17 +69,38 @@ class GeminiSampler(Sampler):
                 self._client = self._make_client()
             return self._client
 
+    def base_url(self) -> str | None:
+        """The endpoint, always explicit: --base-url, else AI Studio's, else Vertex AI's for the recorded location
+        (the URLs google-genai would derive; never from GOOGLE_* variables, which registry.resolve refuses)."""
+        s = self.spec
+        if s.base_url_source != "default":
+            return s.base_url(self._cli_base_url)
+        if s.provider != "vertex":
+            return "https://generativelanguage.googleapis.com/"
+        loc = s.vertex_location
+        if not loc:
+            return None
+        if loc == "global":
+            return "https://aiplatform.googleapis.com/"
+        try:
+            from google.genai._api_client import _MULTI_REGIONAL_LOCATIONS as multi
+        except ImportError:
+            multi = ()
+        return f"https://aiplatform.{loc}.rep.googleapis.com/" if loc in multi else f"https://{loc}-aiplatform.googleapis.com/"
+
     def _make_client(self):
         from google import genai
         from google.genai import types
 
         s = self.spec
-        url = s.base_url(self._cli_base_url) if s.base_url_source != "default" else None
-        http = types.HttpOptions(base_url=url) if url else None
+        http = types.HttpOptions(base_url=self.base_url())
         if s.provider == "vertex":
-            return genai.Client(vertexai=True, project=os.environ.get("GEMINI_PROJECT_ID"),
-                                location=os.environ.get("GEMINI_LOCATION"), http_options=http)
-        return genai.Client(api_key=s.api_key(), http_options=http)
+            missing = [n for n, v in (("project (--model-arg project= or GEMINI_PROJECT_ID)", s.vertex_project),
+                                      ("location (--model-arg location= or GEMINI_LOCATION)", s.vertex_location)) if not v]
+            if missing:  # no silent application-default project / global location
+                raise RuntimeError(f"vertex: {' and '.join(missing)} not set")
+            return genai.Client(vertexai=True, project=s.vertex_project, location=s.vertex_location, http_options=http)
+        return genai.Client(vertexai=False, api_key=s.api_key(), http_options=http)
 
     def preflight(self, timeout: float = 10.0) -> list[str]:
         """Key / project variables set (names only); AI Studio: its endpoint answers GET /v1beta/models."""
@@ -88,7 +109,8 @@ class GeminiSampler(Sampler):
 
         s, problems = self.spec, []
         if s.provider == "vertex":
-            return [f"{v} is not set (provider vertex)" for v in s.extra_vars if not os.environ.get(v)]
+            return [f"{v} is not set (provider vertex)" for v, have in zip(s.extra_vars, (s.vertex_project, s.vertex_location),
+                                                                             strict=False) if not have]
         if s.api_key_required and not os.environ.get(s.api_key_name or ""):
             problems.append(f"{s.api_key_name} is not set (provider {s.provider})")
         url = s.base_url(self._cli_base_url)
@@ -175,10 +197,12 @@ class GeminiSampler(Sampler):
             system.insert(0, self.spec.system_message)
         return contents, ("\n\n".join(system) if system else None)
 
-    def build_config(self, system: str | None = None, tools: list[dict] | None = None):
+    def build_config(self, system: str | None = None, tools: list[dict] | None = None, seed: int | None = None):
         from google.genai import types
 
         body = self.request_body()
+        if seed is not None:
+            body["seed"] = seed
         thinking = body.pop("thinking_config", None)
         cfg = dict(body)
         if thinking:
@@ -195,15 +219,20 @@ class GeminiSampler(Sampler):
         return types.GenerateContentConfig(**cfg)
 
     # ------------------------------------------------------------------ call
-    def __call__(self, messages: list[Message], tools: list[dict] | None = None) -> Response:
+    def __call__(self, messages: list[Message], tools: list[dict] | None = None, seed: int | None = None) -> Response:
         s = self.spec
         self.ensure_prepared()
         contents, system = self.to_contents(messages)
-        config = self.build_config(system, tools)
+        config = self.build_config(system, tools, seed)
         resp = retry_call(lambda: self.client.models.generate_content(model=s.request_model, contents=contents, config=config),
                           label=f"[{s.provider}] {s.model}", max_tries=s.max_tries,
                           max_rate_limit_tries=s.max_rate_limit_tries, classify=classify_google_error)
-        return self._parse(resp)
+        r = self._parse(resp)
+        sent = [describe_image(p.inline_data.data, p.inline_data.mime_type) for c in contents for p in c.parts or []
+                if getattr(p, "inline_data", None) is not None and p.inline_data.data]
+        r.extra = {"sent_images": sent, "max_tokens_sent": config.max_output_tokens, "seed": config.seed,
+                   "response_id": getattr(resp, "response_id", None)}
+        return r
 
     def _parse(self, resp) -> Response:
         texts, thoughts, tool_calls = [], [], []

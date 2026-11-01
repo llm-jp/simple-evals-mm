@@ -39,7 +39,8 @@ def test_presets_and_errors(monkeypatch, endpoints):
     judge.prepare()
     jb = judge.request_body()
     assert jb["reasoning"] == {"effort": "none"} and jb["max_tokens"] == 128000  # the endpoint maximum, no small cap
-    assert jb["provider"] == {"order": ["openai"], "allow_fallbacks": False}
+    # the matched endpoint's tag and quantization (OpenRouter lists "unknown" for closed models)
+    assert jb["provider"] == {"order": ["openai"], "allow_fallbacks": False, "quantizations": ["unknown"]}
     for bad, kw in (("noprovider", {}), ("bogus/x", {}), ("openrouter/qwen/qwen3.8-27b", {"effort": "max"}),
                     ("azure/x", {"preset": "none"}), ("sglang/other", {}), ("sglang/m", {"preset": "nope"})):
         with pytest.raises(ValueError):
@@ -135,7 +136,7 @@ def clean_env(monkeypatch):
     return monkeypatch
 
 
-ENDPOINT_ROW = {"model_id": "m", "matched": True, "provider_name": "OpenAI", "tag": "openai", "quantization": "unknown",
+ENDPOINT_ROW = {"model_id": "m", "matched": True, "provider_name": None, "tag": None, "quantization": "unknown",
                 "context_length": 400000, "max_completion_tokens": 128000, "price_per_mtok": {"prompt": 1.25}}
 
 
@@ -152,7 +153,8 @@ def endpoints(monkeypatch):
         "default_parameters": dict(fake["defaults"]), "canonical_slug": model_id + "-2026", "hugging_face_id": None,
         "catalog_context_length": 400000})
     monkeypatch.setattr(openai_chat, "fetch_endpoint_info", lambda model_id, providers, quant=None, **kw: {
-        **fake["row"], "model_id": model_id})
+        **fake["row"], "model_id": model_id, "tag": fake["row"]["tag"] or providers[0],
+        "provider_name": fake["row"]["provider_name"] or providers[0].capitalize()})
     monkeypatch.setattr(openai_chat, "fetch_server_info", lambda base_url, engine, key=None, **kw: {
         "engine": engine, **fake["server"]})
     monkeypatch.setattr(openai_chat, "read_generation_config", lambda model: (dict(fake["gen"]), {"model": model, "found": bool(fake["gen"])}))
@@ -180,15 +182,21 @@ def _v04(cls, model_id, reply, png, text, effort=None, attr="client"):
 CHAT_CASES = {
     "gpt-4o (OpenAI chat)": ("simple_evals_mm.sampler.openai_sampler:OpenAISampler", "gpt-4o-2024-11-20",
                              {"OPENAI_API_KEY": "k"}, None, "openai/gpt-4o-2024-11-20", {}),
-    # v0.4 sent OpenAISampler over OpenRouter unpinned; v0.5 pins OpenAI's endpoint and asks for the billed cost
+    # v0.4 sent OpenAISampler over OpenRouter unpinned; v0.5 pins OpenAI's endpoint (its tag and quantization) and asks
+    # for the billed cost
     "gpt-4o (OpenRouter)": ("simple_evals_mm.sampler.openai_sampler:OpenAISampler", "gpt-4o-2024-11-20",
                             {"OPENROUTER_API_KEY": "k"}, None, "openrouter/openai/gpt-4o-2024-11-20",
-                            {"provider": {"order": ["openai"], "allow_fallbacks": False}, "usage": {"include": True}}),
+                            {"provider": {"order": ["openai"], "allow_fallbacks": False, "quantizations": ["unknown"]},
+                             "usage": {"include": True}}),
+    # v0.5 sends the matched endpoint row: its tag in provider.order and its quantization (v0.4: the provider slug only)
     "qwen3.8-27b (OpenRouter pin)": ("simple_evals_mm.sampler.openrouter_sampler:OpenRouterSampler", "openrouter/qwen/qwen3.8-27b",
-                                     {"OPENROUTER_API_KEY": "k"}, "low", "openrouter/qwen/qwen3.8-27b", {}),
+                                     {"OPENROUTER_API_KEY": "k"}, "low", "openrouter/qwen/qwen3.8-27b",
+                                     {"provider": {"order": ["alibaba"], "allow_fallbacks": False, "quantizations": ["unknown"]}}),
     "gemma-4-31b (OpenRouter bf16 pin, toggle)": ("simple_evals_mm.sampler.openrouter_sampler:OpenRouterSampler",
                                                   "openrouter/google/gemma-4-31b-it", {"OPENROUTER_API_KEY": "k"}, "none",
-                                                  "openrouter/google/gemma-4-31b-it", {}),
+                                                  "openrouter/google/gemma-4-31b-it",
+                                                  {"provider": {"order": ["crusoe/bf16"], "allow_fallbacks": False,
+                                                                "quantizations": ["bf16"]}}),
     "Qwen3.8 sglang": ("simple_evals_mm.sampler.sglang_sampler:Qwen3_8SGLangSampler", "Qwen/Qwen3.8-27B",
                        {"SGLANG_BASE_URL": "http://h:1/v1"}, "low", "sglang/Qwen/Qwen3.8-27B", {}),
     "Qwen3.5 sglang": ("simple_evals_mm.sampler.sglang_sampler:Qwen3_5SGLangSampler", "Qwen/Qwen3.5-9B",
@@ -225,6 +233,8 @@ def test_chat_request_parity_with_v04(clean_env, endpoints, png, case):
     for k, v in env.items():
         clean_env.setenv(k, v)
     endpoints["row"]["max_completion_tokens"] = 262144  # above every v0.4 budget: nothing clamped
+    if "gemma" in case:  # the catalog row of the pinned bf16 host
+        endpoints["row"].update(provider_name="Crusoe", tag="crusoe/bf16", quantization="bf16")
     content = HARMONY_RAW if "Harmony" in case else " 42 "
     old, old_kw = _v04(_cls(ref), model_id, _chat_reply(content), png, "How many?", effort)
     new, new_kw, _ = _v05(slug, _chat_reply(content), [user(Image(path=png), "How many?")], effort=effort,
@@ -273,7 +283,7 @@ def test_judge_request_parity_with_v04(clean_env, endpoints, png):
     old, old_kw = _v04(ResponsesSampler, "gpt-5.1-2025-11-13", _chat_reply(), png, "Grade this.")
     assert _flat(old_kw)["max_tokens"] == 8192
     new, new_kw, _ = _v05(registry.DEFAULT_JUDGE, _chat_reply(), [user(Image(path=png), "Grade this.")])
-    assert _flat(new_kw) == {**_flat(old_kw), "provider": {"order": ["openai"], "allow_fallbacks": False},
+    assert _flat(new_kw) == {**_flat(old_kw), "provider": {"order": ["openai"], "allow_fallbacks": False, "quantizations": ["unknown"]},
                              "usage": {"include": True}, "max_tokens": 128000}
     assert new.text == old.response_text
 
@@ -429,16 +439,16 @@ def test_presets_cover_v04_models(clean_env):
 
 def test_preflight_new_formats(clean_env):
     """Key / project variables named (never values); the base URL probed (discard port: unreachable)."""
-    clean_env.setenv("GEMINI_BASE_URL", "http://127.0.0.1:9")
-    p = registry.make_sampler(registry.resolve("gemini/gemini-3.1-pro-preview")).preflight(timeout=2)
+    url = "http://127.0.0.1:9"
+    p = registry.make_sampler(registry.resolve("gemini/gemini-3.1-pro-preview", base_url=url), base_url=url).preflight(timeout=2)
     assert p[0] == "GEMINI_API_KEY is not set (provider gemini)" and "unreachable" in p[1] and "127.0.0.1" not in " ".join(p)
     clean_env.setenv("GEMINI_PROJECT_ID", "secret-project")
     p = registry.make_sampler(registry.resolve("vertex/gemini-3.1-pro-preview")).preflight()
     assert p == ["GEMINI_LOCATION is not set (provider vertex)"]
     assert registry.resolve("vertex/gemini-3.1-pro-preview").resolution()["vars_set"] == {"GEMINI_PROJECT_ID": True, "GEMINI_LOCATION": False}
-    clean_env.setenv("OPENAI_BASE_URL", "http://127.0.0.1:9/v1")
-    p = registry.make_sampler(registry.resolve("openai/gpt-5.1-2025-11-13")).preflight(timeout=2)
-    assert p[0] == "OPENAI_API_KEY is not set (provider openai)" and "OPENAI_BASE_URL is unreachable" in p[1]
+    url = "http://127.0.0.1:9/v1"
+    p = registry.make_sampler(registry.resolve("openai/gpt-5.1-2025-11-13", base_url=url), base_url=url).preflight(timeout=2)
+    assert p[0] == "OPENAI_API_KEY is not set (provider openai)" and "--base-url is unreachable" in p[1]
 
 
 def test_planned_judge_preset(endpoints):
@@ -635,3 +645,152 @@ def test_endpoint_unavailable_classification(clean_env, endpoints, monkeypatch, 
     with pytest.raises(errors.SamplerError) as e:
         served([user("q")])
     assert e.value.cause == errors.PROVIDER_FAILED
+
+
+# ---------------------------------------------------------------- what was really sent (audit #108)
+def test_chat_records_sent_images_seed_and_max_tokens(clean_env, endpoints, png, tmp_path, monkeypatch):
+    """Per request: the images as really sent (after the request-size shrink), the seed (chat `seed`), the max_tokens
+    sent (after a served engine's context-overflow refit) and the response id; --model-arg seed=off sends none."""
+    import httpx
+    import openai
+    from PIL import Image as PILImage
+
+    from simple_evals_mm.samplers import openai_chat
+
+    clean_env.setenv("OPENROUTER_API_KEY", "k")
+    big = tmp_path / "big.png"
+    PILImage.effect_noise((600, 400), 64).convert("RGB").save(big)
+    r, kw, s = _v05("openrouter/qwen/qwen3.8-27b", _chat_reply(), [user(Image(path=str(big)), "q")],
+                    model_args={"max_request_mb": 0.2})
+    sent = r.extra["sent_images"][0]
+    assert sent["width"] < 600 and sent["media_type"] == "image/png" and len(sent["sha256"]) == 64  # shrunk to fit
+    assert (r.extra["seed"], r.extra["max_tokens_sent"], r.extra["response_id"]) == (None, 128000, "x")
+    assert "seed" not in kw["extra_body"]
+    rec = Recorder(_chat_reply())
+    s._client = rec
+    r = s([user("q")], seed=1234)
+    assert rec.calls[-1]["extra_body"]["seed"] == 1234 and r.extra["seed"] == 1234 and r.extra["response_id"] == "x"
+    assert r.extra["max_tokens_sent"] == rec.calls[-1]["extra_body"]["max_tokens"] and r.extra["sent_images"] == []
+    off = registry.resolve("openrouter/qwen/qwen3.8-27b", model_args={"seed": "off"})
+    assert off.seed == "off" and off.public()["model_args"] == {"seed": "off"}
+
+    # served engine: the refitted max_tokens is what the step records
+    monkeypatch.setattr(openai_chat.time, "sleep", lambda s: None)
+    served = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B"))
+    req = httpx.Request("POST", "http://x/v1/chat/completions")
+    err = openai.BadRequestError("This model's maximum context length is 262144 tokens. However, you requested 262144 "
+                                 "output tokens and your prompt contains 1000 input tokens, for a total of 263144 tokens.",
+                                 response=httpx.Response(400, request=req), body=None)
+    calls = []
+
+    def create(**kw):
+        calls.append(kw["extra_body"]["max_tokens"])
+        if len(calls) == 1:
+            raise err
+        return _chat_reply()
+
+    served._client = NS(chat=NS(completions=NS(create=create)))
+    r = served([user("q")], seed=7)
+    assert calls == [262144, 262144 - 1000 - 16] and r.extra["max_tokens_sent"] == 262144 - 1000 - 16
+
+
+def test_responses_and_gemini_seed_and_sent_images(clean_env, png):
+    from google.genai import types
+    from openai.types.responses import Response as OAIResponse
+
+    clean_env.setenv("OPENAI_API_KEY", "k")
+    r, kw, _ = _v05("openai/gpt-5.1-2025-11-13", OAIResponse.model_validate(RESPONSES_REPLY), [user(Image(path=png), "q")])
+    assert "seed" not in kw and r.extra["seed"] is None and r.extra["sent_images"][0]["width"] == 12
+    clean_env.setenv("GEMINI_API_KEY", "k")
+    s = registry.make_sampler(registry.resolve("gemini/gemini-3.1-pro-preview"))
+    rec = Recorder(types.GenerateContentResponse.model_validate(GEMINI_REPLY))
+    s._client = rec
+    r = s([user(Image(path=png), "q")], seed=99)
+    assert rec.calls[-1]["config"].seed == 99 and r.extra["seed"] == 99
+    assert r.extra["sent_images"][0] == {**r.extra["sent_images"][0], "width": 12, "height": 7, "media_type": "image/png"}
+    assert r.extra["max_tokens_sent"] == 65536
+
+
+def test_base_url_identity_and_env_refusal(clean_env, endpoints, monkeypatch):
+    """The base URL's identity (scheme + host + path, no credentials / query) is in the sampler config; a
+    <PROVIDER>_BASE_URL of a public API is refused unless --base-url is given; OpenRouter's catalog is read from the
+    URL the requests go to."""
+    from simple_evals_mm.samplers import openai_chat
+    from simple_evals_mm.samplers.base import url_identity
+
+    assert url_identity("https://user:pw@proxy.example:8443/api/v1/?key=s#f") == "https://proxy.example:8443/api/v1"
+    for prov, slug in (("OPENROUTER", "openrouter/qwen/qwen3.8-27b"), ("OPENAI", "openai/gpt-5.1-2025-11-13"),
+                       ("GEMINI", "gemini/gemini-3.1-pro-preview")):
+        clean_env.setenv(f"{prov}_BASE_URL", "http://evil.example/v1")
+        with pytest.raises(ValueError, match=f"{prov}_BASE_URL is set"):
+            registry.resolve(slug)
+        assert registry.resolve(slug, base_url="https://proxy/v1").base_url_source == "--base-url"
+        clean_env.delenv(f"{prov}_BASE_URL")
+    seen = []
+    monkeypatch.setattr(openai_chat, "fetch_model_info", lambda model_id, **kw: seen.append(kw["base_url"]) or {
+        "default_parameters": {}, "canonical_slug": "c", "hugging_face_id": None, "catalog_context_length": 1})
+    url = "https://proxy.example/api/v1/"
+    s = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b", base_url=url), base_url=url)
+    s.prepare()
+    assert seen == ["https://proxy.example/api/v1"] and s.config()["base_url"] == "https://proxy.example/api/v1"
+    assert registry.make_sampler(registry.resolve("openai/gpt-5.1-2025-11-13")).config()["base_url"] == "https://api.openai.com/v1"
+    assert registry.make_sampler(registry.resolve("gemini/gemini-3.1-pro-preview")).config()["base_url"] == \
+        "https://generativelanguage.googleapis.com"
+
+
+def test_catalog_unreachable_message(clean_env, monkeypatch):
+    from simple_evals_mm.samplers import openai_chat
+
+    monkeypatch.setattr(openai_chat, "fetch_model_info", lambda model_id, **kw: None)
+    with pytest.raises(RuntimeError, match="cannot be resolved and recorded"):
+        registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b")).prepare()
+
+
+def test_gemini_client_is_explicit(clean_env, monkeypatch):
+    """vertexai and the base URL are passed explicitly; Vertex project / location come from --model-arg or
+    GEMINI_PROJECT_ID / GEMINI_LOCATION (recorded), never ADC / global; GOOGLE_GENAI_* variables are refused."""
+    from google import genai
+
+    made = []
+    monkeypatch.setattr(genai, "Client", lambda **kw: made.append(kw) or NS())
+    clean_env.setenv("GEMINI_API_KEY", "k")
+    registry.make_sampler(registry.resolve("gemini/gemini-3.1-pro-preview")).client  # noqa: B018
+    assert made[-1]["vertexai"] is False and made[-1]["http_options"].base_url == "https://generativelanguage.googleapis.com/"
+    for v in ("GEMINI_PROJECT_ID", "GEMINI_LOCATION", "GOOGLE_CLOUD_PROJECT"):
+        clean_env.delenv(v, raising=False)
+    with pytest.raises(RuntimeError, match="project .* and location"):
+        registry.make_sampler(registry.resolve("vertex/gemini-3.1-pro-preview"))._make_client()
+    spec = registry.resolve("vertex/gemini-3.1-pro-preview", model_args={"project": "p1", "location": "us-central1"})
+    registry.make_sampler(spec).client  # noqa: B018
+    assert (made[-1]["vertexai"], made[-1]["project"], made[-1]["location"]) == (True, "p1", "us-central1")
+    assert made[-1]["http_options"].base_url == "https://us-central1-aiplatform.googleapis.com/"
+    assert spec.public()["vertex_project"] == "p1"
+    clean_env.setenv("GEMINI_PROJECT_ID", "p2")
+    clean_env.setenv("GEMINI_LOCATION", "global")
+    assert registry.resolve("vertex/gemini-3.1-pro-preview").vertex_project == "p2"
+    for var in ("GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_GENAI_USE_ENTERPRISE", "GOOGLE_GEMINI_BASE_URL", "GOOGLE_VERTEX_BASE_URL"):
+        clean_env.setenv(var, "1")
+        with pytest.raises(ValueError, match=f"unset {var}"):
+            registry.resolve("gemini/gemini-3.1-pro-preview")
+        clean_env.delenv(var)
+
+
+def test_alias_models_are_marked(clean_env):
+    rows = {r["slug"]: r for r in registry.preset_rows()}
+    assert rows["openrouter/openai/gpt-5.1"]["alias"] and rows["openrouter/openai/gpt-6-astra"]["alias"]
+    assert rows["gemini/gemini-3.1-pro-preview"]["alias"] and rows["openrouter/google/gemini-3-flash-preview"]["alias"]
+    assert not rows["openai/gpt-5.1-2025-11-13"]["alias"] and not rows["openrouter/openai/gpt-4o-2024-11-20"]["alias"]
+    assert not rows["openrouter/qwen/qwen3.8-27b"]["alias"]  # open weights: the HF id names the weights
+    assert registry.resolve("openrouter/openai/gpt-5.1").alias is True
+
+
+def test_served_identity_tracking():
+    from simple_evals_mm.models import Response
+    from simple_evals_mm.samplers.base import track_identity
+
+    s = NS()
+    assert track_identity(s, Response("a", model="m1", provider="P", system_fingerprint="fp1")) == ({}, None)
+    changes, moved = track_identity(s, Response("a", model="m1", provider="P", system_fingerprint="fp2"))
+    assert changes == {"system_fingerprint": ["fp1", "fp2"]} and moved is None  # recorded only
+    changes, moved = track_identity(s, Response("a", model="m2", provider="P"))
+    assert changes == {"model": ["m1", "m2"]} and "model 'm1' -> 'm2'" in moved

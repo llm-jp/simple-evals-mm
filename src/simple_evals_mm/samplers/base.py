@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import threading
+from io import BytesIO
+from urllib.parse import urlsplit, urlunsplit
 
 from simple_evals_mm.models import Message, Response
 
@@ -25,10 +28,13 @@ def endpoint_lock(endpoint: dict | None) -> dict | None:
 
 def lock_config(config: dict | None) -> dict | None:
     """A sampler config as the locks hash it: the endpoint record through endpoint_lock (no pricing, uptime,
-    supported_parameters)."""
+    supported_parameters). A served engine's base URL is left out: it names the machine of this session (the compute
+    node), and the server's identity (model id, root, max_model_len, version, generation_config.json) is in the
+    endpoint record."""
     if config is None:
         return None
-    out = {k: v for k, v in config.items() if k != "endpoint"}
+    served = config.get("provider") in ("sglang", "vllm", "hf")
+    out = {k: v for k, v in config.items() if k != "endpoint" and not (served and k == "base_url")}
     if "endpoint" in config:
         out["endpoint"] = endpoint_lock(config.get("endpoint"))
     return out
@@ -128,15 +134,96 @@ class Sampler:
         out["max_output_tokens"] = {"value": eff, "source": src, "requested": req, "endpoint_max": self.endpoint_max}
         return out
 
+    def base_url(self) -> str | None:
+        """The URL requests go to (None: the SDK's default; subclasses resolve it from the spec)."""
+        return None
+
     def config(self) -> dict:
-        """Everything that changes outputs (no secrets, no machine-local values)."""
-        c = {"api_format": self.api_format, **self.spec.public(), "settings": self.settings()}
+        """Everything that changes outputs (no secrets, no machine-local values). base_url: scheme + host + path of
+        the URL requests go to (no credentials, no query)."""
+        c = {"api_format": self.api_format, **self.spec.public(), "settings": self.settings(),
+             "base_url": url_identity(self.base_url())}
         if self.endpoint_info:
             c["endpoint"] = self.endpoint_info
         return c
 
-    def __call__(self, messages: list[Message], tools: list[dict] | None = None) -> Response:
+    def __call__(self, messages: list[Message], tools: list[dict] | None = None, seed: int | None = None) -> Response:
         raise NotImplementedError
+
+
+def url_identity(url: str | None) -> str | None:
+    """scheme://host[:port]/path of a URL: credentials, query and fragment dropped."""
+    if not url:
+        return None
+    u = urlsplit(url)
+    host = u.hostname or ""
+    if u.port:
+        host += f":{u.port}"
+    return urlunsplit((u.scheme, host, u.path.rstrip("/"), "", ""))
+
+
+# ---------------------------------------------------------------- what was really sent
+def describe_image(data: bytes, media_type: str | None = None) -> dict:
+    """{sha256, width, height, media_type} of image bytes as sent (the header is read, the image is not decoded)."""
+    from PIL import Image as PILImage
+
+    with PILImage.open(BytesIO(data)) as im:
+        w, h = im.size
+        fmt = im.format
+    return {"sha256": hashlib.sha256(data).hexdigest(), "width": w, "height": h,
+            "media_type": media_type or (f"image/{fmt.lower()}" if fmt else None)}
+
+
+def describe_data_url(url: str) -> dict | None:
+    """describe_image of a base64 data URL (None for a remote URL)."""
+    import base64
+
+    if not url.startswith("data:"):
+        return None
+    head, _, b64 = url.partition(",")
+    return describe_image(base64.b64decode(b64), head[5:].split(";", 1)[0] or None)
+
+
+def message_images(messages: list[Message]) -> list[dict]:
+    """sent_images of messages whose images go out unchanged (test fakes; a sampler that sends the files as they are)."""
+    out = []
+    for m in messages:
+        for p in m.images:
+            data = p.data
+            if data is None:
+                with open(p.path, "rb") as f:  # type: ignore[arg-type]
+                    data = f.read()
+            out.append(describe_image(data, p.media_type))
+    return out
+
+
+# ---------------------------------------------------------------- served identity within a job
+IDENTITY_FIELDS = ("model", "provider", "system_fingerprint")
+ENDPOINT_IDENTITY = ("model", "provider")  # a change of these = another endpoint: the job stops
+
+
+def track_identity(sampler, r: Response) -> tuple[dict, str | None]:
+    """Compare a response's served identity (model / provider / system_fingerprint; Gemini: model = model_version)
+    with the first one this sampler saw in this process. Returns (changes {field: [first, now]}, endpoint change
+    message or None). system_fingerprint changes are only recorded (OpenAI rotates them)."""
+    lock = sampler.__dict__.setdefault("_identity_lock", threading.Lock())
+    with lock:
+        first = sampler.__dict__.setdefault("_identity_first", {})
+        changes = {}
+        for k in IDENTITY_FIELDS:
+            v = getattr(r, k, None)
+            if v in (None, ""):
+                continue
+            if k not in first:
+                first[k] = v
+            elif first[k] != v:
+                changes[k] = [first[k], v]
+    moved = {k: v for k, v in changes.items() if k in ENDPOINT_IDENTITY}
+    msg = None
+    if moved:
+        msg = ("the served endpoint changed within the job (" + ", ".join(f"{k} {a!r} -> {b!r}" for k, (a, b) in moved.items())
+               + "): resume later if it reverts, or start a new job for the unfinished datasets")
+    return changes, msg
 
 
 def sampling_echo(sent: dict, echoed: dict) -> dict | None:
@@ -160,7 +247,7 @@ def retry_call(send, *, label: str, max_tries: int, max_rate_limit_tries: int, c
 
     sleep = sleep or time.sleep
     trial = rl = 0
-    last = ""
+    last, conn = "", False
     while True:
         try:
             return send()
@@ -171,6 +258,7 @@ def retry_call(send, *, label: str, max_tries: int, max_rate_limit_tries: int, c
             if kind == "fail":
                 raise errors.SamplerError(str(e), exc_type=type(e).__name__) from e
             last = f"{type(e).__name__}: {str(e)[:200]}"
+            conn = errors.is_connection_error(e)
         if kind == "rate":
             rl += 1
             if rl > max_rate_limit_tries:
@@ -184,4 +272,4 @@ def retry_call(send, *, label: str, max_tries: int, max_rate_limit_tries: int, c
             print(f"{label}: {last} (attempt {trial}/{max_tries}, retry in {backoff}s)")
         sleep(backoff)
     raise errors.SamplerError(f"gave up after {trial} errors / {rl} rate limits: {last}", errors.PROVIDER_FAILED,
-                              exc_type="RetryExhausted")
+                              exc_type="RetryExhausted", connection=conn)

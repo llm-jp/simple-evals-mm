@@ -107,6 +107,10 @@ class Response:
     system_fingerprint: str | None = None
     cost_usd: float | None = None  # billed cost when the API reports it (OpenRouter usage.cost)
     sampling_echo: dict | None = None  # sampling the response reports it used ({"echo", "differs"}; Responses API)
+    # what the request really carried and the response's own ids, stored in the step's extra: sent_images
+    # [{sha256, width, height, media_type}] (after any downscaling), max_tokens_sent (after a context-overflow refit),
+    # seed (None = not sent), response_id
+    extra: dict = field(default_factory=dict)
     raw: Any = None  # untouched response payload (not stored)
 
 

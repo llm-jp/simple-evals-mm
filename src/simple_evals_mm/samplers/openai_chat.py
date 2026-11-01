@@ -34,7 +34,7 @@ from io import BytesIO
 
 from simple_evals_mm import errors
 from simple_evals_mm.models import Image, Message, Response, Text, ToolCall
-from simple_evals_mm.samplers.base import SAMPLING_FIELDS, Sampler
+from simple_evals_mm.samplers.base import SAMPLING_FIELDS, Sampler, describe_data_url
 
 OPENROUTER_HEADERS = {"HTTP-Referer": "https://github.com/llm-jp/simple-evals-mm", "X-Title": "simple-evals-mm"}
 # Some providers return transient failures as 400 (Google AI Studio: "User location is not supported").
@@ -307,6 +307,9 @@ class OpenAIChatSampler(Sampler):
     def served(self) -> bool:
         return self.spec.provider in ("sglang", "vllm", "hf")
 
+    def base_url(self) -> str | None:
+        return self.spec.base_url(self._cli_base_url)
+
     @property
     def queries_defaults(self) -> bool:  # type: ignore[override]
         return self.spec.provider == "openrouter" or self.served
@@ -314,19 +317,23 @@ class OpenAIChatSampler(Sampler):
     def _prepare(self) -> None:
         s = self.spec
         if s.provider == "openrouter":
-            info = fetch_model_info(s.model)
+            url = (self.base_url() or "").rstrip("/")  # the catalog of the API the requests go to
+            info = fetch_model_info(s.model, base_url=url)
             if info is None:
-                raise RuntimeError(f"{s.model}: OpenRouter's model catalog is unreachable: the effective settings "
-                                   "(default_parameters, endpoint maximum) cannot be resolved")
+                raise RuntimeError(f"{s.model}: OpenRouter's model catalog ({url}/models) is unreachable: the job cannot "
+                                   "start because the settings it would run with (default_parameters, the pinned endpoint "
+                                   "row, the endpoint maximum of max_output_tokens) cannot be resolved and recorded")
             if not info:
                 raise RuntimeError(f"{s.model}: not in OpenRouter's model catalog (GET /models)")
             self.model_defaults = {k: v for k, v in info.pop("default_parameters").items() if k in SAMPLING_FIELDS and v is not None}
             self.model_defaults_source = "openrouter:default_parameters"
             endpoint = {"model_id": s.model, **info}
             if s.provider_pin:
-                ep = fetch_endpoint_info(s.model, s.provider_pin, s.quant)
+                ep = fetch_endpoint_info(s.model, s.provider_pin, s.quant, base_url=url)
                 if ep is None:
-                    raise RuntimeError(f"{s.model}: OpenRouter's endpoint catalog is unreachable")
+                    raise RuntimeError(f"{s.model}: OpenRouter's endpoint catalog ({url}/models/{s.model}/endpoints) is "
+                                       "unreachable: the job cannot start because the pinned endpoint row (tag, "
+                                       "quantization, max_completion_tokens) cannot be resolved and recorded")
                 if not ep.get("matched"):
                     raise RuntimeError(f"{s.model}: no OpenRouter endpoint matches provider={s.provider_pin} quant={s.quant}; "
                                        f"available: {ep.get('available_tags')}")
@@ -396,8 +403,13 @@ class OpenAIChatSampler(Sampler):
             body["chat_template_kwargs"] = template_kwargs
         if s.provider == "openrouter":
             if s.provider_pin:
-                prov: dict = {"order": list(s.provider_pin), "allow_fallbacks": False}
-                if s.quant:
+                # after prepare(): the matched endpoint itself (its tag, e.g. "openai" rather than "openai/flex"; its
+                # quantization), so OpenRouter cannot route to another endpoint of the same provider
+                ep = self.endpoint_info if (self.endpoint_info or {}).get("matched") else None
+                prov: dict = {"order": [ep["tag"]] if ep and ep.get("tag") else list(s.provider_pin), "allow_fallbacks": False}
+                if ep and ep.get("quantization"):
+                    prov["quantizations"] = [ep["quantization"]]
+                elif s.quant:
                     prov["quantizations"] = list(s.quant)
                 body["provider"] = prov
             body["usage"] = {"include": True}
@@ -441,6 +453,18 @@ class OpenAIChatSampler(Sampler):
         return out
 
     @staticmethod
+    def _sent_images(api_messages) -> list[dict]:
+        """{sha256, width, height, media_type} of every image in the final request (after any downscaling)."""
+        out = []
+        for m in api_messages:
+            for p in m.get("content") if isinstance(m.get("content"), list) else []:
+                url = p.get("image_url")
+                url = url.get("url") if isinstance(url, dict) else url
+                if p.get("type") in ("image_url", "input_image") and isinstance(url, str):
+                    out.append(describe_data_url(url) or {"url": url[:200]})
+        return out
+
+    @staticmethod
     def _payload_bytes(api_messages) -> int:
         return sum(len(p["image_url"]["url"]) for m in api_messages if isinstance(m.get("content"), list)
                    for p in m["content"] if p.get("type") == "image_url")
@@ -465,7 +489,7 @@ class OpenAIChatSampler(Sampler):
         return out
 
     # ------------------------------------------------------------------ call
-    def __call__(self, messages: list[Message], tools: list[dict] | None = None) -> Response:
+    def __call__(self, messages: list[Message], tools: list[dict] | None = None, seed: int | None = None) -> Response:
         import openai
 
         s = self.spec
@@ -474,6 +498,8 @@ class OpenAIChatSampler(Sampler):
         body = self.request_body()
         if tools:
             body["tools"] = tools
+        if seed is not None:
+            body["seed"] = seed
         shrinks = 0
         while s.max_request_mb and self._payload_bytes(api_messages) > s.max_request_mb * 1e6 and shrinks < 8:
             api_messages = self._shrink_images(api_messages, 0.8)
@@ -510,7 +536,7 @@ class OpenAIChatSampler(Sampler):
                 last = f"{type(e).__name__}: {str(e)[:200]}"
             except Exception as e:  # noqa: BLE001 - connection errors, timeouts: retried
                 last = f"{type(e).__name__}: {str(e)[:200]}"
-                refused_conn = isinstance(e, openai.APIConnectionError) and not isinstance(e, openai.APITimeoutError)
+                refused_conn = errors.is_connection_error(e)
             else:
                 err = _extra(resp, "error")
                 choices = getattr(resp, "choices", None) or []
@@ -520,7 +546,10 @@ class OpenAIChatSampler(Sampler):
                     if errors.classify_error(str(err)) == errors.ENDPOINT_UNAVAILABLE:  # the provider lost the model
                         raise errors.SamplerError(last, errors.ENDPOINT_UNAVAILABLE, exc_type="UpstreamError")
                 else:
-                    return self._parse(resp)
+                    r = self._parse(resp)
+                    r.extra = {"sent_images": self._sent_images(api_messages), "max_tokens_sent": body[s.max_tokens_field],
+                               "seed": body.get("seed"), "response_id": getattr(resp, "id", None)}
+                    return r
             if rate_limited:
                 rl += 1
                 if rl > s.max_rate_limit_tries:
@@ -535,7 +564,8 @@ class OpenAIChatSampler(Sampler):
             time.sleep(backoff)
         # a served engine that still refuses connections after every retry is down, not overloaded
         cause = errors.ENDPOINT_UNAVAILABLE if served and refused_conn else errors.PROVIDER_FAILED
-        raise errors.SamplerError(f"gave up after {trial} errors / {rl} rate limits: {last}", cause, exc_type="RetryExhausted")
+        raise errors.SamplerError(f"gave up after {trial} errors / {rl} rate limits: {last}", cause, exc_type="RetryExhausted",
+                                  connection=refused_conn and not rate_limited)
 
     def _parse(self, resp) -> Response:
         s = self.spec
