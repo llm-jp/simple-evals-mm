@@ -20,18 +20,19 @@ VERDICT = "extracted_final_answer: x\nreasoning: t\ncorrect: {}\nconfidence: 100
 
 
 class FakeSampler:
-    """reply(prompt_text) -> str | Response; `fail` maps a prompt substring to an exception to raise."""
+    """reply(prompt_text) -> str | Response; `fail` maps a prompt substring to an exception to raise; `endpoint` is the
+    endpoint record config() reports (as the OpenRouter / served samplers do after prepare())."""
 
-    def __init__(self, reply="A", fail=None, slug="sglang/fake"):
-        self.spec = registry.resolve(slug)
+    def __init__(self, reply="A", fail=None, slug="sglang/fake", endpoint=None):
+        self.spec = registry.resolve(slug, preset="none")
         self.slug = slug
-        self.reply, self.fail, self.calls = reply, fail or {}, []
+        self.reply, self.fail, self.calls, self.endpoint = reply, fail or {}, [], endpoint
 
     def prepare(self):
         pass
 
     def config(self):
-        return {"fake": True}
+        return {"fake": True, **({"endpoint": dict(self.endpoint)} if self.endpoint else {})}
 
     def __call__(self, messages, tools=None):
         self.calls.append(messages)
@@ -68,6 +69,8 @@ def job_env(tmp_path, monkeypatch):
     """Fake dataset, fake samplers and stubbed start checks; returns a `sem` runner + state."""
     state = {"commit": "c1", "sampler": FakeSampler(lambda q: ANSWERS[q]), "judge": FakeSampler(VERDICT.format("yes"))}
     monkeypatch.setitem(dataset_mod.DATASETS, "arith", Arith)
+    for slug in ("sglang/fake", "sglang/judge"):  # presets are exact slugs
+        monkeypatch.setitem(registry.PRESETS, slug, {})
     monkeypatch.setattr(registry, "make_sampler",
                         lambda spec, base_url=None: state["judge"] if "judge" in spec.model else state["sampler"])
     monkeypatch.setattr(checks, "start_checks", lambda allow_dirty=False, **kw: {

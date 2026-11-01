@@ -1,7 +1,7 @@
 """`simple-evals-mm` / `sem` command line (v0.5; Harbor's names where the concept is the same).
 
     sem run -m PROVIDER/MODEL -d ai2d,chartqa [-c job.yaml] [--job-name NAME] [-k N] [-n N] [-r N] [-l N] [-t ID ...]
-            [-i GLOB] [-x GLOB] [--effort L] [--max-tokens N] [--temperature T] [--top-p P] [--top-k K] [--provider P]
+            [-i GLOB] [-x GLOB] [--preset NAME|none] [--effort L] [--max-output-tokens N] [--temperature T] [--top-p P] [--top-k K] [--provider P]
             [--quantization Q] [--model-arg k=v] [--dataset-arg ds.k=v] [-a AGENT] [--agent-arg k=v] [--judge-model M]
             [--generate-only] [--base-url U] [--api-key-name VAR] [--api-format F] [-o JOBS_DIR] [--allow-dirty]
             [--print-config] [--dry-run]
@@ -65,8 +65,11 @@ def _run_parser(sub) -> None:
     a("-t", "--task", dest="task_ids", action="append", help="task id (repeatable or comma-separated)")
     a("-i", "--include", action="append", help="task id glob to include (repeatable)")
     a("-x", "--exclude", action="append", help="task id glob to exclude (repeatable)")
+    a("--preset", help="model preset family for a model id without an exact preset (internal checkpoints), or 'none' "
+                       "(no model-specific settings); `sem models list` shows the exact slugs and the families")
     a("--effort", help="reasoning effort level")
-    a("--max-tokens", type=int)
+    a("--max-output-tokens", type=int, help="maximum generated tokens, reasoning included (default: the largest the "
+                                            "endpoint allows; a larger value is clamped to it)")
     a("--temperature", type=float)
     a("--top-p", type=float)
     a("--top-k", type=int)
@@ -86,7 +89,8 @@ def _run_parser(sub) -> None:
     a("--allow-dirty", action="store_true", default=None, help="run from a dirty tree / unsynced venv: diff recorded, job marked dirty")
     a("--skip-preflight", action="store_true", default=None, help="skip the key / server / dataset checks before the first trial")
     a("--print-config", action="store_true", help="print the merged job config and exit")
-    a("--dry-run", action="store_true", help="resolve everything (variable names only, no API call) and exit")
+    a("--dry-run", action="store_true", help="resolve everything (variable names only; no generation call: the free "
+                                             "catalog / server-info GETs of prepare() are tried) and exit")
 
 
 def build_config(args) -> dict:
@@ -106,7 +110,7 @@ def build_config(args) -> dict:
             y["retry"] = {**cfg["retry"], **(y["retry"] or {})}
         cfg.update(y)
     cli = {k: getattr(args, k) for k in ("model", "datasets", "job_name", "n_attempts", "n_concurrent",
-                                         "n_tasks", "include", "exclude", "effort", "max_tokens", "temperature",
+                                         "n_tasks", "include", "exclude", "preset", "effort", "max_output_tokens", "temperature",
                                          "top_p", "top_k", "provider", "quantization", "agent", "env", "judge_model",
                                          "generate_only", "api_key_name", "api_format", "jobs_dir", "allow_dirty",
                                          "skip_preflight")}
@@ -126,14 +130,28 @@ def build_config(args) -> dict:
     return cfg
 
 
+def _prepared_config(sampler) -> dict:
+    """sampler.config() after prepare() (free GETs: OpenRouter catalog, server /v1/models, Gemini models.get); when
+    prepare fails (no server, no key, offline) the unresolved config and the reason."""
+    out = {}
+    try:
+        sampler.prepare()
+    except Exception as e:  # noqa: BLE001 - the plan reports it; the run refuses
+        out["prepare_error"] = f"{type(e).__name__}: {e}"[:300]
+    out["config"] = sampler.config()
+    out["settings"] = out["config"].get("settings")
+    return out
+
+
 def dry_run(cfg: dict, base_url: str | None) -> dict:
     """The plan: datasets, tasks, attempts, trials done vs to run, the resolved provider / format / variable NAMES
-    (never values) and the start-check status. No API call; datasets are loaded to count the tasks."""
+    (never values), the resolved settings table (value and source per field) and the start-check status. No
+    generation call; datasets are loaded to count the tasks."""
     spec = runner.sampler_spec(cfg, base_url=base_url)
     sampler = registry.make_sampler(spec, base_url=base_url)
     st = store_mod.JobStore(cfg["jobs_dir"], cfg.get("job_name") or "<start time>")
     out = {"job_dir": st.dir, "exists": st.exists(), "n_attempts": cfg["n_attempts"],
-           "model": {**spec.resolution(), "config": sampler.config()}, "datasets": {}}
+           "model": {**spec.resolution(), **_prepared_config(sampler)}, "datasets": {}}
     judge_needed = False
     for name in cfg["datasets"]:
         ds = dataset_mod.get_dataset(name, **(cfg.get("dataset_args") or {}).get(name, {}))
@@ -149,7 +167,7 @@ def dry_run(cfg: dict, base_url: str | None) -> dict:
         out["datasets"][name] = info
     if judge_needed and not cfg.get("generate_only"):
         jspec = registry.resolve(cfg["judge_model"])
-        out["judge"] = {**jspec.resolution(), "config": registry.make_sampler(jspec).config()}
+        out["judge"] = {**jspec.resolution(), **_prepared_config(registry.make_sampler(jspec))}
     try:
         code = checks.start_checks(allow_dirty=True, do_import=False)
         out["checks"] = {"commit": code.get("commit"), "dirty": code.get("dirty"), "problems": code.get("problems", []),
@@ -282,10 +300,12 @@ def cmd_models(args) -> int:
     for r in rows:
         samp = ", ".join(f"{k}={v}" for k, v in r["sampling"].items()) or "provider default"
         pin = f"  pin={','.join(r['pin'])}" + (f"/{','.join(r['quant'])}" if r["quant"] else "") if r["pin"] else ""
-        print(f"{r['slug']:48s} {r['api_format']:24s} effort={efforts(r):34s} max_tokens={r['max_tokens']:<7} {samp}{pin}"
+        limit = f" output_limit={r['output_limit']}" if r["output_limit"] else ""
+        fam = f" [{r['family']}]" if r["family"] and not r["slug"].startswith("--preset") else ""
+        print(f"{r['slug'] + fam:56s} {r['api_format']:24s} effort={efforts(r):34s} {samp}{pin}{limit}"
               + (f"  args={','.join(r['args'])}" if r["args"] else ""))
-    print(f"{len(rows)} presets; other PROVIDER/MODEL slugs run with the provider defaults "
-          f"(providers: {', '.join(registry.PROVIDERS)})")
+    print(f"{len(rows)} rows: exact slugs (served ids under every engine prefix), then the families for --preset. "
+          "Any other slug needs --preset FAMILY or --preset none; max_output_tokens defaults to the endpoint maximum.")
     return 0
 
 

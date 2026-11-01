@@ -1,8 +1,19 @@
-"""Model presets: DATA, not classes (docs/design/v0.5.md). One entry per model (or model family) with
+"""Model presets: DATA, not classes (docs/design/v0.5.md). One entry per model (exact slug), built from a named family:
 
+  max_output_tokens   NOT a preset field. It is the maximum number of generated tokens INCLUDING the reasoning /
+                  thinking tokens, for every backend; the request carries it in the API's own field: chat `max_tokens` /
+                  `max_completion_tokens`, Responses / Gemini `max_output_tokens`, sglang / vLLM / hf `max_tokens`. Every
+                  request sends it explicitly (never the server's or API's own default). Without --max-output-tokens it
+                  is the largest generation the endpoint allows, resolved once at prepare() and recorded in the sampler
+                  config (settings.max_output_tokens: value, requested, endpoint_max, source):
+                    OpenRouter     the pinned endpoint's max_completion_tokens (context_length when that is null)
+                    sglang / vllm / hf   the server's context length (/v1/models max_model_len); a request whose input
+                                   leaves less room is re-sent once with context_length - input_tokens - 16 (the
+                                   server's overflow error names the input length)
+                    OpenAI / Azure / Gemini   `output_limit`, the model's documented output limit (preset data; Gemini
+                                   without one: models.get output_token_limit)
+                  A larger --max-output-tokens is clamped to the endpoint maximum; requested and effective are recorded.
   sampling        the recommended decoding, sent as given (temperature / top_p / top_k / min_p / penalties)
-  max_tokens      the default request budget (a floor for thinking models: the trace counts against it);
-                  `effort_floor` raises it per effort level (v0.4 Responses / Gemini: 16384 at "high")
   efforts         the effort levels the model accepts (None = unverified, () = no effort control) and the default
                   `effort`; `effort_field` says where the level goes:
                     reasoning         OpenRouter's `reasoning` object ({"effort": l}; "none" -> {"enabled": false}
@@ -20,8 +31,10 @@
   api_model / api_key_var / base_url_var / api_version   request id and variable NAMES that differ from the
                   provider default (Azure deployments)
 
-Keys: `provider/model` (exact) or `provider/prefix*` (prefix match); `*/prefix*` matches every served engine
-(sglang / vllm / hf). The first matching key wins, so specific prefixes come first.
+Keys are EXACT slugs (`provider/model`); there is no prefix or wildcard matching, so a model released later never
+inherits settings silently. A served HF id listed in SERVED_MODELS gets its family under every engine prefix (sglang /
+vllm / hf). Any other slug is refused unless `--preset FAMILY` (a FAMILIES name, e.g. internal checkpoints) or
+`--preset none` (no model-specific settings) is given; the choice is recorded.
 """
 
 from __future__ import annotations
@@ -151,84 +164,113 @@ SPECIAL_SAMPLING = {"decode": {"qwen": {"temperature": 1.0, "top_p": 1.0, "top_k
 
 
 # ---------------------------------------------------------------- presets
-# The v0.4 judge (DEFAULT_GRADER_MODEL gpt-5.1-2025-11-13): ResponsesSampler with effort "none", max 8192 tokens,
-# the developer system message; with an OpenRouter key it went to OpenRouter's openai/gpt-5.1 (the 2025-11-13
-# snapshot; OpenRouter has no dated id).
-_GPT51 = {"effort": "none", "efforts": ("none", "low", "medium", "high"), "max_tokens": 8192,
-          "effort_floor": {"high": 16384},  # v0.4 ResponsesSampler: reasoning tokens count against max_output_tokens
-          "system_message": OPENAI_SYSTEM_MESSAGE, "system_role": "developer", "max_tokens_field": "max_completion_tokens"}
-_GPT4O = {"sampling": {"temperature": 0.0}, "max_tokens": 8192, "system_message": OPENAI_SYSTEM_MESSAGE,
-          "system_role": "developer", "efforts": ()}  # v0.4 OpenAISampler
-_AZURE_GPT5 = {"api_key_var": "AZURE_OPENAI_KEY_GPT5", "base_url_var": "AZURE_OPENAI_ENDPOINT_GPT5",
-               "api_version": "2025-04-01-preview"}
-# v0.4 GeminiSampler: temperature 0 (SamplerBase), 8192 tokens, thinking_level "low" (the API floor of the thinking-only
-# gemini-3 models; --cot = medium), 16384 at "high"
-_GEMINI3 = {"sampling": {"temperature": 0.0}, "max_tokens": 8192, "effort": "low", "efforts": ("low", "medium", "high"),
-            "effort_floor": {"high": 16384}}
+# Families: the shared settings of one model family, referenced by name from the exact entries below and applied to
+# any other model id with `--preset NAME` (internal checkpoints: `-m sglang/models/LLM-jp-VL-... --preset llm-jp-vl`).
+# No family carries max_output_tokens: the default is the endpoint maximum (module docstring). `output_limit` is the documented
+# output limit of an API model (OpenAI / Azure / Gemini have no endpoint to ask), not a tuning choice.
 _HARMONY_VL = {"sampling": {"temperature": 0.0, "skip_special_tokens": False}, "efforts": ("low", "medium", "high"),
                "template_kwargs": {"conversation_start_date": ""}, "response_parser": "harmony",
                "args": ("date", "identity", "chat_template", "decode")}
+FAMILIES: dict[str, dict] = {
+    # The v0.4 judge (DEFAULT_GRADER_MODEL gpt-5.1-2025-11-13): ResponsesSampler with effort "none" and the developer
+    # system message; with an OpenRouter key it went to OpenRouter's openai/gpt-5.1 (the 2025-11-13 snapshot).
+    # output_limit 128000: OpenAI model page; OpenRouter lists 128000 for the OpenAI and Azure endpoints (2026-11-01)
+    "gpt-5.1": {"effort": "none", "efforts": ("none", "low", "medium", "high"), "output_limit": 128000,
+                "system_message": OPENAI_SYSTEM_MESSAGE, "system_role": "developer", "max_tokens_field": "max_completion_tokens"},
+    # v0.4 OpenAISampler; output_limit 16384: OpenAI model page; OpenRouter's OpenAI endpoint lists 16384 (2026-11-01)
+    "gpt-4o": {"sampling": {"temperature": 0.0}, "output_limit": 16384, "system_message": OPENAI_SYSTEM_MESSAGE,
+               "system_role": "developer", "efforts": ()},
+    # v0.4 GeminiSampler: temperature 0, thinking_level "low" (the API floor of the thinking-only gemini-3 models; --cot
+    # = medium). output_limit 65536: Gemini model page; OpenRouter lists 65536 for AI Studio and Vertex (2026-11-01)
+    "gemini-3": {"sampling": {"temperature": 0.0}, "effort": "low", "efforts": ("low", "medium", "high"), "output_limit": 65536},
+    # ---- served models (sglang / vllm / hf): v0.4 sglang_sampler.py subclasses. Serve thinking models with the
+    # reasoning parser named here.
+    "qwen3.8": {"sampling": {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 0.0, "top_k": 20, "min_p": 0.0, "repetition_penalty": 1.0},
+                "template_kwargs": {"enable_thinking": True, "preserve_thinking": False},
+                "efforts": ("low", "medium", "xhigh"), "expects_reasoning": True, "reasoning_parser": "qwen3"},
+    "qwen3.5": {"sampling": {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 1.5, "top_k": 20, "min_p": 0.0, "repetition_penalty": 1.0},
+                "efforts": (), "expects_reasoning": True, "reasoning_parser": "qwen3"},
+    # v0.4 served every model without its own sampling at temperature 0 (SamplerBase): kept explicit here
+    "qwen3-vl": {"sampling": {"temperature": 0.0}, "efforts": ()},  # v0.4 SGLangSampler / QwenVLSampler: greedy
+    "glm-5": {"sampling": {"temperature": 1.0, "top_p": 0.95}, "template_kwargs": {"clear_thinking": True},
+              "efforts": ("low", "high", "max"), "expects_reasoning": True, "reasoning_parser": "glm45"},
+    "deepseek-v4": {"sampling": {"temperature": 1.0, "top_p": 0.95}, "template_kwargs": {"thinking": True},
+                    "efforts": ("low", "high", "max"), "effort_field": "reasoning_effort", "expects_reasoning": True,
+                    "reasoning_parser": "auto"},
+    # gemma-4: thinking on/off through the chat template (v0.4 set it server-side with --default-chat-template-kwargs);
+    # no effort = the server default
+    "gemma-4": {"sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 64},
+                "efforts": ("none", "high"), "effort_field": "template_toggle", "effort_key": "enable_thinking",
+                "reasoning_parser": "gemma4", "args": ("max_soft_tokens",)},
+    # Muse Glimmer (internal MuseGlimmerServedSampler): strength through the template's reasoning_strength
+    "muse-glimmer": {"sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 64},
+                     "efforts": ("low", "medium", "high", "xhigh"), "effort_key": "reasoning_strength",
+                     "expects_reasoning": True, "reasoning_parser": "muse_glimmer", "args": ("max_image_tokens",)},
+    "internvl3": {"sampling": {"temperature": 0.0}, "efforts": ()},
+    "sarashina": {"sampling": {"temperature": 0.0}, "efforts": ()},
+    # Harmony (HarmonyServedSampler): channels split client-side (skip_special_tokens false), explicit date line
+    "llm-jp-vl": _HARMONY_VL,
+    "llm-jp-4-text": dict(_HARMONY_VL, template_kwargs={"conversation_start_date": EVAL_FIXED_DATE}),
+}
 
+# Served models by their exact Hugging Face id (v0.4 KNOWN_MODELS, the campaigns, the leaderboard and the design-doc
+# table): every served engine prefix (sglang / vllm / hf) of one of these ids gets the family. A model not listed here
+# needs an entry, or `--preset FAMILY`, or `--preset none`.
+SERVED_ENGINES = ("sglang", "vllm", "hf")
+SERVED_MODELS: dict[str, str] = {
+    "Qwen/Qwen3.8-27B": "qwen3.8", "Qwen/Qwen3.8-Flash-Next": "qwen3.8", "Qwen/Qwen3.8-Flash-Next-FP8": "qwen3.8",
+    "Qwen/Qwen3.5-4B": "qwen3.5", "Qwen/Qwen3.5-9B": "qwen3.5", "Qwen/Qwen3.5-397B-A17B": "qwen3.5",
+    "Qwen/Qwen3-VL-2B-Instruct": "qwen3-vl", "Qwen/Qwen3-VL-4B-Instruct": "qwen3-vl", "Qwen/Qwen3-VL-8B-Instruct": "qwen3-vl",
+    "Qwen/Qwen3-VL-30B-A3B-Instruct": "qwen3-vl", "Qwen/Qwen3-VL-235B-A22B-Instruct": "qwen3-vl",
+    "zai-org/GLM-5.3-Flash": "glm-5",
+    "deepseek-ai/DeepSeek-V4.1-Flash": "deepseek-v4",
+    "google/gemma-4-E4B-it": "gemma-4", "google/gemma-4-12B-it": "gemma-4",
+    "meta-models/Muse-Glimmer-30B": "muse-glimmer",
+    "OpenGVLab/InternVL3_5-1B": "internvl3", "OpenGVLab/InternVL3_5-2B": "internvl3", "OpenGVLab/InternVL3_5-4B": "internvl3",
+    "OpenGVLab/InternVL3_5-8B": "internvl3",
+    "sbintuitions/sarashina2.2-vision-3b": "sarashina",
+    "llm-jp/llm-jp-4-vl-9b": "llm-jp-vl", "llm-jp/llm-jp-4-vl-9b-beta": "llm-jp-vl",
+    "llm-jp/llm-jp-4-8b-thinking": "llm-jp-4-text", "llm-jp/llm-jp-4.1-8b-thinking": "llm-jp-4-text",
+}
+
+_AZURE_GPT5 = {"api_key_var": "AZURE_OPENAI_KEY_GPT5", "base_url_var": "AZURE_OPENAI_ENDPOINT_GPT5",
+               "api_version": "2025-04-01-preview"}
+
+
+def _family(name: str, **over) -> dict:
+    return {**FAMILIES[name], "family": name, **over}
+
+
+# Exact slugs only: a model released later never inherits settings silently (an unknown slug is an error).
 PRESETS: dict[str, dict] = {
-    # ---- OpenRouter: every registry model, pinned
+    # ---- OpenRouter: every registry model, pinned; the default max_tokens is the pinned endpoint's maximum
     **{f"openrouter/{m}": {"provider_pin": list(s["provider"]), "quant": list(s["quant"]) if s.get("quant") else None,
-                           "sampling": dict(s.get("sampling") or {}), "efforts": s.get("efforts"), "toggle": bool(s.get("toggle")),
-                           "max_tokens": 131072}  # ceiling: clamped to the endpoint's max_completion_tokens
+                           "sampling": dict(s.get("sampling") or {}), "efforts": s.get("efforts"), "toggle": bool(s.get("toggle"))}
        for m, s in OPENROUTER_MODELS.items()},
     # v0.4 ResponsesSampler over OpenRouter sent reasoning {"effort": "none"} (not {"enabled": false}, the
     # OpenRouterSampler mapping of "none"): reasoning_none "effort"
-    "openrouter/openai/gpt-5.1": dict(provider_pin=["openai"], **{**_GPT51, "max_tokens_field": "max_tokens"},
-                                      reasoning_none="effort"),
-    # planned judge (not the default yet: switch after a judge-agreement check): effort medium; reasoning tokens
-    # count against max_tokens, so the ceiling is generous (a cut-off verdict is judge_failed and retried)
+    "openrouter/openai/gpt-5.1": {**{k: v for k, v in FAMILIES["gpt-5.1"].items() if k != "output_limit"},
+                                  "family": "gpt-5.1", "provider_pin": ["openai"], "max_tokens_field": "max_tokens",
+                                  "reasoning_none": "effort"},
+    # planned judge (not the default yet: switch after a judge-agreement check): effort medium
     # ($0.10 / $0.50 per 1M tokens on OpenRouter, 2026-11-01)
     "openrouter/openai/gpt-6-luna": {"provider_pin": ["openai"], "effort": "medium",
-                                     "efforts": ("none", "low", "medium", "high", "xhigh", "max"), "max_tokens": 32768,
+                                     "efforts": ("none", "low", "medium", "high", "xhigh", "max"),
                                      "max_tokens_field": "max_tokens", "system_message": OPENAI_SYSTEM_MESSAGE,
                                      "system_role": "developer"},
     # v0.4 OpenAISampler over OpenRouter: image detail "high" as on OpenAI
-    "openrouter/openai/gpt-4o-2024-11-20": {"provider_pin": ["openai"], "image_detail": "high", **_GPT4O},
+    "openrouter/openai/gpt-4o-2024-11-20": {**{k: v for k, v in FAMILIES["gpt-4o"].items() if k != "output_limit"},
+                                            "family": "gpt-4o", "provider_pin": ["openai"], "image_detail": "high"},
     # ---- OpenAI / Azure: Responses API for gpt-5*, chat for gpt-4o (v0.4 ResponsesSampler / OpenAISampler)
-    "openai/gpt-5.1-2025-11-13": dict(_GPT51),
-    "azure/gpt-5.1-2025-11-13": dict(_GPT51, api_model="gpt-5-1-2025-11-13", **_AZURE_GPT5),  # deployment: dashes
-    "openai/gpt-5*": {"efforts": None, "max_tokens": 8192, "max_tokens_field": "max_completion_tokens"},
-    "azure/gpt-5*": {"efforts": None, "max_tokens": 8192, "max_tokens_field": "max_completion_tokens", **_AZURE_GPT5},
-    "openai/gpt-4o-2024-11-20": dict(_GPT4O),
-    "azure/gpt-4o-2024-11-20": dict(_GPT4O),
+    "openai/gpt-5.1-2025-11-13": _family("gpt-5.1"),
+    "azure/gpt-5.1-2025-11-13": _family("gpt-5.1", api_model="gpt-5-1-2025-11-13", **_AZURE_GPT5),  # deployment: dashes
+    "openai/gpt-4o-2024-11-20": _family("gpt-4o"),
+    "azure/gpt-4o-2024-11-20": _family("gpt-4o"),
     # ---- Gemini (AI Studio key, or Vertex AI with GEMINI_PROJECT_ID / GEMINI_LOCATION)
-    "gemini/gemini-3*": dict(_GEMINI3),
-    "vertex/gemini-3*": dict(_GEMINI3),
-    # ---- served models (sglang / vllm / hf): v0.4 sglang_sampler.py subclasses. Serve thinking models with the
-    # reasoning parser named here.
-    "*/Qwen/Qwen3.8*": {"sampling": {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 0.0, "top_k": 20, "min_p": 0.0, "repetition_penalty": 1.0},
-                        "template_kwargs": {"enable_thinking": True, "preserve_thinking": False},
-                        "efforts": ("low", "medium", "xhigh"), "max_tokens": 65536, "expects_reasoning": True,
-                        "reasoning_parser": "qwen3"},
-    "*/Qwen/Qwen3.5*": {"sampling": {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 1.5, "top_k": 20, "min_p": 0.0, "repetition_penalty": 1.0},
-                        "efforts": (), "max_tokens": 16384, "expects_reasoning": True, "reasoning_parser": "qwen3"},
-    "*/Qwen/Qwen3-VL*": {"efforts": ()},  # v0.4 SGLangSampler / QwenVLSampler: greedy, 8192 tokens
-    "*/zai-org/GLM-5*": {"sampling": {"temperature": 1.0, "top_p": 0.95}, "template_kwargs": {"clear_thinking": True},
-                         "efforts": ("low", "high", "max"), "max_tokens": 65536, "expects_reasoning": True,
-                         "reasoning_parser": "glm45"},
-    "*/deepseek-ai/DeepSeek-V4*": {"sampling": {"temperature": 1.0, "top_p": 0.95}, "template_kwargs": {"thinking": True},
-                                   "efforts": ("low", "high", "max"), "effort_field": "reasoning_effort", "max_tokens": 65536,
-                                   "expects_reasoning": True, "reasoning_parser": "auto"},
-    # gemma-4: thinking on/off through the chat template (v0.4 set it server-side with --default-chat-template-kwargs);
-    # no effort = the server default
-    "*/google/gemma-4*": {"sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 64}, "max_tokens": 8192,
-                          "efforts": ("none", "high"), "effort_field": "template_toggle", "effort_key": "enable_thinking",
-                          "reasoning_parser": "gemma4", "args": ("max_soft_tokens",)},
-    # Muse Glimmer (internal MuseGlimmerServedSampler): strength through the template's reasoning_strength
-    "*/meta-models/Muse-Glimmer*": {"sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 64},
-                                    "efforts": ("low", "medium", "high", "xhigh"), "effort_key": "reasoning_strength",
-                                    "max_tokens": 65536, "expects_reasoning": True, "reasoning_parser": "muse_glimmer",
-                                    "args": ("max_image_tokens",)},
-    "*/OpenGVLab/InternVL3*": {"efforts": ()},
-    "*/sbintuitions/sarashina*": {"efforts": ()},
-    # Harmony (HarmonyServedSampler): channels split client-side (skip_special_tokens false), explicit date line
-    "*/llm-jp/llm-jp-4-vl*": dict(_HARMONY_VL),
-    "*/models/LLM-jp-VL*": dict(_HARMONY_VL),
-    "*/llm-jp/llm-jp-4*": dict(_HARMONY_VL, template_kwargs={"conversation_start_date": EVAL_FIXED_DATE}),  # text models
+    "gemini/gemini-3.1-pro-preview": _family("gemini-3"),
+    "vertex/gemini-3.1-pro-preview": _family("gemini-3"),
+    # ---- served models: one exact entry per engine and HF id
+    **{f"{eng}/{mid}": _family(fam) for mid, fam in SERVED_MODELS.items() for eng in SERVED_ENGINES},
 }
 
 DEFAULT_JUDGE = "openrouter/openai/gpt-5.1"

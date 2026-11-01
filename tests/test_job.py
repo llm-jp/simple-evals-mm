@@ -95,7 +95,7 @@ def test_job_check_detects_edits(job_env, capsys):
 def test_preflight(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("SGLANG_BASE_URL", "http://127.0.0.1:9/v1")  # discard port: nothing listens
-    problems = runner.preflight(registry.make_sampler(registry.resolve("sglang/m")),
+    problems = runner.preflight(registry.make_sampler(registry.resolve("sglang/m", preset="none")),
                                 registry.make_sampler(registry.resolve("openrouter/openai/gpt-5.1")))
     assert any(p.startswith("model: base URL from SGLANG_BASE_URL is unreachable") for p in problems)
     assert any(p.startswith("judge: OPENROUTER_API_KEY is not set") for p in problems)
@@ -166,3 +166,83 @@ def test_job_lock_and_dirty_regrade(job_env, monkeypatch, capsys):
     vid = st.current_verification_id("arith")
     with open(os.path.join(st.verifier_dir("arith"), vid, "meta.json")) as f:
         assert json.load(f)["dirty"] is True
+
+
+def test_preset_is_recorded_and_compared(job_env, capsys):
+    """--preset is a job config key: recorded in config.json and part of the resume comparison."""
+    s = job_env
+    assert s["run"]("--preset", "none", name="p") == 0
+    st = s["store"]("p")
+    assert st.read_config()["preset"] == "none"
+    capsys.readouterr()
+    assert s["run"](name="p") == 2  # resumed without --preset: a different config
+    assert runner.RESUME_REFUSED in capsys.readouterr().err
+
+
+def test_endpoint_change_refuses_resume_and_changes_generation_lock(job_env, capsys):
+    """The pinned endpoint row is part of the resume comparison and of every trial's generation_lock; volatile catalog
+    fields (pricing) are not."""
+    s = job_env
+    row = {"provider_name": "Crusoe", "tag": "crusoe/bf16", "quantization": "bf16", "context_length": 262144,
+           "max_completion_tokens": 65536, "price_per_mtok": {"prompt": 0.1}}
+    s["sampler"].endpoint = dict(row)
+    assert s["run"](name="a") == 0
+    lock_a = {t.task_name: t.generation_lock for t in s["store"]("a").read_trials("arith", 1)}
+    assert s["store"]("a").read_lock()["sampler"]["config"]["endpoint"]["quantization"] == "bf16"
+
+    s["sampler"].endpoint = {**row, "price_per_mtok": {"prompt": 0.2}}  # pricing moved: still resumable
+    assert s["run"](name="a") == 0
+    s["sampler"].endpoint = {**row, "quantization": "fp8"}
+    capsys.readouterr()
+    assert s["run"](name="a") == 2
+    err = capsys.readouterr().err
+    assert runner.RESUME_REFUSED in err and 'endpoint.quantization: "bf16" -> "fp8"' in err
+
+    assert s["run"](name="b") == 0  # the same tasks against the fp8 endpoint
+    lock_b = {t.task_name: t.generation_lock for t in s["store"]("b").read_trials("arith", 1)}
+    assert lock_a.keys() == lock_b.keys() and all(lock_a[k] != lock_b[k] for k in lock_a)
+    s["sampler"].endpoint = {**row, "price_per_mtok": {"prompt": 0.9}}
+    assert s["run"](name="c") == 0
+    assert {t.task_name: t.generation_lock for t in s["store"]("c").read_trials("arith", 1)} == lock_a
+
+
+def test_circuit_breaker_stops_and_job_resumes(job_env, monkeypatch, tmp_path, capsys):
+    """A provider that disappears after 5 calls: after abort_after_consecutive endpoint failures in a row no new trial
+    starts, the failed trials are not written, and `sem job resume` finishes the job once the endpoint is back."""
+    s = job_env
+    qs = [f"q{i}" for i in range(30)]
+    monkeypatch.setattr(Arith, "questions", qs)
+    monkeypatch.setattr(Arith, "truth", {q: "ok" for q in qs})
+    gone = {"on": True}
+
+    def reply(q):
+        if gone["on"] and len(s["sampler"].calls) > 5:
+            raise errors.SamplerError("Error code: 404 - No endpoints found for fake.", errors.ENDPOINT_UNAVAILABLE)
+        return "ok"
+
+    s["sampler"].reply = reply
+    cfg = tmp_path / "job.yaml"
+    cfg.write_text(json.dumps({"retry": {"abort_after_consecutive": 3}}))
+    capsys.readouterr()
+    assert s["run"]("-c", str(cfg)) == 2
+    err = capsys.readouterr().err
+    assert "circuit breaker" in err and "the pinned endpoint is failing" in err and "sem job resume" in err
+    st = s["store"]()
+    written = st.read_trials("arith", 1)
+    assert [t.task_name for t in written] == qs[:5] and all(t.exception_info is None for t in written)
+    assert len(s["sampler"].calls) == 8 and not st.is_complete("arith", 1)  # no trial started after the third failure
+
+    gone["on"], s["sampler"].calls = False, []
+    assert s["sem"]("job", "resume", "-p", st.dir) == 0
+    assert len(s["sampler"].calls) == 25 and st.is_complete("arith", 1)
+    assert runner.summarize_job(st)["arith"]["attempts"]["a1"]["causes"] == {}
+
+
+def test_endpoint_unavailable_is_excluded_not_retried(job_env, monkeypatch):
+    s = job_env
+    monkeypatch.setattr(Arith, "questions", ["2+2?", "flaky"])
+    s["sampler"].fail = {"flaky": errors.SamplerError("No allowed providers are available for the selected model.")}
+    assert s["run"]() == 0
+    assert sum(1 for m in s["sampler"].calls if m[-1].text == "flaky") == 1  # not retried
+    a1 = runner.summarize_job(s["store"]())["arith"]["attempts"]["a1"]
+    assert a1["causes"] == {"endpoint_unavailable": 1} and a1["n_counted"] == 1

@@ -3,14 +3,15 @@ sampler/responses_sampler.py.
 
 Request (as v0.4): `responses.create(model, input, max_output_tokens, reasoning={"effort": e})`, the developer system
 message first, images as `input_image` data URLs (lossless PNG, detail "high"); no temperature (gpt-5 rejects it) unless
-given explicitly. max_output_tokens is raised to the preset's effort floor (16384 at "high": reasoning tokens count
-against it). Azure: the preset's deployment name (`api_model`), API version and key / endpoint variable names.
+given explicitly. max_output_tokens = the preset's documented output limit unless --max-output-tokens is given (reasoning
+tokens count against it). Azure: the preset's deployment name (`api_model`), API version and key / endpoint variable names.
 
 Response: output_text = the answer; reasoning summaries (requested with `--model-arg reasoning_summary=auto`) = the
 reasoning; usage with output_tokens_details.reasoning_tokens and input_tokens_details.cached_tokens; status mapped to
 finish_reason (completed -> stop, incomplete: max_output_tokens -> length, content_filter -> content_filter, other
 -> length as v0.4); a refusal content part -> finish_reason content_filter (cause refused); function_call items ->
-tool_calls.
+tool_calls. The response echoes the temperature / top_p it used: recorded per step (extra.sampling_echo) with the
+fields that differ from what was sent.
 
 Retry (v0.4 retried every non-400 error forever with min(2**n, 60) s): 400 fails at once, 401-404 fail at once, 429
 jittered backoff up to max_rate_limit_tries, other errors min(2**n, 60) s up to max_tries, then provider_failed.
@@ -22,7 +23,7 @@ import json
 
 from simple_evals_mm import errors
 from simple_evals_mm.models import Image, Message, Response, Text, ToolCall
-from simple_evals_mm.samplers.base import retry_call
+from simple_evals_mm.samplers.base import retry_call, sampling_echo
 from simple_evals_mm.samplers.openai_chat import TRANSIENT_400, OpenAIChatSampler
 
 
@@ -45,8 +46,8 @@ class OpenAIResponsesSampler(OpenAIChatSampler):
     # ------------------------------------------------------------------ request
     def request_body(self) -> dict:
         s = self.spec
-        body: dict = {"max_output_tokens": self.effective_max_tokens()}
-        body.update(s.sampling)
+        body: dict = {"max_output_tokens": self.effective_max_output_tokens()}
+        body.update(self.sampling())
         if s.effort is not None or s.reasoning_summary:
             reasoning: dict = {}
             if s.effort is not None:
@@ -86,6 +87,7 @@ class OpenAIResponsesSampler(OpenAIChatSampler):
     # ------------------------------------------------------------------ call
     def __call__(self, messages: list[Message], tools: list[dict] | None = None) -> Response:
         s = self.spec
+        self.ensure_prepared()
         items = self.to_api_messages(messages)
         kwargs = self.request_body()
         if tools:
@@ -145,6 +147,7 @@ class OpenAIResponsesSampler(OpenAIChatSampler):
             reasoning_tokens=(getattr(out_details, "reasoning_tokens", 0) or 0) if out_details else 0,
             cached_tokens=(getattr(in_details, "cached_tokens", 0) or 0) if in_details else 0,
             finish_reason=finish, model=getattr(resp, "model", None), raw=resp,
+            sampling_echo=sampling_echo(self.sampling(), {k: getattr(resp, k, None) for k in ("temperature", "top_p")}),
         )
 
 

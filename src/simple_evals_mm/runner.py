@@ -4,7 +4,8 @@
                         can be resumed (same config except job_name / jobs_dir / runtime-only options, same commit,
                         lock check and dataset digests)
     run_trials(job)     every (dataset, attempt, task) not yet in trials_a<k>.jsonl, -n concurrent, transient
-                        failures retried -r times; an attempt's meta is written once all its tasks are in the file
+                        failures retried -r times; an attempt's meta is written once all its tasks are in the file;
+                        a circuit breaker stops the job when the endpoint keeps failing (retry.abort_after_consecutive)
     verify_job(...)     a new verification id per dataset (`sem job regrade`), `current` moved to it
     summarize_job(...)  rewards, std, failure counts and costs recomputed from the rows (nothing stored)
 """
@@ -16,7 +17,6 @@ import fnmatch
 import hashlib
 import json
 import os
-import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -28,22 +28,29 @@ from simple_evals_mm.agent import get_agent
 from simple_evals_mm.common import subsample
 from simple_evals_mm.models import TrialResult, task_checksum
 from simple_evals_mm.samplers import registry
+from simple_evals_mm.samplers.base import endpoint_lock
 
 # Options that do not change any trial: a resumed job may differ in them (Harbor compares the config without
 # job_name / jobs_dir; concurrency, retries and the verification settings are added here).
 RUNTIME_ONLY = ("job_name", "jobs_dir", "n_concurrent", "retry", "generate_only", "judge_model", "allow_dirty",
                 "skip_preflight")
 RESUME_REFUSED = "job directory already exists and cannot be resumed with a different config"
+# Trial causes that mean the endpoint, not the task, failed: the circuit breaker counts them
+BREAKER_CAUSES = (errors.ENDPOINT_UNAVAILABLE, errors.PROVIDER_FAILED)
+BREAKER_TRIPPED = ("the pinned endpoint is failing; resume later with `sem job resume`, or start a new job with another "
+                   "--provider for the unfinished datasets (`sem job show` lists them)")
 
 DEFAULTS: dict = {
     "model": None, "datasets": [], "job_name": None, "jobs_dir": store_mod.DEFAULT_JOBS_DIR, "n_attempts": 1,
     "n_concurrent": 4, "n_tasks": None, "task_ids": None, "include": None, "exclude": None,
-    "effort": None, "max_tokens": None, "temperature": None, "top_p": None, "top_k": None, "provider": None,
+    "preset": None, "effort": None, "max_output_tokens": None, "temperature": None, "top_p": None, "top_k": None, "provider": None,
     "quantization": None, "model_args": {}, "dataset_args": {}, "agent": "direct", "agent_args": {}, "env": None,
     "judge_model": registry.DEFAULT_JUDGE, "generate_only": False, "api_key_name": None, "api_format": None,
     "allow_dirty": False, "skip_preflight": False,
-    # Harbor's RetryConfig: causes retried (None = those with retry=True in errors.POLICY), minus exclude_causes
-    "retry": {"max_retries": 2, "include_causes": None, "exclude_causes": []},
+    # Harbor's RetryConfig: causes retried (None = those with retry=True in errors.POLICY), minus exclude_causes;
+    # abort_after_consecutive: stop the job after this many consecutive trials ended in endpoint_unavailable /
+    # provider_failed (0 = never)
+    "retry": {"max_retries": 2, "include_causes": None, "exclude_causes": [], "abort_after_consecutive": 20},
 }
 
 
@@ -103,7 +110,8 @@ def sampler_spec(cfg: dict, slug: str | None = None, judge: bool = False, base_u
     if judge:
         return registry.resolve(slug or cfg["judge_model"])
     return registry.resolve(
-        cfg["model"], effort=cfg.get("effort"), max_tokens=cfg.get("max_tokens"), temperature=cfg.get("temperature"),
+        cfg["model"], preset=cfg.get("preset"), effort=cfg.get("effort"), max_output_tokens=cfg.get("max_output_tokens"),
+        temperature=cfg.get("temperature"),
         top_p=cfg.get("top_p"), top_k=cfg.get("top_k"), provider_pin=cfg.get("provider"),
         quantization=cfg.get("quantization"), model_args=cfg.get("model_args"), base_url=base_url,
         api_key_name=cfg.get("api_key_name"), api_format=cfg.get("api_format"))
@@ -114,8 +122,14 @@ def _comparable(cfg: dict) -> dict:
 
 
 def _lock_digest(lock: dict) -> dict:
+    """What must be equal to resume: code, lock check, dataset digests, the endpoint (OpenRouter pinned row / served
+    server identity) and the resolved settings values (OpenRouter default_parameters, generation_config.json,
+    endpoint maximum)."""
     code = lock.get("code", {})
+    sconf = (lock.get("sampler") or {}).get("config") or {}
     return {"commit": code.get("commit"), "dirty": code.get("dirty"), "diff_sha256": code.get("diff_sha256"),
+            "endpoint": endpoint_lock(sconf.get("endpoint")),
+            "settings": {k: (v or {}).get("value") for k, v in (sconf.get("settings") or {}).items()},
             "lock_check": {k: code.get("lock_check", {}).get(k) for k in ("ok", "lock_sha256", "mismatches")},
             "datasets": {n: {k: d.get(k) for k in ("revision", "task_ids_sha256", "n_tasks")}
                          for n, d in lock.get("datasets", {}).items()}}
@@ -157,6 +171,9 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
         problems = preflight(sampler, judge if verify else None, dsets, verify=verify)
         if problems:
             raise JobError("preflight failed (--skip-preflight to run anyway):\n- " + "\n- ".join(problems))
+    sampler.prepare()  # endpoint record + resolved settings: compared on resume, recorded in lock.json
+    if judge is not None and not cfg.get("generate_only"):
+        judge.prepare()
     judge_config = judge.config() if judge is not None else None
     lock_ds = {}
     for name, ds in dsets.items():
@@ -172,7 +189,7 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
                          "n_tasks": len(tasks), "config": ds.config(),
                          "verifier_lock": dataset_mod.verifier_lock(ds, judge_config)}
     lock = {"format": store_mod.FORMAT, "job_id": None, "code": code, "datasets": lock_ds,
-            "sampler": spec.resolution(), "judge": judge_spec.resolution() if judge_spec else None,
+            "sampler": {**spec.resolution(), "config": sampler.config()}, "judge": judge_spec.resolution() if judge_spec else None,
             "agent": agent.config(), "skip_preflight": bool(cfg.get("skip_preflight"))}
 
     if st.exists():
@@ -184,9 +201,9 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
         print(f"[job] resuming {cfg['job_name']} ({lock['job_id']})")
     else:
         lock["job_id"] = str(uuid.uuid4())
-    sampler.prepare()
-    lock["sampler"]["config"] = sampler.config()
-    job.sampler_config = {k: v for k, v in lock["sampler"]["config"].items() if k != "endpoint"}
+    sconf = lock["sampler"]["config"]
+    # generation_lock: the endpoint fields that change outputs, not the volatile catalog fields (pricing, uptime)
+    job.sampler_config = {**{k: v for k, v in sconf.items() if k != "endpoint"}, "endpoint": endpoint_lock(sconf.get("endpoint"))}
     os.makedirs(st.dir, exist_ok=True)
     if diff is not None:
         with open(os.path.join(st.dir, "dirty.diff"), "w", encoding="utf-8") as f:
@@ -227,12 +244,19 @@ def _run_trial(job: Job, name: str, k: int, task) -> TrialResult:
         started_at=started, finished_at=_now(),
         generation_lock=dataset_mod.generation_lock(traj, job.sampler_config),
         verifier_lock=job.lock["datasets"][name]["verifier_lock"])
-    job.store.append_trial(name, trial)
     return trial
 
 
+def _cause(trial: TrialResult) -> str | None:
+    return (trial.exception_info or {}).get("cause")
+
+
 def run_trials(job: Job) -> None:
-    """Every missing trial of every dataset and attempt over one pool of n_concurrent threads."""
+    """Every missing trial of every dataset and attempt over one pool of n_concurrent threads (submitted as slots free
+    up). Circuit breaker: trials ending in endpoint_unavailable / provider_failed are held back while they come in a
+    row; abort_after_consecutive of them in a row stop the job (no new trials, the running ones finish), and the held
+    back and later ones with these causes are NOT written, so `sem job resume` regenerates them. A streak that a
+    normal trial breaks is written as it is."""
     st, todo, remaining = job.store, [], {}
     for name, tasks in job.tasks.items():
         ds_meta = job.lock["datasets"][name]
@@ -252,22 +276,64 @@ def run_trials(job: Job) -> None:
         return
     from tqdm import tqdm
 
-    lock = threading.Lock()
+    limit = int((job.cfg.get("retry") or {}).get("abort_after_consecutive", DEFAULTS["retry"]["abort_after_consecutive"]) or 0)
+    streak: list[tuple[str, TrialResult]] = []  # the current run of breaker causes, not written yet
+    tripped, dropped = False, 0
+
+    def write(name: str, trial: TrialResult) -> None:
+        k = trial.attempt
+        st.append_trial(name, trial)
+        remaining[(name, k)] -= 1
+        if remaining[(name, k)] == 0:
+            m = job.lock["datasets"][name]
+            st.finalize_attempt(name, k, revision=m["revision"], task_ids_sha256=m["task_ids_sha256"], n_tasks=m["n_tasks"])
+
+    pending = iter(todo)
     with concurrent.futures.ThreadPoolExecutor(max_workers=job.cfg["n_concurrent"]) as ex:
-        futs = {ex.submit(_run_trial, job, name, k, t): (name, k) for name, k, t in todo}
+        running: dict = {}  # future -> dataset name
+
+        def submit_next() -> None:
+            nxt = next(pending, None)
+            if nxt is not None:
+                running[ex.submit(_run_trial, job, *nxt)] = nxt[0]
+
+        for _ in range(job.cfg["n_concurrent"]):
+            submit_next()
+        bar = tqdm(total=len(todo))
         try:
-            for f in tqdm(concurrent.futures.as_completed(futs), total=len(futs)):
-                f.result()  # a fatal error (bug, ThinkLeakError) stops the job; finished trials are kept
-                name, k = futs[f]
-                with lock:
-                    remaining[(name, k)] -= 1
-                    last = remaining[(name, k)] == 0
-                if last:
-                    m = job.lock["datasets"][name]
-                    st.finalize_attempt(name, k, revision=m["revision"], task_ids_sha256=m["task_ids_sha256"], n_tasks=m["n_tasks"])
+            while running:
+                done, _ = concurrent.futures.wait(running, return_when=concurrent.futures.FIRST_COMPLETED)
+                for f in done:
+                    name = running.pop(f)
+                    trial = f.result()  # a fatal error (bug, ThinkLeakError) stops the job; finished trials are kept
+                    bar.update(1)
+                    if _cause(trial) in BREAKER_CAUSES:
+                        if tripped:
+                            dropped += 1
+                            continue
+                        streak.append((name, trial))
+                        if limit and len(streak) >= limit:
+                            tripped, dropped = True, dropped + len(streak)
+                            print(f"[job] {len(streak)} consecutive trials ended in {'/'.join(BREAKER_CAUSES)} "
+                                  f"(last: {(trial.exception_info or {}).get('message', '')[:200]}); no new trials")
+                            streak = []
+                    else:
+                        for n, t in streak:  # the streak is broken: those were ordinary transient failures
+                            write(n, t)
+                        streak = []
+                        write(name, trial)
+                    if not tripped:
+                        submit_next()
+            for n, t in streak:
+                write(n, t)
         except BaseException:
             ex.shutdown(wait=True, cancel_futures=True)
             raise
+        finally:
+            bar.close()
+    if tripped:
+        raise JobError(f"circuit breaker: {limit} consecutive trials failed at the endpoint; {dropped} failed trial(s) "
+                       f"not written. {BREAKER_TRIPPED}")
 
 
 # ---------------------------------------------------------------- verification

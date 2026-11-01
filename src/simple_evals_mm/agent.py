@@ -78,7 +78,7 @@ class Direct(Agent):
                 traj.extra["failure"] = {"cause": e.cause, "error": f"{e.exc_type}: {e.message}", "step": len(steps) + 1}
                 break
             extra = {"finish_reason": r.finish_reason, "provider": r.provider, "system_fingerprint": r.system_fingerprint,
-                     "duration_seconds": round(time.time() - t0, 3)}
+                     "duration_seconds": round(time.time() - t0, 3), "sampling_echo": r.sampling_echo}
             steps.append(atif.Step(
                 step_id=len(steps) + 1, source="agent", message=r.text, timestamp=_now(),
                 model_name=r.model or model_name, reasoning_effort=getattr(spec, "effort", None),

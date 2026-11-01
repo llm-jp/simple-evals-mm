@@ -7,8 +7,16 @@ Retry behaviour is ported from the v0.4 samplers (sampler/openrouter_sampler.py,
     transient 400s): backoff min(2**n, 60) s, up to max_tries (OpenRouter / OpenAI 60, served engines 120);
   * 401/402/403/404 and other 400s fail at once (SamplerError, cause from errors.classify_error);
   * 413 (and requests over max_request_mb): images shrunk by 0.8 instead of spending a retry;
-  * served engines: a context overflow is retried once with max_tokens fitted to the remaining context.
+  * served engines: max_tokens is the server's context length unless --max-output-tokens is smaller; the server
+    rejects a request whose input leaves less room (sglang / vLLM name the input length in the error), so it is re-sent
+    once with max_tokens = context - input - 16 (below 256 tokens of room: context_overflow);
+  * the endpoint is gone (404, OpenRouter "No endpoints found" / "No allowed providers", an upstream model-not-found
+    inside a 200, a served engine refusing connections after every retry): endpoint_unavailable, not retried.
 Timeout 3600 s per request; the SDK's own retries are off.
+
+prepare() resolves the effective settings (samplers/base.py Sampler): OpenRouter's /models row (default_parameters,
+canonical_slug, hugging_face_id) and the pinned endpoint row (max_completion_tokens); a served engine's /v1/models
+(model id, root, max_model_len), its version and the model's generation_config.json.
 """
 
 from __future__ import annotations
@@ -26,25 +34,33 @@ from io import BytesIO
 
 from simple_evals_mm import errors
 from simple_evals_mm.models import Image, Message, Response, Text, ToolCall
-from simple_evals_mm.samplers.base import Sampler
+from simple_evals_mm.samplers.base import SAMPLING_FIELDS, Sampler
 
 OPENROUTER_HEADERS = {"HTTP-Referer": "https://github.com/llm-jp/simple-evals-mm", "X-Title": "simple-evals-mm"}
 # Some providers return transient failures as 400 (Google AI Studio: "User location is not supported").
 TRANSIENT_400 = ("User location is not supported", "The model is overloaded", "Internal error encountered")
 _STANDARD = ("max_tokens", "max_completion_tokens", "messages", "model")
 
-_CTX_RE = re.compile(
-    r"maximum context length of (\d+) tokens\. You requested a total of (\d+) tokens: "
-    r"(\d+) tokens from the input"
+# (context, input tokens) of the served engines' overflow errors
+_CTX_RES = (
+    # sglang: "Requested token count exceeds the model's maximum context length of 8192 tokens. You requested a total
+    # of 9000 tokens: 1000 tokens from the input messages and 8000 tokens for the completion."
+    re.compile(r"maximum context length of (?P<ctx>\d+) tokens\. You requested a total of \d+ tokens: "
+               r"(?P<inp>\d+) tokens from the input"),
+    # vLLM: "This model's maximum context length is 8192 tokens. However, you requested 8192 output tokens and your
+    # prompt contains 1000 input tokens, for a total of 9192 tokens."
+    re.compile(r"maximum context length is (?P<ctx>\d+) tokens\. However, you requested \d+ output tokens and your "
+               r"prompt contains (?:at least )?(?P<inp>\d+) input tokens"),
 )
+_CTX_RE = _CTX_RES[0]  # v0.4 sampler/sglang_sampler.py imports the sglang pattern
 
 
 def _fit_max_tokens(err: str, max_tokens: int, margin: int = 16, floor: int = 256):
-    """max_tokens that fits the context given SGLang's overflow error text, or None."""
-    m = _CTX_RE.search(err)
+    """max_tokens that fits the context given a served engine's overflow error text, or None."""
+    m = next((m for r in _CTX_RES if (m := r.search(err))), None)
     if not m:
         return None
-    ctx, _total, inp = (int(x) for x in m.groups())
+    ctx, inp = int(m["ctx"]), int(m["inp"])
     fit = ctx - inp - margin
     if fit < floor or fit >= max_tokens:
         return None
@@ -133,6 +149,95 @@ def fetch_endpoint_info(model_id: str, providers: list[str], quant: list[str] | 
     }
 
 
+_CATALOG: dict[str, dict] = {}
+_CATALOG_LOCK = threading.Lock()
+
+
+def fetch_model_info(model_id: str, timeout: float = 30.0, base_url: str = "https://openrouter.ai/api/v1") -> dict | None:
+    """The model's row of OpenRouter's /models catalog (default_parameters, canonical_slug, hugging_face_id,
+    context_length): {} when the model is not listed, None when the catalog is unreachable. Fetched once per process."""
+    with _CATALOG_LOCK:
+        if base_url not in _CATALOG:
+            try:
+                with urllib.request.urlopen(f"{base_url}/models", timeout=timeout) as r:
+                    _CATALOG[base_url] = {m["id"]: m for m in json.loads(r.read().decode("utf-8")).get("data", [])}
+            except Exception as e:  # noqa: BLE001
+                print(f"[openrouter] model catalog unavailable: {type(e).__name__}")
+                return None
+        row = _CATALOG[base_url].get(model_id)
+    if row is None:
+        return {}
+    return {"default_parameters": dict(row.get("default_parameters") or {}), "canonical_slug": row.get("canonical_slug"),
+            "hugging_face_id": row.get("hugging_face_id"), "catalog_context_length": row.get("context_length")}
+
+
+def _get_json(url: str, key: str | None, timeout: float):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"} if key else {})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def fetch_server_info(base_url: str, engine: str, key: str | None = None, timeout: float = 15.0) -> dict | None:
+    """What a served engine says about itself: /v1/models (model id, root = the path it loaded, max_model_len = its
+    context length; sglang, vLLM and serving/hf_server.py) and the version (vLLM /version, sglang /server_info).
+    None when /models does not answer."""
+    try:
+        rows = _get_json(base_url.rstrip("/") + "/models", key, timeout).get("data") or []
+    except Exception as e:  # noqa: BLE001
+        print(f"[{engine}] GET /models failed: {type(e).__name__}")
+        return None
+    m = rows[0] if rows else {}
+    info = {"engine": engine, "model_id": m.get("id"), "root": m.get("root"), "max_model_len": m.get("max_model_len"),
+            "version": None}
+    root_url = re.sub(r"/v1/?$", "", base_url.rstrip("/"))
+    for path in ("/version", "/server_info"):
+        try:
+            info["version"] = _get_json(root_url + path, key, timeout).get("version")
+        except Exception:  # noqa: BLE001, S112 - optional
+            continue
+        if info["version"]:
+            break
+    return info
+
+
+GEN_CONFIG_KEYS = ("temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "frequency_penalty")
+
+
+def read_generation_config(model: str) -> tuple[dict, dict]:
+    """(sampling defaults, provenance) from the model's generation_config.json: a local model directory, else the HF
+    snapshot in the local cache (the one the server loaded), else the Hub. These are the defaults vLLM / sglang apply
+    (vLLM --generation-config auto); sending them explicitly removes the dependence on the engine's defaulting."""
+    import hashlib
+
+    path, prov = None, {"model": model if not os.path.isabs(model) else os.path.basename(model.rstrip("/"))}
+    if os.path.isdir(model):
+        path = os.path.join(model, "generation_config.json")
+        path = path if os.path.isfile(path) else None
+    else:
+        try:
+            from huggingface_hub import hf_hub_download
+
+            for local in (True, False):
+                try:
+                    path = hf_hub_download(model, "generation_config.json", local_files_only=local)
+                    break
+                except Exception:  # noqa: BLE001, S112 - not cached / offline / not on the Hub
+                    continue
+        except ImportError:
+            pass
+        m = re.search(r"/snapshots/([0-9a-f]{40})/", path or "")
+        prov["revision"] = m.group(1) if m else None
+    if not path:
+        print(f"[served] {model}: no generation_config.json found; the engine's own sampling defaults apply to the "
+              "fields not given (recorded as not reported)")
+        return {}, {**prov, "found": False}
+    with open(path, "rb") as f:
+        raw = f.read()
+    cfg = json.loads(raw)
+    return ({k: cfg[k] for k in GEN_CONFIG_KEYS if cfg.get(k) is not None},
+            {**prov, "found": True, "sha256": hashlib.sha256(raw).hexdigest()})
+
+
 # ---------------------------------------------------------------- images
 def _encode_png(img) -> str:
     with BytesIO() as buf:
@@ -174,8 +279,6 @@ class OpenAIChatSampler(Sampler):
         self._cli_base_url = base_url
         self._client = None
         self._client_lock = threading.Lock()
-        self.endpoint_info: dict | None = None
-        self.max_completion_cap: int | None = None
 
     # ------------------------------------------------------------------ setup
     @property
@@ -200,15 +303,55 @@ class OpenAIChatSampler(Sampler):
         return openai.OpenAI(api_key=s.api_key(), base_url=base_url, timeout=3600, max_retries=0,
                              default_headers=headers, http_client=http)
 
-    def prepare(self) -> None:
+    @property
+    def served(self) -> bool:
+        return self.spec.provider in ("sglang", "vllm", "hf")
+
+    @property
+    def queries_defaults(self) -> bool:  # type: ignore[override]
+        return self.spec.provider == "openrouter" or self.served
+
+    def _prepare(self) -> None:
         s = self.spec
-        if s.provider != "openrouter" or not s.provider_pin:
-            return
-        self.endpoint_info = fetch_endpoint_info(s.model, s.provider_pin, s.quant)
-        if self.endpoint_info and not self.endpoint_info.get("matched"):
-            raise RuntimeError(f"{s.model}: no OpenRouter endpoint matches provider={s.provider_pin} quant={s.quant}; "
-                               f"available: {self.endpoint_info.get('available_tags')}")
-        self.max_completion_cap = (self.endpoint_info or {}).get("max_completion_tokens")
+        if s.provider == "openrouter":
+            info = fetch_model_info(s.model)
+            if info is None:
+                raise RuntimeError(f"{s.model}: OpenRouter's model catalog is unreachable: the effective settings "
+                                   "(default_parameters, endpoint maximum) cannot be resolved")
+            if not info:
+                raise RuntimeError(f"{s.model}: not in OpenRouter's model catalog (GET /models)")
+            self.model_defaults = {k: v for k, v in info.pop("default_parameters").items() if k in SAMPLING_FIELDS and v is not None}
+            self.model_defaults_source = "openrouter:default_parameters"
+            endpoint = {"model_id": s.model, **info}
+            if s.provider_pin:
+                ep = fetch_endpoint_info(s.model, s.provider_pin, s.quant)
+                if ep is None:
+                    raise RuntimeError(f"{s.model}: OpenRouter's endpoint catalog is unreachable")
+                if not ep.get("matched"):
+                    raise RuntimeError(f"{s.model}: no OpenRouter endpoint matches provider={s.provider_pin} quant={s.quant}; "
+                                       f"available: {ep.get('available_tags')}")
+                endpoint.update(ep)
+                if ep.get("max_completion_tokens"):
+                    self.endpoint_max, self.endpoint_max_source = ep["max_completion_tokens"], "openrouter:endpoint max_completion_tokens"
+                elif ep.get("context_length"):
+                    self.endpoint_max, self.endpoint_max_source = ep["context_length"], "openrouter:endpoint context_length"
+            self.endpoint_info = endpoint
+        elif self.served:
+            info = fetch_server_info(s.base_url(self._cli_base_url) or "", s.provider, os.environ.get(s.api_key_name or ""))
+            if info is None:
+                raise RuntimeError(f"{s.provider}: the server ({s.base_url_source}) does not answer GET /models")
+            self.model_defaults, info["generation_config"] = read_generation_config(info.get("root") or info.get("model_id") or s.model)
+            self.model_defaults_source = "model:generation_config.json"
+            if info.get("max_model_len"):
+                self.endpoint_max, self.endpoint_max_source = int(info["max_model_len"]), f"{s.provider}:max_model_len"
+            self.endpoint_info = info
+
+    def _no_max_reason(self) -> str:
+        if self.spec.provider == "openrouter":
+            return "OpenRouter without a provider pin: give --provider" if not self.spec.provider_pin else "the endpoint row has none"
+        if self.served:
+            return "the server reports no max_model_len on /v1/models"
+        return "no documented output limit (output_limit) in the preset"
 
     def preflight(self, timeout: float = 10.0) -> list[str]:
         """Key variable set and base URL answering GET /models (any HTTP status counts as reachable). Messages name
@@ -232,14 +375,10 @@ class OpenAIChatSampler(Sampler):
             problems.append(f"base URL from {s.base_url_source} is unreachable ({type(e).__name__})")
         return problems
 
-    def effective_max_tokens(self) -> int:
-        m = max(self.spec.max_tokens, self.spec.effective_effort_floor())
-        return min(m, self.max_completion_cap) if self.max_completion_cap else m
-
     def request_body(self) -> dict:
         """Exactly what is sent next to model / messages (and recorded in the job config)."""
         s = self.spec
-        body: dict = {s.max_tokens_field: self.effective_max_tokens(), **s.sampling}
+        body: dict = {s.max_tokens_field: self.effective_max_output_tokens(), **self.sampling()}
         template_kwargs = dict(s.template_kwargs)
         if s.effort is not None:
             if s.effort_field == "reasoning":
@@ -266,11 +405,7 @@ class OpenAIChatSampler(Sampler):
         return body
 
     def config(self) -> dict:
-        c = super().config()
-        c["request_body"] = self.request_body()
-        if self.endpoint_info:
-            c["endpoint"] = self.endpoint_info
-        return c
+        return {**super().config(), "request_body": self.request_body()}
 
     # ------------------------------------------------------------------ messages
     def _image_part(self, p: Image) -> dict:
@@ -334,6 +469,7 @@ class OpenAIChatSampler(Sampler):
         import openai
 
         s = self.spec
+        self.ensure_prepared()
         api_messages = self.to_api_messages(messages)
         body = self.request_body()
         if tools:
@@ -342,11 +478,11 @@ class OpenAIChatSampler(Sampler):
         while s.max_request_mb and self._payload_bytes(api_messages) > s.max_request_mb * 1e6 and shrinks < 8:
             api_messages = self._shrink_images(api_messages, 0.8)
             shrinks += 1
-        served = s.provider in ("sglang", "vllm", "hf")
-        last = ""
+        served = self.served
+        last, refused_conn = "", False
         trial = rl = 0
         while True:
-            rate_limited = False
+            rate_limited = refused_conn = False
             try:
                 resp = self.client.chat.completions.create(model=s.request_model, messages=api_messages, extra_body=body)
             except openai.BadRequestError as e:
@@ -363,7 +499,9 @@ class OpenAIChatSampler(Sampler):
                 rate_limited = True
                 last = f"RateLimitError: {str(e)[:160]}"
             except openai.APIStatusError as e:
-                if e.status_code in (401, 402, 403, 404):  # key / credits / provider gone: retrying cannot help
+                if e.status_code == 404:  # the model / pinned endpoint / deployment is gone
+                    raise errors.SamplerError(str(e), errors.ENDPOINT_UNAVAILABLE, exc_type=type(e).__name__) from e
+                if e.status_code in (401, 402, 403):  # key / credits: retrying cannot help
                     raise errors.SamplerError(str(e), exc_type=type(e).__name__) from e
                 if e.status_code == 413 and shrinks < 8:  # provider body limit: shrink the images, not the retry budget
                     api_messages = self._shrink_images(api_messages, 0.8)
@@ -372,12 +510,15 @@ class OpenAIChatSampler(Sampler):
                 last = f"{type(e).__name__}: {str(e)[:200]}"
             except Exception as e:  # noqa: BLE001 - connection errors, timeouts: retried
                 last = f"{type(e).__name__}: {str(e)[:200]}"
+                refused_conn = isinstance(e, openai.APIConnectionError) and not isinstance(e, openai.APITimeoutError)
             else:
                 err = _extra(resp, "error")
                 choices = getattr(resp, "choices", None) or []
                 finish = (choices[0].finish_reason or "") if choices else ""
                 if err or not choices or finish == "error":  # OpenRouter reports upstream failures inside a 200
                     last = f"upstream error: {err or finish or 'no choices'}"
+                    if errors.classify_error(str(err)) == errors.ENDPOINT_UNAVAILABLE:  # the provider lost the model
+                        raise errors.SamplerError(last, errors.ENDPOINT_UNAVAILABLE, exc_type="UpstreamError")
                 else:
                     return self._parse(resp)
             if rate_limited:
@@ -392,8 +533,9 @@ class OpenAIChatSampler(Sampler):
                 backoff = min(2 ** trial, 60)
                 print(f"[{s.provider}] {s.model}: {last} (attempt {trial}/{s.max_tries}, retry in {backoff}s)")
             time.sleep(backoff)
-        raise errors.SamplerError(f"gave up after {trial} errors / {rl} rate limits: {last}", errors.PROVIDER_FAILED,
-                                  exc_type="RetryExhausted")
+        # a served engine that still refuses connections after every retry is down, not overloaded
+        cause = errors.ENDPOINT_UNAVAILABLE if served and refused_conn else errors.PROVIDER_FAILED
+        raise errors.SamplerError(f"gave up after {trial} errors / {rl} rate limits: {last}", cause, exc_type="RetryExhausted")
 
     def _parse(self, resp) -> Response:
         s = self.spec

@@ -3,8 +3,9 @@ sampler/gemini_sampler.py. Providers: `gemini` (AI Studio, GEMINI_API_KEY) and `
 default credentials, GEMINI_PROJECT_ID / GEMINI_LOCATION; v0.4 used it when GEMINI_API_KEY was unset).
 
 Request (as v0.4): GenerateContentConfig(temperature, max_output_tokens, thinking_config=ThinkingConfig(
-thinking_level=effort)); images as inline PNG bytes (lossless). max_output_tokens is raised to the preset's effort
-floor (16384 at "high": thoughts count against it). Differences: every message is its own Content with its role
+thinking_level=effort)); images as inline PNG bytes (lossless). max_output_tokens = the preset's documented output
+limit (else the model's output_token_limit from models.get) unless --max-output-tokens is given (thoughts count against
+it). prepare() reads models.get: the temperature / top_p / top_k defaults the model declares are sent explicitly. Differences: every message is its own Content with its role
 (user / model; v0.4 flattened all parts into one role-less Content, which the API reads as one user turn: the same
 request for single-turn prompts), a system message becomes system_instruction, tools become function declarations.
 
@@ -53,6 +54,7 @@ def classify_google_error(e: Exception) -> str:
 
 class GeminiSampler(Sampler):
     api_format = "google_generate_content"
+    queries_defaults = True
 
     def __init__(self, spec, base_url: str | None = None):
         super().__init__(spec)
@@ -102,14 +104,29 @@ class GeminiSampler(Sampler):
         return problems
 
     # ------------------------------------------------------------------ request
-    def effective_max_tokens(self) -> int:
-        return max(self.spec.max_tokens, self.spec.effective_effort_floor())
+    def _prepare(self) -> None:
+        """models.get: the model's declared sampling defaults (sent) and output_token_limit (used when the preset has no
+        output_limit)."""
+        s = self.spec
+        try:
+            m = self.client.models.get(model=s.request_model)
+        except Exception as e:
+            raise RuntimeError(f"{self.slug}: models.get failed ({type(e).__name__}): the effective settings cannot be "
+                               "resolved") from e
+        self.model_defaults = {k: getattr(m, k, None) for k in ("temperature", "top_p", "top_k")
+                               if getattr(m, k, None) is not None}
+        self.model_defaults_source = "gemini:models.get"
+        limit = getattr(m, "output_token_limit", None)
+        self.endpoint_info = {"model_id": getattr(m, "name", None), "version": getattr(m, "version", None),
+                              "output_token_limit": limit}
+        if self.endpoint_max is None and limit:
+            self.endpoint_max, self.endpoint_max_source = int(limit), "gemini:models.get output_token_limit"
 
     def request_body(self) -> dict:
         """The GenerateContentConfig fields (recorded in the job config)."""
         s = self.spec
-        body: dict = dict(s.sampling)
-        body["max_output_tokens"] = self.effective_max_tokens()
+        body: dict = dict(self.sampling())
+        body["max_output_tokens"] = self.effective_max_output_tokens()
         thinking: dict = {}
         if s.effort is not None:
             thinking["thinking_level"] = s.effort
@@ -180,6 +197,7 @@ class GeminiSampler(Sampler):
     # ------------------------------------------------------------------ call
     def __call__(self, messages: list[Message], tools: list[dict] | None = None) -> Response:
         s = self.spec
+        self.ensure_prepared()
         contents, system = self.to_contents(messages)
         config = self.build_config(system, tools)
         resp = retry_call(lambda: self.client.models.generate_content(model=s.request_model, contents=contents, config=config),

@@ -140,3 +140,11 @@ class TestClientCompatibility:
         assert parsed.usage.prompt_tokens == 10
         assert (getattr(parsed.usage, "reasoning_tokens", 0) or 0) == 3
         assert parsed.choices[0].finish_reason == "stop"
+
+
+def test_models_payload_reports_context_length():
+    """GET /v1/models: model id and max_model_len, read by the v0.5 sampler's prepare() (as from sglang / vLLM)."""
+    from simple_evals_mm.serving import hf_server
+
+    row = hf_server.models_payload("llm-jp/llm-jp-4-vl-9b", 32768)["data"][0]
+    assert (row["id"], row["root"], row["max_model_len"]) == ("llm-jp/llm-jp-4-vl-9b", "llm-jp/llm-jp-4-vl-9b", 32768)

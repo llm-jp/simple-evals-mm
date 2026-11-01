@@ -366,7 +366,28 @@ class WorkerPool:
                 p.terminate()
 
 
-def make_handler(pool: WorkerPool):
+def model_context_length(model_id: str) -> int | None:
+    """The model's context length from its config (max_position_embeddings, of the text config for VLMs); None when the
+    config cannot be read. GET /v1/models reports it as max_model_len, as sglang and vLLM do."""
+    try:
+        from transformers import AutoConfig
+
+        cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+    except Exception:  # noqa: BLE001 - reported as unknown
+        return None
+    for c in (getattr(cfg, "text_config", None), getattr(cfg, "llm_config", None), cfg):
+        n = getattr(c, "max_position_embeddings", None) if c is not None else None
+        if n:
+            return int(n)
+    return None
+
+
+def models_payload(model_id: str, max_model_len: int | None) -> dict:
+    return {"object": "list", "data": [{"id": model_id, "object": "model", "root": model_id, "owned_by": "hf_server",
+                                        "max_model_len": max_model_len}]}
+
+
+def make_handler(pool: WorkerPool, max_model_len: int | None = None):
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status: int, obj: dict):
             data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -380,6 +401,8 @@ def make_handler(pool: WorkerPool):
             if self.path == "/health":
                 status, body = pool.health()
                 self._send(status, body)
+            elif self.path.rstrip("/") == "/v1/models":  # the client's prepare(): model id, context length
+                self._send(200, models_payload(pool.model_id, max_model_len))
             else:
                 self._send(404, {"error": {"message": "not found"}})
 
@@ -413,7 +436,7 @@ def main():
     args = parser.parse_args()
 
     pool = WorkerPool(args.model, args.dp_size, mp.get_context("spawn"))
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(pool))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(pool, model_context_length(args.model)))
     print(
         f"[front] serving {args.model} on {args.host}:{args.port} "
         f"(dp={args.dp_size}); waiting for workers to load...",

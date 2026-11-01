@@ -14,7 +14,7 @@ from simple_evals_mm.samplers import registry
     ("openrouter/qwen/qwen3.8-27b", {}, {}, "OPENROUTER_API_KEY", "default", "https://openrouter.ai/api/v1"),
     ("openai/gpt-5.1-2025-11-13", {"api_key_name": "MY_KEY"}, {}, "MY_KEY", "default", "https://api.openai.com/v1"),
     ("sglang/Qwen/Qwen3.8-27B", {}, {"SGLANG_BASE_URL": "http://h:1/v1"}, "SGLANG_API_KEY", "SGLANG_BASE_URL", "http://h:1/v1"),
-    ("vllm/m", {"base_url": "http://cli/v1"}, {"VLLM_BASE_URL": "http://env/v1"}, "VLLM_API_KEY", "--base-url", "http://cli/v1"),
+    ("vllm/m", {"base_url": "http://cli/v1", "preset": "none"}, {"VLLM_BASE_URL": "http://env/v1"}, "VLLM_API_KEY", "--base-url", "http://cli/v1"),
 ])
 def test_resolution(monkeypatch, slug, kw, env, key, url_from, url):
     for k in ("SGLANG_BASE_URL", "VLLM_BASE_URL"):
@@ -27,17 +27,21 @@ def test_resolution(monkeypatch, slug, kw, env, key, url_from, url):
     assert all(v not in res for v in env.values())  # names only, never values
 
 
-def test_presets_and_errors(monkeypatch):
+def test_presets_and_errors(monkeypatch, endpoints):
     monkeypatch.delenv("SGLANG_BASE_URL", raising=False)
-    s = registry.resolve("sglang/Qwen/Qwen3.8-27B", effort="low")
-    body = registry.make_sampler(s).request_body()
+    sampler = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.8-27B", effort="low"))
+    sampler.prepare()
+    body = sampler.request_body()
     assert body["chat_template_kwargs"] == {"enable_thinking": True, "preserve_thinking": False, "reasoning_effort": "low"}
-    assert body["max_tokens"] == 65536 and body["top_k"] == 20
-    assert registry.resolve("sglang/other").sampling == {"temperature": 0.0}  # served: always explicit
-    judge = registry.make_sampler(registry.resolve(registry.DEFAULT_JUDGE)).request_body()
-    assert judge["reasoning"] == {"effort": "none"} and judge["max_tokens"] == 8192
-    assert judge["provider"] == {"order": ["openai"], "allow_fallbacks": False}
-    for bad, kw in (("noprovider", {}), ("bogus/x", {}), ("openrouter/qwen/qwen3.8-27b", {"effort": "max"}), ("azure/x", {})):
+    assert body["max_tokens"] == 262144 and body["top_k"] == 20  # the server's context length (fake /v1/models)
+    assert registry.resolve("sglang/other", preset="none").sampling == {}  # nothing model-specific
+    judge = registry.make_sampler(registry.resolve(registry.DEFAULT_JUDGE))
+    judge.prepare()
+    jb = judge.request_body()
+    assert jb["reasoning"] == {"effort": "none"} and jb["max_tokens"] == 128000  # the endpoint maximum, no small cap
+    assert jb["provider"] == {"order": ["openai"], "allow_fallbacks": False}
+    for bad, kw in (("noprovider", {}), ("bogus/x", {}), ("openrouter/qwen/qwen3.8-27b", {"effort": "max"}),
+                    ("azure/x", {"preset": "none"}), ("sglang/other", {}), ("sglang/m", {"preset": "nope"})):
         with pytest.raises(ValueError):
             registry.resolve(bad, **kw)
 
@@ -90,7 +94,8 @@ class Recorder:
         self.calls, self.reply = [], reply
         self.chat = NS(completions=NS(create=self._rec))
         self.responses = NS(create=self._rec)
-        self.models = NS(generate_content=self._rec)
+        self.models = NS(generate_content=self._rec, get=lambda model: self.model_info)
+        self.model_info = NS(name="models/x", version="3", temperature=None, top_p=None, top_k=None, output_token_limit=65536)
 
     def _rec(self, **kw):
         self.calls.append(kw)
@@ -130,6 +135,30 @@ def clean_env(monkeypatch):
     return monkeypatch
 
 
+ENDPOINT_ROW = {"model_id": "m", "matched": True, "provider_name": "OpenAI", "tag": "openai", "quantization": "unknown",
+                "context_length": 400000, "max_completion_tokens": 128000, "price_per_mtok": {"prompt": 1.25}}
+
+
+@pytest.fixture
+def endpoints(monkeypatch):
+    """Fake catalogs for prepare(): OpenRouter /models (default_parameters) and /models/{id}/endpoints (the pinned
+    row), a served engine's /v1/models (+ version) and its generation_config.json. Tests edit the dicts."""
+    from simple_evals_mm.samplers import openai_chat
+
+    fake = {"defaults": {}, "row": dict(ENDPOINT_ROW), "server": {"model_id": "m", "root": "m", "max_model_len": 262144,
+                                                                   "version": "0.5.23"}, "gen": {},
+            "real_read_generation_config": openai_chat.read_generation_config}
+    monkeypatch.setattr(openai_chat, "fetch_model_info", lambda model_id, **kw: {
+        "default_parameters": dict(fake["defaults"]), "canonical_slug": model_id + "-2026", "hugging_face_id": None,
+        "catalog_context_length": 400000})
+    monkeypatch.setattr(openai_chat, "fetch_endpoint_info", lambda model_id, providers, quant=None, **kw: {
+        **fake["row"], "model_id": model_id})
+    monkeypatch.setattr(openai_chat, "fetch_server_info", lambda base_url, engine, key=None, **kw: {
+        "engine": engine, **fake["server"]})
+    monkeypatch.setattr(openai_chat, "read_generation_config", lambda model: (dict(fake["gen"]), {"model": model, "found": bool(fake["gen"])}))
+    return fake
+
+
 def _v05(slug, reply, msgs, **kw):
     s = registry.make_sampler(registry.resolve(slug, **kw))
     rec = Recorder(reply)
@@ -146,7 +175,8 @@ def _v04(cls, model_id, reply, png, text, effort=None, attr="client"):
     return s([s.pack_message(images=[png], instruction=text)]), rec.calls[-1]
 
 
-# (v0.4 sampler, v0.4 model id, env, effort, v0.5 slug, the v0.5-only body fields)
+# (v0.4 sampler, v0.4 model id, env, effort, v0.5 slug, the v0.5-only body fields); V04_MAX_TOKENS: the v0.4 default
+# budget, passed to v0.5 explicitly (v0.5's default is the endpoint maximum)
 CHAT_CASES = {
     "gpt-4o (OpenAI chat)": ("simple_evals_mm.sampler.openai_sampler:OpenAISampler", "gpt-4o-2024-11-20",
                              {"OPENAI_API_KEY": "k"}, None, "openai/gpt-4o-2024-11-20", {}),
@@ -176,6 +206,12 @@ CHAT_CASES = {
 }
 
 
+V04_MAX_TOKENS = {"gpt-4o (OpenAI chat)": 8192, "gpt-4o (OpenRouter)": 8192, "qwen3.8-27b (OpenRouter pin)": 131072,
+                  "gemma-4-31b (OpenRouter bf16 pin, toggle)": 131072, "Qwen3.8 sglang": 65536, "Qwen3.5 sglang": 16384,
+                  "gemma-4 sglang": 8192, "GLM-5.3 sglang": 65536, "DeepSeek-V4.1 sglang": 65536,
+                  "llm-jp-4-vl Harmony": 8192, "Qwen3-VL served": 8192}
+
+
 def _cls(ref):
     import importlib
 
@@ -184,13 +220,15 @@ def _cls(ref):
 
 
 @pytest.mark.parametrize("case", sorted(CHAT_CASES))
-def test_chat_request_parity_with_v04(clean_env, png, case):
+def test_chat_request_parity_with_v04(clean_env, endpoints, png, case):
     ref, model_id, env, effort, slug, v05_only = CHAT_CASES[case]
     for k, v in env.items():
         clean_env.setenv(k, v)
+    endpoints["row"]["max_completion_tokens"] = 262144  # above every v0.4 budget: nothing clamped
     content = HARMONY_RAW if "Harmony" in case else " 42 "
     old, old_kw = _v04(_cls(ref), model_id, _chat_reply(content), png, "How many?", effort)
-    new, new_kw, _ = _v05(slug, _chat_reply(content), [user(Image(path=png), "How many?")], effort=effort)
+    new, new_kw, _ = _v05(slug, _chat_reply(content), [user(Image(path=png), "How many?")], effort=effort,
+                          max_output_tokens=V04_MAX_TOKENS[case])
     expected = _flat(old_kw)
     expected.update(v05_only)
     assert _flat(new_kw) == expected
@@ -207,10 +245,11 @@ def test_responses_request_parity_with_v04(clean_env, png):
     clean_env.setenv("OPENAI_API_KEY", "k")
     for effort in ("none", "high"):
         old, old_kw = _v04(ResponsesSampler, "gpt-5.1-2025-11-13", reply, png, "How many?", effort)
+        v04_max = 16384 if effort == "high" else 8192  # v0.4: 8192, the effort floor 16384 at "high"
         new, new_kw, s = _v05("openai/gpt-5.1-2025-11-13", reply, [user(Image(path=png), "How many?")],
-                              effort=None if effort == "none" else effort)
+                              effort=None if effort == "none" else effort, max_output_tokens=v04_max)
         assert s.api_format == "openai_responses" and new_kw == old_kw
-        assert new_kw["max_output_tokens"] == (16384 if effort == "high" else 8192)
+        assert new_kw["max_output_tokens"] == v04_max
         assert (new.text, new.finish_reason, new.reasoning_tokens) == (old.response_text, old.finish_reason, old.reasoning_tokens)
     clean_env.delenv("OPENAI_API_KEY")
     clean_env.setenv("AZURE_OPENAI_KEY_GPT5", "k")
@@ -218,19 +257,24 @@ def test_responses_request_parity_with_v04(clean_env, png):
     old, old_kw = _v04(ResponsesSampler, "gpt-5.1-2025-11-13", reply, png, "How many?")
     spec = registry.resolve("azure/gpt-5.1-2025-11-13")
     assert (spec.api_key_name, spec.base_url_source, spec.api_version) == ("AZURE_OPENAI_KEY_GPT5", "AZURE_OPENAI_ENDPOINT_GPT5", "2025-04-01-preview")
-    new, new_kw, _ = _v05("azure/gpt-5.1-2025-11-13", reply, [user(Image(path=png), "How many?")])
+    new, new_kw, _ = _v05("azure/gpt-5.1-2025-11-13", reply, [user(Image(path=png), "How many?")], max_output_tokens=8192)
     assert new_kw == old_kw and new_kw["model"] == "gpt-5-1-2025-11-13"
+    _, new_kw, s = _v05("azure/gpt-5.1-2025-11-13", reply, [user(Image(path=png), "How many?")])
+    assert new_kw["max_output_tokens"] == 128000 == s.config()["settings"]["max_output_tokens"]["value"]  # output_limit
 
 
-def test_judge_request_parity_with_v04(clean_env, png):
-    """The v0.4 judge (ResponsesSampler with an OpenRouter key) vs DEFAULT_JUDGE: v0.5 pins OpenAI's endpoint and asks
-    for the billed cost; the rest is equal."""
+def test_judge_request_parity_with_v04(clean_env, endpoints, png):
+    """The v0.4 judge (ResponsesSampler with an OpenRouter key) vs DEFAULT_JUDGE: v0.5 pins OpenAI's endpoint, asks
+    for the billed cost and sends the endpoint maximum (128000) instead of v0.4's 8192 (at effort medium a small cap
+    cuts verdicts: judge_failed); the rest is equal."""
     from simple_evals_mm.sampler.responses_sampler import ResponsesSampler
 
     clean_env.setenv("OPENROUTER_API_KEY", "k")
     old, old_kw = _v04(ResponsesSampler, "gpt-5.1-2025-11-13", _chat_reply(), png, "Grade this.")
+    assert _flat(old_kw)["max_tokens"] == 8192
     new, new_kw, _ = _v05(registry.DEFAULT_JUDGE, _chat_reply(), [user(Image(path=png), "Grade this.")])
-    assert _flat(new_kw) == {**_flat(old_kw), "provider": {"order": ["openai"], "allow_fallbacks": False}, "usage": {"include": True}}
+    assert _flat(new_kw) == {**_flat(old_kw), "provider": {"order": ["openai"], "allow_fallbacks": False},
+                             "usage": {"include": True}, "max_tokens": 128000}
     assert new.text == old.response_text
 
 
@@ -251,7 +295,8 @@ def test_gemini_request_parity_with_v04(clean_env, png):
         s.client = rec
         old = s([s.pack_message(images=[png], instruction="How many?")])
         old_kw = rec.calls[-1]
-        new, new_kw, sampler = _v05("gemini/gemini-3.1-pro-preview", reply, [user(Image(path=png), "How many?")], effort=effort)
+        new, new_kw, sampler = _v05("gemini/gemini-3.1-pro-preview", reply, [user(Image(path=png), "How many?")], effort=effort,
+                                    max_output_tokens=16384 if effort == "high" else 8192)  # v0.4: 8192, 16384 at high
         assert sampler.api_format == "google_generate_content" and new_kw["model"] == old_kw["model"]
         assert new_kw["config"].model_dump(exclude_none=True) == old_kw["config"].model_dump(exclude_none=True)
         [old_c], [new_c] = old_kw["contents"], new_kw["contents"]
@@ -282,7 +327,7 @@ def test_responses_parse_reasoning_refusal_tools(clean_env):
 
     clean_env.setenv("OPENAI_API_KEY", "k")
     s = registry.make_sampler(registry.resolve("openai/gpt-5.1-2025-11-13", effort="low", model_args={"reasoning_summary": "auto"}))
-    assert s.request_body() == {"max_output_tokens": 8192, "reasoning": {"effort": "low", "summary": "auto"}}
+    assert s.request_body() == {"max_output_tokens": 128000, "reasoning": {"effort": "low", "summary": "auto"}}
     d = json.loads(json.dumps(RESPONSES_REPLY))
     d["output"] = [{"type": "reasoning", "id": "rs", "summary": [{"type": "summary_text", "text": "thought"}]},
                    {"type": "function_call", "call_id": "c1", "name": "f", "arguments": '{"a": 1}'}]
@@ -324,11 +369,11 @@ def test_retry_policy():
 @pytest.mark.parametrize("slug,fmt", [
     ("openai/gpt-5.1-2025-11-13", "openai_responses"), ("openai/gpt-5.2-x", "openai_responses"),
     ("openai/gpt-4o-2024-11-20", "openai_chat_completions"), ("gemini/gemini-3.1-pro-preview", "google_generate_content"),
-    ("vertex/gemini-3-pro-preview", "google_generate_content"), ("openrouter/openai/gpt-5.1", "openai_chat_completions"),
+    ("vertex/gemini-3.1-pro-preview", "google_generate_content"), ("openrouter/openai/gpt-5.1", "openai_chat_completions"),
     ("sglang/Qwen/Qwen3.8-27B", "openai_chat_completions"), ("hf/sbintuitions/sarashina2.2-vision-3b", "openai_chat_completions"),
 ])
 def test_default_api_format(clean_env, slug, fmt):
-    spec = registry.resolve(slug)
+    spec = registry.resolve(slug, preset="none" if slug == "openai/gpt-5.2-x" else None)
     sampler = registry.make_sampler(spec)
     assert spec.api_format == fmt == sampler.api_format
     json.dumps(sampler.config())
@@ -337,7 +382,7 @@ def test_default_api_format(clean_env, slug, fmt):
 def test_api_format_override(clean_env):
     assert registry.resolve("openai/gpt-5.1-2025-11-13", api_format="openai_chat_completions").api_format == "openai_chat_completions"
     with pytest.raises(ValueError, match="not available"):
-        registry.resolve("sglang/m", api_format="openai_responses")
+        registry.resolve("sglang/m", preset="none", api_format="openai_responses")
 
 
 def test_model_args(clean_env):
@@ -357,8 +402,8 @@ def test_model_args(clean_env):
     assert o.sampling == {"temperature": 0.6} and o.max_image_px == 2048
     with pytest.raises(ValueError, match="must be one of"):
         registry.resolve("openrouter/qwen/qwen3.8-27b", model_args={"sampling": "greedy"})
-    assert registry.resolve("sglang/m", top_k=0).sampling["top_k"] == -1  # v0.4 SGLANG_TOP_K=0
-    e = registry.make_sampler(registry.resolve("sglang/m", model_args={"extra_body": {"seed": 1}})).request_body()
+    assert registry.resolve("sglang/m", preset="none", top_k=0).sampling["top_k"] == -1  # v0.4 SGLANG_TOP_K=0
+    e = registry.make_sampler(registry.resolve("sglang/m", preset="none", model_args={"extra_body": {"seed": 1}})).request_body()
     assert e["seed"] == 1
 
 
@@ -377,7 +422,9 @@ def test_presets_cover_v04_models(clean_env):
         key, _ = registry.find_preset(*registry.parse_slug(slug))
         assert key is not None, slug
     rows = registry.preset_rows()
-    assert len(rows) == len(presets.PRESETS) and all(json.dumps(r) for r in rows)
+    slugs = {r["slug"] for r in rows}
+    assert all(json.dumps(r) for r in rows) and {f"--preset {f}" for f in presets.FAMILIES} <= slugs
+    assert "{sglang,vllm,hf}/Qwen/Qwen3.8-27B" in slugs and "openrouter/qwen/qwen3.8-27b" in slugs
 
 
 def test_preflight_new_formats(clean_env):
@@ -394,10 +441,197 @@ def test_preflight_new_formats(clean_env):
     assert p[0] == "OPENAI_API_KEY is not set (provider openai)" and "OPENAI_BASE_URL is unreachable" in p[1]
 
 
-def test_planned_judge_preset():
-    """openrouter/openai/gpt-6-luna (planned judge): effort medium, pinned to openai, generous token ceiling."""
-    from simple_evals_mm.samplers import registry
-
-    cfg = registry.make_sampler(registry.resolve("openrouter/openai/gpt-6-luna")).config()
-    assert cfg["effort"] == "medium" and cfg["max_tokens"] >= 32768
+def test_planned_judge_preset(endpoints):
+    """openrouter/openai/gpt-6-luna (planned judge): effort medium, pinned to openai, max_output_tokens = the endpoint
+    maximum."""
+    s = registry.make_sampler(registry.resolve("openrouter/openai/gpt-6-luna"))
+    s.prepare()
+    cfg = s.config()
+    assert cfg["effort"] == "medium" and cfg["max_output_tokens"] is None
+    assert cfg["settings"]["max_output_tokens"] == {"value": 128000, "source": "openrouter:endpoint max_completion_tokens",
+                                                   "requested": None, "endpoint_max": 128000}
     assert registry.resolve("openrouter/openai/gpt-6-luna").resolution()["model"] == "openai/gpt-6-luna"
+
+
+# ---------------------------------------------------------------- exact presets, --preset
+def test_presets_are_exact_slugs(clean_env):
+    """No pattern matching: an unknown slug is refused; --preset none / --preset FAMILY are explicit and recorded."""
+    from simple_evals_mm.samplers import presets
+
+    assert not [k for k in presets.PRESETS if "*" in k]
+    for slug in ("openai/gpt-5.9-2027-01-01", "gemini/gemini-3.9-pro", "sglang/google/gemma-4-99B-it", "openrouter/x/y"):
+        with pytest.raises(ValueError, match="--preset none"):
+            registry.resolve(slug)
+    none = registry.resolve("sglang/google/gemma-4-99B-it", preset="none")
+    assert (none.preset, none.family, none.sampling, none.efforts, none.max_output_tokens) == ("none", None, {}, None, None)
+    assert none.public()["preset"] == "none"
+    path = "models/LLM-jp-VL-llmjp4_harmony-steps-30000"
+    fam = registry.resolve(f"sglang/{path}", preset="llm-jp-vl", effort="high")
+    assert (fam.preset, fam.family, fam.response_parser, fam.model) == ("llm-jp-vl", "llm-jp-vl", "harmony", path)
+    assert fam.sampling_source == {"temperature": "preset:llm-jp-vl", "skip_special_tokens": "preset:llm-jp-vl"}
+    exact = registry.resolve("vllm/Qwen/Qwen3.5-9B")  # every engine prefix of a listed HF id: same family
+    assert (exact.preset, exact.family) == ("vllm/Qwen/Qwen3.5-9B", "qwen3.5")
+
+
+# ---------------------------------------------------------------- max_output_tokens = the endpoint maximum
+def test_max_output_tokens_default_and_clamp(clean_env, endpoints):
+    """Without --max-output-tokens: the pinned endpoint's max_completion_tokens (context_length when null), the served
+    engine's max_model_len, the preset's output_limit; a larger request is clamped, requested + effective recorded."""
+    endpoints["row"]["max_completion_tokens"] = 65536
+    s = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    assert s.config()["settings"]["max_output_tokens"]["value"] is None  # before prepare: unresolved
+    s.prepare()
+    assert s.request_body()["max_tokens"] == 65536
+    endpoints["row"]["max_completion_tokens"] = None
+    s = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b", max_output_tokens=10 ** 6))
+    s.prepare()
+    assert s.request_body()["max_tokens"] == 400000
+    assert s.config()["settings"]["max_output_tokens"] == {
+        "value": 400000, "requested": 10 ** 6, "endpoint_max": 400000,
+        "source": "cli, clamped to the endpoint maximum (openrouter:endpoint context_length)"}
+    small = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b", max_output_tokens=4096))
+    small.prepare()
+    assert small.config()["settings"]["max_output_tokens"]["source"] == "cli" and small.request_body()["max_tokens"] == 4096
+
+    endpoints["server"]["max_model_len"] = 32768
+    v = registry.make_sampler(registry.resolve("vllm/Qwen/Qwen3.5-9B"))
+    v.prepare()
+    assert v.request_body()["max_tokens"] == 32768
+    assert v.config()["settings"]["max_output_tokens"]["source"] == "vllm:max_model_len"
+    assert v.config()["endpoint"]["version"] == "0.5.23"
+    endpoints["server"]["max_model_len"] = None
+    with pytest.raises(RuntimeError, match="--max-output-tokens"):
+        registry.make_sampler(registry.resolve("vllm/Qwen/Qwen3.5-9B")).prepare()
+    with pytest.raises(RuntimeError, match="give --provider"):  # unpinned OpenRouter: no single endpoint maximum
+        registry.make_sampler(registry.resolve("openrouter/x/y", preset="none")).prepare()
+    with pytest.raises(RuntimeError, match="output_limit"):
+        registry.make_sampler(registry.resolve("openai/gpt-5.9", preset="none")).prepare()
+    g = registry.make_sampler(registry.resolve("openai/gpt-5.9", preset="none", max_output_tokens=2048))
+    g.prepare()
+    assert g.request_body()["max_output_tokens"] == 2048
+
+
+def test_served_overflow_refit():
+    """sglang and vLLM name the input length in their overflow error: max_tokens is refitted to the remaining context."""
+    from simple_evals_mm.samplers.openai_chat import _fit_max_tokens
+
+    sg = ("Requested token count exceeds the model's maximum context length of 32768 tokens. You requested a total of "
+          "33768 tokens: 1000 tokens from the input messages and 32768 tokens for the completion.")
+    vl = ("This model's maximum context length is 32768 tokens. However, you requested 32768 output tokens and your "
+          "prompt contains 1000 input tokens, for a total of 33768 tokens.")
+    assert _fit_max_tokens(sg, 32768) == _fit_max_tokens(vl, 32768) == 32768 - 1000 - 16
+    assert _fit_max_tokens(vl.replace("1000 input", "32700 input"), 32768) is None  # no room: context_overflow
+
+
+# ---------------------------------------------------------------- resolved settings: value + source per field
+def test_settings_precedence_cli_preset_provider(clean_env, endpoints):
+    """CLI beats the preset beats the provider's declared defaults (OpenRouter default_parameters, sent explicitly);
+    a field nobody declares is not sent and recorded as not reported."""
+    endpoints["defaults"] = {"temperature": 0.3, "top_p": 0.5, "top_k": 7, "frequency_penalty": 0.1, "repetition_penalty": None}
+    s = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b", temperature=0.6))
+    s.prepare()
+    body, st = s.request_body(), s.config()["settings"]
+    preset = "preset:openrouter/qwen/qwen3.8-27b"
+    assert (body["temperature"], body["top_p"], body["top_k"], body["frequency_penalty"]) == (0.6, 0.95, 20, 0.1)
+    assert (st["temperature"]["source"], st["top_p"]["source"], st["frequency_penalty"]["source"]) == (
+        "cli", preset, "openrouter:default_parameters")
+    assert "repetition_penalty" not in body and st["repetition_penalty"] == {"value": None, "source": "provider default (not reported)"}
+    assert st["effort"] == {"value": None, "source": "provider default (not reported)"}
+    assert s.config()["endpoint"]["canonical_slug"] == "qwen/qwen3.8-27b-2026"
+
+    luna = registry.make_sampler(registry.resolve("openrouter/openai/gpt-6-luna"))  # no preset sampling
+    endpoints["defaults"] = {"temperature": 1, "top_p": None}
+    luna.prepare()
+    assert luna.request_body()["temperature"] == 1 and "top_p" not in luna.request_body()
+    assert luna.config()["settings"]["temperature"] == {"value": 1, "source": "openrouter:default_parameters"}
+    assert luna.config()["settings"]["effort"] == {"value": "medium", "source": "preset:openrouter/openai/gpt-6-luna"}
+
+
+def test_settings_generation_config_under_preset_none(clean_env, endpoints, monkeypatch, tmp_path):
+    """--preset none on a served model: the sampling defaults come from the model's generation_config.json (the
+    directory the server reports as root) and are sent explicitly."""
+    from simple_evals_mm.samplers import openai_chat
+
+    monkeypatch.setattr(openai_chat, "read_generation_config", endpoints["real_read_generation_config"])
+    model_dir = tmp_path / "ckpt"
+    model_dir.mkdir()
+    (model_dir / "generation_config.json").write_text(json.dumps({"temperature": 0.7, "top_p": 0.8, "top_k": 20,
+                                                                  "repetition_penalty": 1.05, "do_sample": True}))
+    endpoints["server"]["root"] = str(model_dir)
+    s = registry.make_sampler(registry.resolve("sglang/ckpt", preset="none", top_k=5))
+    s.prepare()
+    body, st = s.request_body(), s.config()["settings"]
+    assert {k: body[k] for k in ("temperature", "top_p", "top_k", "repetition_penalty")} == {
+        "temperature": 0.7, "top_p": 0.8, "top_k": 5, "repetition_penalty": 1.05}
+    assert st["temperature"]["source"] == "model:generation_config.json" and st["top_k"]["source"] == "cli"
+    assert "min_p" not in body and st["min_p"]["source"] == "provider default (not reported)"
+    gen = s.config()["endpoint"]["generation_config"]
+    assert gen["found"] and gen["model"] == "ckpt" and len(gen["sha256"]) == 64  # no absolute path recorded
+
+
+def test_settings_unknown_on_openai_and_gemini_defaults(clean_env):
+    """OpenAI does not report defaults: a field not given is not sent, recorded as not reported. Gemini models.get
+    declares temperature / top_p / top_k: sent unless the preset / CLI sets them."""
+    clean_env.setenv("OPENAI_API_KEY", "k")
+    o = registry.make_sampler(registry.resolve("openai/gpt-5.1-2025-11-13"))
+    o.prepare()
+    assert "temperature" not in o.request_body()
+    assert o.config()["settings"]["temperature"] == {"value": None, "source": "provider default (not reported)"}
+    clean_env.setenv("GEMINI_API_KEY", "k")
+    g = registry.make_sampler(registry.resolve("gemini/gemini-3.1-pro-preview"))
+    g._client = Recorder(None)
+    g._client.model_info = NS(name="models/gemini-3.1-pro-preview", version="3.1", temperature=1.0, top_p=0.95, top_k=64,
+                              output_token_limit=65536)
+    g.prepare()
+    body, st = g.request_body(), g.config()["settings"]
+    assert (body["temperature"], body["top_p"], body["top_k"]) == (0.0, 0.95, 64)
+    assert (st["temperature"]["source"], st["top_k"]["source"]) == ("preset:gemini-3", "gemini:models.get")
+    assert st["max_output_tokens"]["source"] == "preset:gemini-3 output_limit"
+
+
+def test_responses_sampling_echo(clean_env):
+    """The Responses API echoes temperature / top_p: stored per step with the fields that differ from what was sent."""
+    from openai.types.responses import Response as OAIResponse
+
+    clean_env.setenv("OPENAI_API_KEY", "k")
+    s = registry.make_sampler(registry.resolve("openai/gpt-5.1-2025-11-13", temperature=0.5))
+    r = s._parse(OAIResponse.model_validate({**RESPONSES_REPLY, "temperature": 1.0, "top_p": 0.98}))
+    assert r.sampling_echo == {"echo": {"temperature": 1.0, "top_p": 0.98}, "differs": ["temperature"]}
+    assert s._parse(OAIResponse.model_validate(RESPONSES_REPLY)).sampling_echo is None
+
+
+# ---------------------------------------------------------------- endpoint unavailable
+def test_endpoint_unavailable_classification(clean_env, endpoints, monkeypatch, png):
+    """404 / "No endpoints found" / an upstream model-not-found: endpoint_unavailable at once; a served engine that
+    refuses connections after every retry: endpoint_unavailable; a timeout stays provider_failed."""
+    import httpx
+    import openai
+
+    from simple_evals_mm.samplers import openai_chat
+
+    monkeypatch.setattr(openai_chat.time, "sleep", lambda s: None)
+    req = httpx.Request("POST", "http://x/v1/chat/completions")
+
+    def raising(exc):
+        rec = Recorder(None)
+        rec.chat = NS(completions=NS(create=lambda **kw: (_ for _ in ()).throw(exc)))
+        return rec
+
+    clean_env.setenv("OPENROUTER_API_KEY", "k")
+    s = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    s._client = raising(openai.NotFoundError("Error code: 404 - {'error': {'message': 'No endpoints found for qwen/qwen3.8-27b.'}}",
+                                             response=httpx.Response(404, request=req), body=None))
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.cause == errors.ENDPOINT_UNAVAILABLE
+
+    served = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B"))
+    served.spec.max_tries = 2
+    served._client = raising(openai.APIConnectionError(request=req))
+    with pytest.raises(errors.SamplerError) as e:
+        served([user("q")])
+    assert e.value.cause == errors.ENDPOINT_UNAVAILABLE
+    served._client = raising(openai.APITimeoutError(request=req))
+    with pytest.raises(errors.SamplerError) as e:
+        served([user("q")])
+    assert e.value.cause == errors.PROVIDER_FAILED

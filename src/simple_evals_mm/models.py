@@ -106,6 +106,7 @@ class Response:
     provider: str | None = None  # serving provider (OpenRouter)
     system_fingerprint: str | None = None
     cost_usd: float | None = None  # billed cost when the API reports it (OpenRouter usage.cost)
+    sampling_echo: dict | None = None  # sampling the response reports it used ({"echo", "differs"}; Responses API)
     raw: Any = None  # untouched response payload (not stored)
 
 
