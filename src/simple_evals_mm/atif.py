@@ -17,7 +17,7 @@ from typing import Any
 
 SCHEMA_VERSION = "ATIF-v1.8"
 SOURCES = ("system", "user", "agent")
-AGENT_ONLY = ("model_name", "reasoning_effort", "reasoning_content", "tool_calls", "metrics")
+AGENT_ONLY = ("model_name", "reasoning_effort", "reasoning_content", "tool_calls", "metrics", "is_copied_context")
 
 
 def _drop_none(d: dict) -> dict:
@@ -115,6 +115,8 @@ class Step(_Base):
     tool_calls: list[ToolCall] | None = None
     observation: Observation | None = None
     metrics: Metrics | None = None
+    # an agent step the model did not generate: context supplied by the task (a dataset's assistant turn)
+    is_copied_context: bool | None = None
     extra: dict | None = None
 
     @property
@@ -136,7 +138,7 @@ class Step(_Base):
             tool_calls=[ToolCall(**t) for t in d["tool_calls"]] if d.get("tool_calls") is not None else None,
             observation=Observation([ObservationResult(**r) for r in obs.get("results", [])], obs.get("extra")) if obs else None,
             metrics=Metrics(**d["metrics"]) if d.get("metrics") else None,
-            extra=d.get("extra"),
+            is_copied_context=d.get("is_copied_context"), extra=d.get("extra"),
         )
 
 
@@ -162,7 +164,8 @@ class Trajectory(_Base):
     # ---- views used by graders
     @property
     def agent_steps(self) -> list[Step]:
-        return [s for s in self.steps if s.source == "agent"]
+        """The model's own answers (copied context excluded)."""
+        return [s for s in self.steps if s.source == "agent" and not s.is_copied_context]
 
     @property
     def final_text(self) -> str:

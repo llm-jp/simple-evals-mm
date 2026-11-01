@@ -10,4 +10,4 @@ def runs_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(runs, "RUNS_DIR", str(d))
     monkeypatch.setattr(runs, "INDEX", str(d / "index.jsonl"))
     return d
-from tests.fakes import job_env  # noqa: F401 - fixture of the v0.5 tests
+from tests.fakes import image_dir, job_env  # noqa: F401 - fixtures of the v0.5 tests
