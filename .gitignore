@@ -49,3 +49,6 @@ runs/
 # campaign launcher records and job logs
 campaigns/submitted/
 logs/
+
+# v0.5 job results (sem run; DEFAULT_JOBS_DIR)
+/jobs/
