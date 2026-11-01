@@ -105,7 +105,7 @@ def test_retry_reopens_a_repeat_and_regenerates_only_the_transient_rows(tmp_path
     (d / "score_r1.json").write_text(json.dumps({"score": 1 / 3, "model_usage": {"call_count": 4}}) + "\n")
     (d / "summary.json").write_text("{}\n")
     assert retry_failed.reopen_task(str(d)) == 1
-    assert sorted(os.listdir(d)) == ["items_r1.jsonl.reopened", "partial_r1.jsonl", "score_r1.json.reopened", "summary.json.reopened"]
+    assert sorted(os.listdir(d)) == ["history.jsonl", "items_r1.jsonl.reopened", "partial_r1.jsonl", "score_r1.json.reopened", "summary.json.reopened"]
     calls = []
     set_checkpoint(str(d / "partial_r1.jsonl"))
     out = map_examples(lambda i: calls.append(i) or _row(i, 1.0), list(range(4)))

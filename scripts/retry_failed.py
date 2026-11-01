@@ -27,7 +27,16 @@ MULTI_ROW_TASKS = {"mmdu", "multiverse"}  # one row per dialogue turn: rows do n
 
 
 def reopen_task(task_dir: str, dry_run: bool = False) -> int:
-    """Reopen every repeat of task_dir that has transient failures; returns the number of rows to regenerate."""
+    """Reopen every repeat of task_dir that has transient failures; returns the number of rows to regenerate (the
+    repeats taken back are recorded in its history.jsonl)."""
+    if dry_run:
+        return _reopen_task(task_dir, dry_run=True)
+    with runs.track(task_dir, "retry_failed") as info:
+        info["rows_to_retry"] = _reopen_task(task_dir)
+        return info["rows_to_retry"]
+
+
+def _reopen_task(task_dir: str, dry_run: bool = False) -> int:
     total = 0
     for items in sorted(glob.glob(os.path.join(task_dir, "items_r*.jsonl"))):
         with open(items) as f:

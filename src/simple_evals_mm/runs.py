@@ -199,6 +199,91 @@ def serving_stack(cfg: dict) -> dict:
     return out
 
 
+# ---------------------------------------------------------------- revision history of a task's result files
+# Every tool that writes result files (the orchestrator, rescore.py, apply_cutoff_rule.py, retry_failed.py,
+# merge_runs.py) wraps its work in track(): <task>/history.jsonl gets one entry per invocation with the sha256 of every
+# changed file before and after. verify_history() replays it against the files on disk, so an edit made outside these
+# tools (or by a tool that does not record) is found at aggregation.
+HISTORY = "history.jsonl"
+_TRACKED = ("items_r*.jsonl", "score_r*.json", "summary.json")  # results are read from these; checkpoints are work in progress
+
+
+def result_file_hashes(task_dir: str) -> dict[str, str]:
+    """{file name: sha256 (16 hex)} of the task's result files."""
+    import glob
+
+    out = {}
+    for pattern in _TRACKED:
+        for f in glob.glob(os.path.join(task_dir, pattern)):
+            out[os.path.basename(f)] = _sha256_file(f)[:16]
+    return dict(sorted(out.items()))
+
+
+def _append_history(task_dir: str, entry: dict) -> None:
+    with _locked("history"), open(os.path.join(task_dir, HISTORY), "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+
+
+@contextlib.contextmanager
+def track(task_dir: str, tool: str, **details):
+    """Record the result files this block changes in <task>/history.jsonl (also when it raises). `details` (e.g. the
+    grader, scores before / after) can be extended inside the block through the yielded dict."""
+    import sys
+
+    os.makedirs(task_dir, exist_ok=True)
+    before = result_file_hashes(task_dir)
+    info = dict(details)
+    status = "ok"
+    try:
+        yield info
+    except BaseException as e:
+        status = f"failed: {type(e).__name__}"
+        raise
+    finally:
+        after = result_file_hashes(task_dir)
+        changed = {n: {"before": before.get(n), "after": after.get(n)}
+                   for n in sorted(set(before) | set(after)) if before.get(n) != after.get(n)}
+        if changed:
+            _append_history(task_dir, {
+                "at": _dt.datetime.now().isoformat(timespec="seconds"), "tool": tool, "status": status,
+                "argv": sys.argv, "code_git": _git_hash(_repo_root()), "code_dirty": _git_dirty(_repo_root()),
+                "files": changed, "details": info,
+            })
+
+
+def verify_history(task_dir: str) -> dict:
+    """Replay <task>/history.jsonl against the files on disk. Returns {"status": "ok" | "untracked" | "no_history",
+    "mismatched": [file whose current hash is not the last recorded one], "unrecorded": [result file the history never
+    mentions], "missing": [file the history says exists but is gone]}."""
+    p = os.path.join(task_dir, HISTORY)
+    current = result_file_hashes(task_dir)
+    if not os.path.exists(p):
+        return {"status": "no_history", "mismatched": [], "unrecorded": sorted(current), "missing": []}
+    state: dict[str, str | None] = {}
+    with open(p, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                for name, ch in json.loads(line).get("files", {}).items():
+                    state[name] = ch.get("after")
+    mismatched = sorted(n for n, h in current.items() if n in state and state[n] is not None and state[n] != h)
+    unrecorded = sorted(n for n in current if n not in state)
+    missing = sorted(n for n, h in state.items() if h is not None and n not in current)
+    bad = mismatched or unrecorded or missing
+    return {"status": "untracked" if bad else "ok", "mismatched": mismatched, "unrecorded": unrecorded, "missing": missing}
+
+
+def baseline_history(task_dir: str, note: str = "legacy baseline") -> bool:
+    """Start the history of a task made before histories existed: record the current files as they are (once)."""
+    if os.path.exists(os.path.join(task_dir, HISTORY)):
+        return False
+    files = {n: {"before": None, "after": h} for n, h in result_file_hashes(task_dir).items()}
+    if files:
+        _append_history(task_dir, {"at": _dt.datetime.now().isoformat(timespec="seconds"), "tool": "baseline",
+                                   "status": "ok", "code_git": _git_hash(_repo_root()), "files": files,
+                                   "details": {"note": note}})
+    return bool(files)
+
+
 def task_provenance(eval_obj) -> dict:
     """Per-task code fingerprint (Harbor: task checksum per trial): the task module's file hash, the
     shared common.py hash, the repo git hash and whether src/ had uncommitted changes. Recorded in

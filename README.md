@@ -112,6 +112,7 @@ A run id is one evaluation setting, and the code refuses to mix two:
 - **Frozen setting.** `config.json` records the model, the provider endpoint (provider, quantization), the request parameters, reasoning effort and token budget, the chat template, and the environment variables that change prompts, images or sampling. For served models it also records the engine version, a content hash of the installed sglang / vLLM package and of any patch loaded on top (`EVAL_SERVER_VENV`, `EVAL_SERVER_OVERLAY`), so a locally patched engine is told apart from a stock one, and the versions of torch, flashinfer and transformers.
 - **Resume checks.** Re-running a run id with a different setting, a different serving stack or different task code stops with the differences. Changed task code can be accepted explicitly with `--allow-code-change`, and that is recorded.
 - **Per-repeat provenance.** Every `score_r<k>.json` records the hash of the task code and `common.py` that produced it, and `scripts/runs_check.py` lists results made by code that differs from the current tree.
+- **Revision history.** Every tool that writes result files (generation, re-scoring, migrations, retries, merges) appends to `<task>/history.jsonl`: the tool, the command, the code version and the hash of each changed file before and after. `scripts/runs_history.py verify` (and `runs_check.py`) replays it against the files on disk, so an edit made any other way is reported.
 
 ### Campaigns
 
