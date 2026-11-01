@@ -407,7 +407,9 @@ class OpenAIChatSampler(Sampler):
                 # quantization), so OpenRouter cannot route to another endpoint of the same provider
                 ep = self.endpoint_info if (self.endpoint_info or {}).get("matched") else None
                 prov: dict = {"order": [ep["tag"]] if ep and ep.get("tag") else list(s.provider_pin), "allow_fallbacks": False}
-                if ep and ep.get("quantization"):
+                # a concrete quantization only: closed / unlabelled hosts report "unknown", and the tag pin already
+                # selects that one endpoint (no live request needed to learn how OpenRouter treats an "unknown" filter)
+                if ep and ep.get("quantization") and ep["quantization"] != "unknown":
                     prov["quantizations"] = [ep["quantization"]]
                 elif s.quant:
                     prov["quantizations"] = list(s.quant)

@@ -39,8 +39,8 @@ def test_presets_and_errors(monkeypatch, endpoints):
     judge.prepare()
     jb = judge.request_body()
     assert jb["reasoning"] == {"effort": "none"} and jb["max_tokens"] == 128000  # the endpoint maximum, no small cap
-    # the matched endpoint's tag and quantization (OpenRouter lists "unknown" for closed models)
-    assert jb["provider"] == {"order": ["openai"], "allow_fallbacks": False, "quantizations": ["unknown"]}
+    # the matched endpoint's tag; no quantization filter when OpenRouter lists "unknown" (closed models)
+    assert jb["provider"] == {"order": ["openai"], "allow_fallbacks": False}
     for bad, kw in (("noprovider", {}), ("bogus/x", {}), ("openrouter/qwen/qwen3.8-27b", {"effort": "max"}),
                     ("azure/x", {"preset": "none"}), ("sglang/other", {}), ("sglang/m", {"preset": "nope"})):
         with pytest.raises(ValueError):
@@ -186,12 +186,12 @@ CHAT_CASES = {
     # for the billed cost
     "gpt-4o (OpenRouter)": ("simple_evals_mm.sampler.openai_sampler:OpenAISampler", "gpt-4o-2024-11-20",
                             {"OPENROUTER_API_KEY": "k"}, None, "openrouter/openai/gpt-4o-2024-11-20",
-                            {"provider": {"order": ["openai"], "allow_fallbacks": False, "quantizations": ["unknown"]},
+                            {"provider": {"order": ["openai"], "allow_fallbacks": False},
                              "usage": {"include": True}}),
     # v0.5 sends the matched endpoint row: its tag in provider.order and its quantization (v0.4: the provider slug only)
     "qwen3.8-27b (OpenRouter pin)": ("simple_evals_mm.sampler.openrouter_sampler:OpenRouterSampler", "openrouter/qwen/qwen3.8-27b",
                                      {"OPENROUTER_API_KEY": "k"}, "low", "openrouter/qwen/qwen3.8-27b",
-                                     {"provider": {"order": ["alibaba"], "allow_fallbacks": False, "quantizations": ["unknown"]}}),
+                                     {"provider": {"order": ["alibaba"], "allow_fallbacks": False}}),
     "gemma-4-31b (OpenRouter bf16 pin, toggle)": ("simple_evals_mm.sampler.openrouter_sampler:OpenRouterSampler",
                                                   "openrouter/google/gemma-4-31b-it", {"OPENROUTER_API_KEY": "k"}, "none",
                                                   "openrouter/google/gemma-4-31b-it",
@@ -283,7 +283,7 @@ def test_judge_request_parity_with_v04(clean_env, endpoints, png):
     old, old_kw = _v04(ResponsesSampler, "gpt-5.1-2025-11-13", _chat_reply(), png, "Grade this.")
     assert _flat(old_kw)["max_tokens"] == 8192
     new, new_kw, _ = _v05(registry.DEFAULT_JUDGE, _chat_reply(), [user(Image(path=png), "Grade this.")])
-    assert _flat(new_kw) == {**_flat(old_kw), "provider": {"order": ["openai"], "allow_fallbacks": False, "quantizations": ["unknown"]},
+    assert _flat(new_kw) == {**_flat(old_kw), "provider": {"order": ["openai"], "allow_fallbacks": False},
                              "usage": {"include": True}, "max_tokens": 128000}
     assert new.text == old.response_text
 
