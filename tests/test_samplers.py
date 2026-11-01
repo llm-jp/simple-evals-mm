@@ -392,3 +392,12 @@ def test_preflight_new_formats(clean_env):
     clean_env.setenv("OPENAI_BASE_URL", "http://127.0.0.1:9/v1")
     p = registry.make_sampler(registry.resolve("openai/gpt-5.1-2025-11-13")).preflight(timeout=2)
     assert p[0] == "OPENAI_API_KEY is not set (provider openai)" and "OPENAI_BASE_URL is unreachable" in p[1]
+
+
+def test_planned_judge_preset():
+    """openrouter/openai/gpt-6-luna (planned judge): effort medium, pinned to openai, generous token ceiling."""
+    from simple_evals_mm.samplers import registry
+
+    cfg = registry.make_sampler(registry.resolve("openrouter/openai/gpt-6-luna")).config()
+    assert cfg["effort"] == "medium" and cfg["max_tokens"] >= 32768
+    assert registry.resolve("openrouter/openai/gpt-6-luna").resolution()["model"] == "openai/gpt-6-luna"
