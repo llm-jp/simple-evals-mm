@@ -60,13 +60,15 @@ def merge(into: str, fill: str, task: str, replicate: bool = False) -> dict:
     backup = os.path.join(dst_dir, f"pre_merge_{fill}")
     os.makedirs(backup, exist_ok=True)
     added = {}
-    for k, dst_path in sorted(dst.items()):
-        shutil.copy2(dst_path, backup)
-        have = set(_ids(dst_path))
-        new = [line for line in open(pairs[k]) if line.strip() and json.loads(line)["id"] not in have]
-        with open(dst_path, "a") as f:
-            f.writelines(line if line.endswith("\n") else line + "\n" for line in new)
-        added[k] = len(new)
+    with runs.track(dst_dir, "merge_runs", fill_run=fill, replicate=replicate) as info:  # recorded in history.jsonl
+        for k, dst_path in sorted(dst.items()):
+            shutil.copy2(dst_path, backup)
+            have = set(_ids(dst_path))
+            new = [line for line in open(pairs[k]) if line.strip() and json.loads(line)["id"] not in have]
+            with open(dst_path, "a") as f:
+                f.writelines(line if line.endswith("\n") else line + "\n" for line in new)
+            added[k] = len(new)
+        info["added"] = added
     log = {"time": datetime.now().isoformat(timespec="seconds"), "fill_run": fill, "replicate": replicate, "added": added}
     with open(os.path.join(dst_dir, "merges.jsonl"), "a") as f:
         f.write(json.dumps(log) + "\n")

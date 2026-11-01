@@ -80,7 +80,7 @@ def _summary():
 def test_run_writes_the_layout(cli):
     cli()
     d = runs.task_dir("r1", "arith")
-    assert sorted(os.listdir(d)) == ["items_r1.jsonl", "items_r2.jsonl", "score_r1.json", "score_r2.json", "summary.json"]
+    assert sorted(os.listdir(d)) == ["history.jsonl", "items_r1.jsonl", "items_r2.jsonl", "score_r1.json", "score_r2.json", "summary.json"]
     s = _summary()
     assert s["scores"] == pytest.approx([2 / 3, 2 / 3]) and s["n_repeats"] == 2
     assert s["category_scores"]["math"]["mean_score"] == pytest.approx(0.5)
@@ -140,7 +140,7 @@ def test_overlapped_repeats_give_the_same_run_with_per_repeat_usage(cli, capsys)
     s = cli("--overlap-repeats", "--eval-threads", "2")
     assert "[overlap] arith: repeats [1, 2]" in capsys.readouterr().out
     d = runs.task_dir("r1", "arith")
-    assert sorted(os.listdir(d)) == ["items_r1.jsonl", "items_r2.jsonl", "score_r1.json", "score_r2.json", "summary.json"]
+    assert sorted(os.listdir(d)) == ["history.jsonl", "items_r1.jsonl", "items_r2.jsonl", "score_r1.json", "score_r2.json", "summary.json"]
     assert _summary()["scores"] == pytest.approx([2 / 3, 2 / 3])
     for k in (1, 2):  # each repeat reports its own calls (forked sampler), not the shared total
         with open(os.path.join(d, f"score_r{k}.json")) as f:
@@ -230,6 +230,22 @@ def test_a_task_code_change_aborts_a_resume_unless_allowed(cli, monkeypatch):
     assert len(s.prompts) == len(QUESTIONS)  # repeat 1 reloaded, repeat 2 generated
     with open(os.path.join(d, "score_r2.json")) as f:
         assert json.load(f)["provenance"]["code_changed_on_resume"] == ["task_module_sha256"]
+
+
+def test_runs_and_rescores_are_recorded_in_the_history(cli):
+    import rescore
+
+    cli()
+    d = runs.task_dir("r1", "arith")
+    assert runs.verify_history(d)["status"] == "ok"
+    rescore.rescore_model_eval("arith", d, grader=None, grader_id="none")
+    with open(os.path.join(d, runs.HISTORY)) as f:
+        tools = [json.loads(line)["tool"] for line in f]
+    assert tools.count("simple_evals") == 5 and tools[-1] == "rescore"  # items + score per repeat, then the summary
+    assert runs.verify_history(d)["status"] == "ok"
+    with open(os.path.join(d, "summary.json"), "a") as f:
+        f.write(" ")  # an edit outside the tools
+    assert runs.verify_history(d)["mismatched"] == ["summary.json"]
 
 
 def test_rescore_script_reproduces_scores(cli):
