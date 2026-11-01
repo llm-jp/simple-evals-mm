@@ -1,16 +1,20 @@
-"""Shared fakes of the v0.5 tests: a scripted sampler, a toy dataset and the `job_env` fixture."""
+"""Shared fakes of the v0.5 tests: a scripted sampler, a toy dataset, the `job_env` and `image_dir` fixtures, and the
+helpers of the dataset parity tests (images, a recording v0.4 sampler, one direct trial)."""
 
+import io
 from typing import ClassVar
 
 import pytest
 from PIL import Image as PILImage
 
-from simple_evals_mm import checks, cli
+from simple_evals_mm import atif, checks, cli, sources
 from simple_evals_mm import dataset as dataset_mod
+from simple_evals_mm.agent import Direct
 from simple_evals_mm.dataset import Dataset
 from simple_evals_mm.models import Response, Task, VerifierResult, user
 from simple_evals_mm.samplers import registry
 from simple_evals_mm.store import JobStore
+from tests.helpers import EchoSampler
 
 VERDICT = "extracted_final_answer: x\nreasoning: t\ncorrect: {}\nconfidence: 100"
 
@@ -86,3 +90,38 @@ def png(path, color="red"):
     """A 4x4 PNG at path; returns the path."""
     PILImage.new("RGB", (4, 4), color).save(path)
     return str(path)
+
+
+def png_bytes(color="red", size=(4, 4)) -> bytes:
+    buf = io.BytesIO()
+    PILImage.new("RGB", size, color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@pytest.fixture(autouse=True)
+def image_dir(tmp_path, monkeypatch):
+    """Dataset image files (sources.image_file) go to a temporary directory (autouse: no test writes to data/)."""
+    d = tmp_path / "images"
+    monkeypatch.setattr(sources, "IMAGE_DIR", str(d))
+    return d
+
+
+class RecordingSampler(EchoSampler):
+    """v0.4 sampler recording every request as [(role, text, n_images)]; `cut_off` reports finish_reason length."""
+
+    def __init__(self, reply="A", cut_off=False):
+        super().__init__("rec", reply=reply)
+        self.requests, self.cut_off = [], cut_off
+
+    def __call__(self, message_list):
+        self.requests.append([(m["role"], "".join(p["text"] for p in m["content"] if p["type"] == "text"),
+                               sum(p["type"] == "image" for p in m["content"])) for m in message_list])
+        r = super().__call__(message_list)
+        if self.cut_off:
+            r.finish_reason = "length"
+        return r
+
+
+def trial(ds, task, sampler, tmp_path):
+    """One trial of `task` with the direct agent (images stored under tmp_path/job)."""
+    return Direct().run(task, ds, sampler, job_id="u", attempt=1, images=atif.ImageStore(str(tmp_path / "job")))

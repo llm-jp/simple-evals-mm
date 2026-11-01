@@ -103,6 +103,23 @@ def test_preflight(monkeypatch):
     assert runner.preflight(FakeSampler(), FakeSampler()) == []  # fakes have no preflight
 
 
+def test_dataset_preflight(job_env, monkeypatch, capsys):
+    """Dataset.preflight(verify) runs in the job preflight with verify = not --generate-only; --skip-preflight skips it."""
+    s, seen = job_env, []
+
+    def preflight(self, verify):
+        seen.append(verify)
+        return ["arith: the evaluator image is missing"] if verify else []
+
+    monkeypatch.setattr(Arith, "preflight", preflight, raising=False)
+    assert s["run"](name="v") == 2
+    assert "dataset arith: the evaluator image is missing" in capsys.readouterr().err and seen == [True]
+    assert not os.path.exists(os.path.join(s["jobs"], "v", "arith"))  # failed before any trial
+    assert s["run"]("--generate-only", name="g") == 0 and seen[-1] is False
+    n = len(seen)
+    assert s["run"]("--skip-preflight", name="k") == 0 and len(seen) == n
+
+
 @pytest.mark.parametrize("retry,calls", [({}, 3), ({"exclude_causes": ["provider_failed"]}, 1), ({"include_causes": []}, 1)])
 def test_retry_config(job_env, monkeypatch, tmp_path, retry, calls):
     s = job_env
