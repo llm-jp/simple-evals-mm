@@ -73,6 +73,14 @@ def cli(runs_dir, monkeypatch):
     return run
 
 
+def _interrupt(d, *files):
+    """Simulate a job that died before writing `files`: remove them and record that (a real interruption leaves them
+    unwritten; deleting recorded files is otherwise an untracked edit)."""
+    for f in files:
+        os.remove(os.path.join(d, f))
+    runs.accept_edits(d, reason="test: simulated interruption")
+
+
 def _summary():
     return json.load(open(os.path.join(runs.task_dir("r1", "arith"), "summary.json")))
 
@@ -100,8 +108,7 @@ def test_rerun_skips_and_a_changed_config_aborts(cli, capsys):
 def test_interrupted_task_resumes_finished_repeats(cli, capsys):
     cli()
     d = runs.task_dir("r1", "arith")
-    for f in ("summary.json", "items_r2.jsonl", "score_r2.json"):
-        os.remove(os.path.join(d, f))
+    _interrupt(d, "summary.json", "items_r2.jsonl", "score_r2.json")
     s = cli()
     assert "[resume] arith repeat 1" in capsys.readouterr().out
     assert len(s.prompts) == len(QUESTIONS)  # only repeat 2 was generated again
@@ -220,8 +227,7 @@ def test_safety_filter_stops_are_counted(cli, monkeypatch):
 def test_a_task_code_change_aborts_a_resume_unless_allowed(cli, monkeypatch):
     cli()
     d = runs.task_dir("r1", "arith")
-    for f in ("summary.json", "items_r2.jsonl", "score_r2.json"):
-        os.remove(os.path.join(d, f))  # interrupted after repeat 1
+    _interrupt(d, "summary.json", "items_r2.jsonl", "score_r2.json")  # interrupted after repeat 1
     real = runs.task_provenance
     monkeypatch.setattr(runs, "task_provenance", lambda e: {**real(e), "task_module_sha256": "changed0000000000"})
     with pytest.raises(RuntimeError, match="code changed"):
@@ -248,6 +254,17 @@ def test_runs_and_rescores_are_recorded_in_the_history(cli):
     assert runs.verify_history(d)["mismatched"] == ["summary.json"]
 
 
+def test_resuming_a_task_with_an_untracked_edit_stops_before_generating(cli):
+    cli()
+    d = runs.task_dir("r1", "arith")
+    os.remove(os.path.join(d, "summary.json"))  # (a recorded file gone: also untracked)
+    with pytest.raises(runs.UntrackedEditError):
+        cli()
+    runs.accept_edits(d, reason="test: summary removed to resume")
+    s = cli()
+    assert s is None or s.prompts == []  # both repeats reloaded, nothing generated
+
+
 def test_rescore_script_reproduces_scores(cli):
     import rescore
 
@@ -268,6 +285,7 @@ def test_rescore_refreshes_failure_counts_in_the_summary(cli):
     s = json.load(open(sp))
     s["num_grader_failed_per_repeat"], s["total_grader_failed"] = [3, 3], 6  # as left by a dummy-judge generation
     json.dump(s, open(sp, "w"))
+    runs.accept_edits(runs.task_dir("r1", "arith"), reason="test: dummy-judge counts written by hand")
     rescore.rescore_model_eval("arith", runs.task_dir("r1", "arith"), grader=None, grader_id="none")
     assert _summary()["num_grader_failed_per_repeat"] == [0, 0] and _summary()["total_grader_failed"] == 0
 
