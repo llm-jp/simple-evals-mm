@@ -217,6 +217,21 @@ def test_safety_filter_stops_are_counted(cli, monkeypatch):
         assert json.load(f)["finish_reasons"] == {"stop": 2, "content_filter": 1}
 
 
+def test_a_task_code_change_aborts_a_resume_unless_allowed(cli, monkeypatch):
+    cli()
+    d = runs.task_dir("r1", "arith")
+    for f in ("summary.json", "items_r2.jsonl", "score_r2.json"):
+        os.remove(os.path.join(d, f))  # interrupted after repeat 1
+    real = runs.task_provenance
+    monkeypatch.setattr(runs, "task_provenance", lambda e: {**real(e), "task_module_sha256": "changed0000000000"})
+    with pytest.raises(RuntimeError, match="code changed"):
+        cli()
+    s = cli("--allow-code-change")
+    assert len(s.prompts) == len(QUESTIONS)  # repeat 1 reloaded, repeat 2 generated
+    with open(os.path.join(d, "score_r2.json")) as f:
+        assert json.load(f)["provenance"]["code_changed_on_resume"] == ["task_module_sha256"]
+
+
 def test_rescore_script_reproduces_scores(cli):
     import rescore
 
