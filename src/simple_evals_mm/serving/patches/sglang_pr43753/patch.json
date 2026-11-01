@@ -1,0 +1,8 @@
+{
+  "name": "sglang_pr43753",
+  "upstream_ref": "https://github.com/sgl-project/sglang/pull/43753",
+  "description": "Gemma 4 vision pooler, minimal form of sglang PR #43753 against sglang 0.5.17: padding patches are zeroed before pooling, as transformers does (unmasked, they are averaged into pooled token 0; CountBenchQA 68 -> HF parity). Copied from the wt/sglang_pr43753 overlay.",
+  "engine": "sglang",
+  "engine_versions": ["0.5.17"],
+  "files": ["sglang/srt/models/gemma4_vision.py"]
+}

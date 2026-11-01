@@ -38,6 +38,7 @@ SKIP_IMPORT = (
     "simple_evals_mm.sampler.llmjpvl_sampler",
     "simple_evals_mm.sampler.sarashina_sampler",
     "simple_evals_mm.serving.hf_server",
+    "simple_evals_mm.serving.hf_backends",
     # not a module: the LiveCodeBench test runner executed inside the sandbox (read as text by tasks/livecodebench.py at
     # import); importing it would set RLIMIT_NPROC 64 on this process and break every later fork (git, bwrap)
     "simple_evals_mm.tasks.lcb_runner",
@@ -197,6 +198,13 @@ def python_info() -> dict:
 
 
 _IMPORTED: dict | None = None
+# not package modules: engine source files that `sem serve --patch` overlays inside the engine venv
+SKIP_DIRS = (os.path.join("serving", "patches"),)
+
+
+def _skipped_dir(d: str) -> bool:
+    rel = os.path.relpath(d, PACKAGE_DIR)
+    return any(rel == s or rel.startswith(s + os.sep) for s in SKIP_DIRS)
 
 
 def eager_import(skip: tuple[str, ...] = SKIP_IMPORT) -> dict:
@@ -207,7 +215,8 @@ def eager_import(skip: tuple[str, ...] = SKIP_IMPORT) -> dict:
         return _IMPORTED
     # every .py under the package (tasks/ and sampler/ are namespace packages: pkgutil.walk_packages skips them)
     names = sorted(PACKAGE + "." + os.path.relpath(os.path.join(d, f), PACKAGE_DIR)[:-3].replace(os.sep, ".").removesuffix(".__init__")
-                   for d, _, files in os.walk(PACKAGE_DIR) if "__pycache__" not in d for f in files if f.endswith(".py"))
+                   for d, _, files in os.walk(PACKAGE_DIR) if "__pycache__" not in d and not _skipped_dir(d)
+                   for f in files if f.endswith(".py"))
     imported, failed, skipped = 0, {}, []
     for name in names:
         if name in skip:

@@ -60,3 +60,7 @@ markers = [
     "api: tests that require API keys (OpenAI, Gemini, etc.)",
     "local_model: tests that require GPU and local HF models",
 ]
+
+[tool.ruff]
+# engine source files overlaid by `sem serve --patch` (copies of upstream sglang / vLLM modules, not our code)
+extend-exclude = ["src/simple_evals_mm/serving/patches"]
