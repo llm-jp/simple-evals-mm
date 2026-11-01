@@ -23,6 +23,17 @@ def endpoint_lock(endpoint: dict | None) -> dict | None:
     return {k: endpoint[k] for k in ENDPOINT_LOCK_KEYS if k in endpoint}
 
 
+def lock_config(config: dict | None) -> dict | None:
+    """A sampler config as the locks hash it: the endpoint record through endpoint_lock (no pricing, uptime,
+    supported_parameters)."""
+    if config is None:
+        return None
+    out = {k: v for k, v in config.items() if k != "endpoint"}
+    if "endpoint" in config:
+        out["endpoint"] = endpoint_lock(config.get("endpoint"))
+    return out
+
+
 class Sampler:
     """Settings resolution (docs/design/v0.5.md "Inference settings"): every sampling field, the effort and
     max_output_tokens get a value and a source at prepare():

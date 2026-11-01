@@ -230,6 +230,11 @@ class JobStore:
             gid = f"{base}-{n}"
         return gid
 
+    def write_verification_diff(self, ds: str, vid: str, diff: str) -> None:
+        """`sem job regrade --allow-dirty`: the diff the verification ran with (its sha256 is in meta.json)."""
+        with open(os.path.join(self.verifier_dir(ds), vid, "dirty.diff"), "w", encoding="utf-8") as f:
+            f.write(diff)
+
     def write_verification(self, ds: str, vid: str, results: dict[int, list[VerifierResult]], meta: dict) -> None:
         d = os.path.join(self.verifier_dir(ds), vid)
         if os.path.exists(d):

@@ -120,6 +120,22 @@ def package_info() -> dict:
     return {"version": version, "editable": editable}
 
 
+def dist_identity(name: str) -> dict:
+    """{"version", "commit_id"} of an installed distribution (commit_id from direct_url.json for git installs);
+    {"version": None} when it is not installed."""
+    try:
+        d = md.distribution(name)
+    except md.PackageNotFoundError:
+        return {"version": None}
+    out = {"version": d.version}
+    direct = d.read_text("direct_url.json")
+    if direct:
+        vcs = json.loads(direct).get("vcs_info") or {}
+        if vcs.get("commit_id"):
+            out["commit_id"] = vcs["commit_id"]
+    return out
+
+
 _IMPORTED: dict | None = None
 
 
