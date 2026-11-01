@@ -231,6 +231,10 @@ def track(task_dir: str, tool: str, **details):
     import sys
 
     os.makedirs(task_dir, exist_ok=True)
+    if not os.path.exists(os.path.join(task_dir, HISTORY)):
+        baseline_history(task_dir, note="legacy baseline (first tracked write)")  # files of runs made before histories
+    else:
+        check_history(task_dir)  # never record a write on top of an edit the history does not know about
     before = result_file_hashes(task_dir)
     info = dict(details)
     status = "ok"
@@ -270,6 +274,45 @@ def verify_history(task_dir: str) -> dict:
     missing = sorted(n for n, h in state.items() if h is not None and n not in current)
     bad = mismatched or unrecorded or missing
     return {"status": "untracked" if bad else "ok", "mismatched": mismatched, "unrecorded": unrecorded, "missing": missing}
+
+
+class UntrackedEditError(RuntimeError):
+    pass
+
+
+def check_history(task_dir: str) -> None:
+    """Raise UntrackedEditError if the task's result files differ from what its history last recorded. Writing on top
+    would make the edit look recorded (the next entry's "before" is the edited file), so the tools refuse until it is
+    either undone or accepted with a reason (scripts/runs_history.py accept)."""
+    v = verify_history(task_dir)
+    if v["status"] == "untracked":
+        details = ", ".join(f"{k}: {' '.join(x)}" for k, x in v.items() if k != "status" and x)
+        raise UntrackedEditError(
+            f"{task_dir}: result files changed outside the recording tools ({details}). Undo the edit, or accept it "
+            f"with: scripts/runs_history.py accept --run <run_id> --task <task> --reason '...'"
+        )
+
+
+def accept_edits(task_dir: str, reason: str) -> dict:
+    """Record the current files as an accepted edit (who / why in `reason`): the next verify is clean again."""
+    import sys
+
+    p = os.path.join(task_dir, HISTORY)
+    state: dict[str, str | None] = {}
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    for name, ch in json.loads(line).get("files", {}).items():
+                        state[name] = ch.get("after")
+    current = result_file_hashes(task_dir)
+    files = {n: {"before": state.get(n), "after": current.get(n)}
+             for n in sorted(set(state) | set(current)) if state.get(n) != current.get(n)}
+    if files:
+        _append_history(task_dir, {"at": _dt.datetime.now().isoformat(timespec="seconds"), "tool": "accept",
+                                   "status": "ok", "argv": sys.argv, "code_git": _git_hash(_repo_root()),
+                                   "files": files, "details": {"reason": reason}})
+    return files
 
 
 def baseline_history(task_dir: str, note: str = "legacy baseline") -> bool:
