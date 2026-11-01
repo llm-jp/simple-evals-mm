@@ -1,0 +1,52 @@
+# Weekly check of the pinned dataset revisions against upstream (`sem datasets check`): when a pin is outdated,
+# open (or update) the issue labelled `dataset-update`. Needs no secrets beyond GITHUB_TOKEN; a gated Hugging Face
+# repository whose metadata needs HF_TOKEN is reported as "skipped" instead of failing the check.
+name: Dataset revisions check
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"  # Mondays 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --no-dev
+      - id: check
+        run: |
+          set +e
+          uv run --frozen sem datasets check > report.txt
+          rc=$?
+          cat report.txt
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+      - name: Open or update the dataset-update issue
+        if: steps.check.outputs.rc == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create dataset-update --color FBCA04 --description "A pinned dataset revision is behind upstream" 2>/dev/null || true
+          {
+            echo "\`sem datasets check\` found pinned dataset revisions behind upstream ($(date -u +%F), run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            echo
+            echo '```'
+            cat report.txt
+            echo '```'
+            echo
+            echo "Review the upstream change, then bump the pin in the dataset code (a new revision changes task ids / results) or add it to dataset_admin.HELD with the reason."
+          } > body.md
+          n=$(gh issue list --label dataset-update --state open --json number --jq '.[0].number')
+          if [ -n "$n" ]; then
+            gh issue edit "$n" --body-file body.md
+          else
+            gh issue create --title "Dataset revisions behind upstream" --label dataset-update --body-file body.md
+          fi
+      - name: Fail on lookup errors
+        if: steps.check.outputs.rc != '0' && steps.check.outputs.rc != '1'
+        run: exit 1

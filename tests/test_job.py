@@ -8,6 +8,7 @@ import pytest
 from simple_evals_mm import checks, errors, runner
 from simple_evals_mm.models import Response
 from simple_evals_mm.samplers import registry
+from simple_evals_mm.verifiers import trial_seed
 from tests.fakes import ANSWERS, Arith, FakeSampler
 
 
@@ -95,7 +96,7 @@ def test_job_check_detects_edits(job_env, capsys):
 def test_preflight(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("SGLANG_BASE_URL", "http://127.0.0.1:9/v1")  # discard port: nothing listens
-    problems = runner.preflight(registry.make_sampler(registry.resolve("sglang/m")),
+    problems = runner.preflight(registry.make_sampler(registry.resolve("sglang/m", preset="none")),
                                 registry.make_sampler(registry.resolve("openrouter/openai/gpt-5.1")))
     assert any(p.startswith("model: base URL from SGLANG_BASE_URL is unreachable") for p in problems)
     assert any(p.startswith("judge: OPENROUTER_API_KEY is not set") for p in problems)
@@ -136,7 +137,10 @@ def test_trial_locks_and_dry_run(job_env, capsys):
     assert s["run"]("-k", "2") == 0
     st = s["store"]()
     a1, a2 = st.read_trials("arith", 1), st.read_trials("arith", 2)
-    assert [t.generation_lock for t in a1] == [t.generation_lock for t in a2]  # same request in both attempts
+    # the per-trial seed (sha256 of "<task_id>__a<k>") is sent and recorded per step: the attempts' requests differ
+    assert all(t1.generation_lock != t2.generation_lock for t1, t2 in zip(a1, a2, strict=True))
+    assert [t.trajectory.agent_steps[0].extra["seed"] for t in a2] == [trial_seed(f"{t.task_name}__a2") for t in a2]
+    assert s["sampler"].seeds and all(isinstance(x, int) for x in s["sampler"].seeds)
     assert len({t.generation_lock for t in a1}) == 3 and len({t.verifier_lock for t in a1 + a2}) == 1
     assert st.read_lock()["datasets"]["arith"]["verifier_lock"] == a1[0].verifier_lock
     capsys.readouterr()
@@ -166,3 +170,189 @@ def test_job_lock_and_dirty_regrade(job_env, monkeypatch, capsys):
     vid = st.current_verification_id("arith")
     with open(os.path.join(st.verifier_dir("arith"), vid, "meta.json")) as f:
         assert json.load(f)["dirty"] is True
+
+
+def test_preset_is_recorded_and_compared(job_env, capsys):
+    """--preset is a job config key: recorded in config.json and part of the resume comparison."""
+    s = job_env
+    assert s["run"]("--preset", "none", name="p") == 0
+    st = s["store"]("p")
+    assert st.read_config()["preset"] == "none"
+    capsys.readouterr()
+    assert s["run"](name="p") == 2  # resumed without --preset: a different config
+    assert runner.RESUME_REFUSED in capsys.readouterr().err
+
+
+def test_endpoint_change_refuses_resume_and_changes_generation_lock(job_env, capsys):
+    """The pinned endpoint row is part of the resume comparison and of every trial's generation_lock; volatile catalog
+    fields (pricing) are not."""
+    s = job_env
+    row = {"provider_name": "Crusoe", "tag": "crusoe/bf16", "quantization": "bf16", "context_length": 262144,
+           "max_completion_tokens": 65536, "price_per_mtok": {"prompt": 0.1}}
+    s["sampler"].endpoint = dict(row)
+    assert s["run"](name="a") == 0
+    lock_a = {t.task_name: t.generation_lock for t in s["store"]("a").read_trials("arith", 1)}
+    assert s["store"]("a").read_lock()["sampler"]["config"]["endpoint"]["quantization"] == "bf16"
+
+    s["sampler"].endpoint = {**row, "price_per_mtok": {"prompt": 0.2}}  # pricing moved: still resumable
+    assert s["run"](name="a") == 0
+    s["sampler"].endpoint = {**row, "quantization": "fp8"}
+    capsys.readouterr()
+    assert s["run"](name="a") == 2
+    err = capsys.readouterr().err
+    assert runner.RESUME_REFUSED in err and 'endpoint.quantization: "bf16" -> "fp8"' in err
+
+    assert s["run"](name="b") == 0  # the same tasks against the fp8 endpoint
+    lock_b = {t.task_name: t.generation_lock for t in s["store"]("b").read_trials("arith", 1)}
+    assert lock_a.keys() == lock_b.keys() and all(lock_a[k] != lock_b[k] for k in lock_a)
+    s["sampler"].endpoint = {**row, "price_per_mtok": {"prompt": 0.9}}
+    assert s["run"](name="c") == 0
+    assert {t.task_name: t.generation_lock for t in s["store"]("c").read_trials("arith", 1)} == lock_a
+
+
+def test_circuit_breaker_stops_and_job_resumes(job_env, monkeypatch, tmp_path, capsys):
+    """A provider that disappears after 5 calls: after abort_after_consecutive endpoint failures in a row no new trial
+    starts, the failed trials are not written, and `sem job resume` finishes the job once the endpoint is back."""
+    s = job_env
+    qs = [f"q{i}" for i in range(30)]
+    monkeypatch.setattr(Arith, "questions", qs)
+    monkeypatch.setattr(Arith, "truth", {q: "ok" for q in qs})
+    gone = {"on": True}
+
+    def reply(q):
+        if gone["on"] and len(s["sampler"].calls) > 5:
+            raise errors.SamplerError("Error code: 404 - No endpoints found for fake.", errors.ENDPOINT_UNAVAILABLE)
+        return "ok"
+
+    s["sampler"].reply = reply
+    cfg = tmp_path / "job.yaml"
+    cfg.write_text(json.dumps({"retry": {"abort_after_consecutive": 3}}))
+    capsys.readouterr()
+    assert s["run"]("-c", str(cfg)) == 2
+    err = capsys.readouterr().err
+    assert "circuit breaker" in err and "the pinned endpoint is failing" in err and "sem job resume" in err
+    st = s["store"]()
+    written = st.read_trials("arith", 1)
+    assert [t.task_name for t in written] == qs[:5] and all(t.exception_info is None for t in written)
+    assert len(s["sampler"].calls) == 8 and not st.is_complete("arith", 1)  # no trial started after the third failure
+
+    gone["on"], s["sampler"].calls = False, []
+    assert s["sem"]("job", "resume", "-p", st.dir) == 0
+    assert len(s["sampler"].calls) == 25 and st.is_complete("arith", 1)
+    assert runner.summarize_job(st)["arith"]["attempts"]["a1"]["causes"] == {}
+
+
+def test_endpoint_unavailable_is_excluded_not_retried(job_env, monkeypatch):
+    s = job_env
+    monkeypatch.setattr(Arith, "questions", ["2+2?", "flaky"])
+    s["sampler"].fail = {"flaky": errors.SamplerError("No allowed providers are available for the selected model.")}
+    assert s["run"]() == 0
+    assert sum(1 for m in s["sampler"].calls if m[-1].text == "flaky") == 1  # not retried
+    a1 = runner.summarize_job(s["store"]())["arith"]["attempts"]["a1"]
+    assert a1["causes"] == {"endpoint_unavailable": 1} and a1["n_counted"] == 1
+
+
+def test_task_content_change_refuses_resume_and_verification(job_env, monkeypatch, capsys):
+    """tasks_sha256 (over the (task_id, task_checksum) pairs) is compared on resume, with the changed ids; verification
+    checks every trial's task_checksum against the reloaded task (--allow-task-change verifies and records them)."""
+    s = job_env
+    assert s["run"]("--generate-only") == 0
+    st = s["store"]()
+    lock = st.read_lock()["datasets"]["arith"]
+    assert len(lock["tasks_sha256"]) == 64
+    monkeypatch.setattr(Arith, "truth", {**Arith.truth, "3+3?": "7"})  # the answer of one task changed upstream
+    capsys.readouterr()
+    assert s["run"]("--generate-only") == 2
+    err = capsys.readouterr().err
+    assert runner.RESUME_REFUSED in err and "task content changed for 1 generated task(s): 3+3?" in err
+    assert s["sem"]("job", "regrade", st.dir) == 2
+    assert "3+3?" in capsys.readouterr().err and st.current_verification_id("arith") is None
+    assert s["sem"]("job", "regrade", st.dir, "--allow-task-change") == 0
+    vid = st.current_verification_id("arith")
+    with open(os.path.join(st.verifier_dir("arith"), vid, "meta.json")) as f:
+        meta = json.load(f)
+    assert meta["task_changes"] == ["3+3?"] and meta["verifier_lock"]
+
+
+def test_generate_only_trial_lock_has_no_unresolved_judge(job_env, monkeypatch):
+    """--generate-only: the judge is not prepared, so the trials' verifier_lock is the dataset part only; the
+    verification meta holds the full lock."""
+    from simple_evals_mm import dataset as dataset_mod
+
+    s = job_env
+    monkeypatch.setattr(Arith, "needs_judge", True)
+    assert s["run"]("--generate-only", name="g") == 0
+    assert s["run"](name="v") == 0
+    g, v = s["store"]("g"), s["store"]("v")
+    tg, tv = g.read_trials("arith", 1)[0], v.read_trials("arith", 1)[0]
+    assert tg.verifier_lock == dataset_mod.verifier_lock(Arith(), None, "c1") != tv.verifier_lock
+    assert s["sem"]("job", "regrade", g.dir) == 0
+    with open(os.path.join(g.verifier_dir("arith"), g.current_verification_id("arith"), "meta.json")) as f:
+        assert json.load(f)["verifier_lock"] == tv.verifier_lock
+
+
+def test_breaker_counts_connection_failures_not_rate_limits(job_env, monkeypatch, tmp_path, capsys):
+    """503 / 429 after every retry are ordinary provider_failed (written, excluded, resumable with -f); connection
+    refusals (DNS, TLS, refused) and endpoint_unavailable trip the breaker."""
+    s = job_env
+    qs = [f"q{i}" for i in range(8)]
+    monkeypatch.setattr(Arith, "questions", qs)
+    monkeypatch.setattr(Arith, "truth", {q: "ok" for q in qs})
+    s["sampler"].reply = "ok"
+    s["sampler"].fail = {"q": errors.SamplerError("503 Service Unavailable")}
+    cfg = tmp_path / "job.yaml"
+    cfg.write_text(json.dumps({"retry": {"abort_after_consecutive": 3, "max_retries": 0}}))
+    assert s["run"]("-c", str(cfg), name="busy") == 0
+    assert len(s["store"]("busy").read_trials("arith", 1)) == 8  # all written as provider_failed
+    s["sampler"].fail = {"q": errors.SamplerError("gave up: ConnectError: [Errno 111] Connection refused",
+                                                  errors.PROVIDER_FAILED, connection=True)}
+    capsys.readouterr()
+    assert s["run"]("-c", str(cfg), name="down") == 2
+    assert "circuit breaker" in capsys.readouterr().err and s["store"]("down").read_trials("arith", 1) == []
+
+
+def test_endpoint_change_within_a_job_stops_it(job_env, monkeypatch, capsys):
+    """A response from another model / provider than the first one this sampler saw: the trial is not written and
+    the job stops like the circuit breaker; a system_fingerprint change is only recorded."""
+    s = job_env
+    qs = [f"q{i}" for i in range(6)]
+    monkeypatch.setattr(Arith, "questions", qs)
+    monkeypatch.setattr(Arith, "truth", {q: "ok" for q in qs})
+
+    def reply(q):
+        n = len(s["sampler"].calls)
+        return Response(text="ok", model="m1" if n <= 3 else "m2", system_fingerprint=f"fp{n}", finish_reason="stop")
+
+    s["sampler"].reply = reply
+    capsys.readouterr()
+    assert s["run"]() == 2
+    err = capsys.readouterr().err
+    assert "endpoint change" in err and "model 'm1' -> 'm2'" in err
+    written = s["store"]().read_trials("arith", 1)
+    assert len(written) == 3 and written[1].trajectory.agent_steps[0].extra["identity_change"] == {
+        "system_fingerprint": ["fp1", "fp2"]}
+
+
+def test_lock_records_identity_base_url_and_concurrency(job_env):
+    s = job_env
+    s["sampler"].endpoint = {"canonical_slug": "fake-2026", "tag": "x"}
+    assert s["run"]("-n", "2") == 0
+    st = s["store"]()
+    lock = st.read_lock()["sampler"]
+    assert lock["model_identity"] == "pinned" and lock["served_identity"] == {"canonical_slug": "fake-2026"}
+    assert st.read_trials("arith", 1)[0].trajectory.extra["n_concurrent"] == 2
+
+
+def test_sessions_are_kept_on_resume(job_env):
+    """Each run / resume appends a session (start time, commit, runtime-only options, endpoint row, python); earlier
+    sessions are not overwritten, and runtime-only options may differ."""
+    s = job_env
+    s["sampler"].endpoint = {"tag": "t", "price_per_mtok": {"prompt": 1}}
+    assert s["run"]("--generate-only", "-r", "1") == 0
+    s["sampler"].endpoint = {"tag": "t", "price_per_mtok": {"prompt": 2}}
+    assert s["run"]("-n", "3") == 0
+    sessions = s["store"]().read_lock()["sessions"]
+    assert [x["runtime"]["n_concurrent"] for x in sessions] == [1, 3]
+    assert [x["runtime"]["generate_only"] for x in sessions] == [True, False]
+    assert sessions[0]["runtime"]["retry"]["max_retries"] == 1 and sessions[1]["runtime"]["retry"]["max_retries"] == 2
+    assert [x["endpoint"]["price_per_mtok"]["prompt"] for x in sessions] == [1, 2] and all(x["commit"] == "c1" for x in sessions)
