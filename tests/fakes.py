@@ -1,0 +1,88 @@
+"""Shared fakes of the v0.5 tests: a scripted sampler, a toy dataset and the `job_env` fixture."""
+
+from typing import ClassVar
+
+import pytest
+from PIL import Image as PILImage
+
+from simple_evals_mm import checks, cli
+from simple_evals_mm import dataset as dataset_mod
+from simple_evals_mm.dataset import Dataset
+from simple_evals_mm.models import Response, Task, VerifierResult, user
+from simple_evals_mm.samplers import registry
+from simple_evals_mm.store import JobStore
+
+VERDICT = "extracted_final_answer: x\nreasoning: t\ncorrect: {}\nconfidence: 100"
+
+
+class FakeSampler:
+    """reply(prompt_text) -> str | Response; `fail` maps a prompt substring to an exception to raise."""
+
+    def __init__(self, reply="A", fail=None, slug="sglang/fake"):
+        self.spec = registry.resolve(slug)
+        self.slug = slug
+        self.reply, self.fail, self.calls = reply, fail or {}, []
+
+    def prepare(self):
+        pass
+
+    def config(self):
+        return {"fake": True}
+
+    def __call__(self, messages, tools=None):
+        self.calls.append(messages)
+        text = messages[-1].text
+        for key, exc in self.fail.items():
+            if key in text:
+                raise exc
+        out = self.reply(text) if callable(self.reply) else self.reply
+        return out if isinstance(out, Response) else Response(text=out, input_tokens=3, output_tokens=1, finish_reason="stop")
+
+
+ANSWERS = {"2+2?": "4", "3+3?": "7", "capital of France?": "Paris", "cut": "partial", "refuse": "-", "flaky": "-"}
+
+
+class Arith(Dataset):
+    name = "arith"
+    revision = "test-rev"
+    questions: ClassVar = ["2+2?", "3+3?", "capital of France?"]
+    truth: ClassVar = {"2+2?": "4", "3+3?": "6", "capital of France?": "Paris", "cut": "x", "refuse": "x", "flaky": "x"}
+
+    @staticmethod
+    def verifier(task, traj, judge):
+        return VerifierResult(task.id, float(traj.final_text == task.answer), method="exact")
+
+    def load(self):
+        return [Task(id=q, answer=self.truth[q], category="math" if q[0].isdigit() else "other") for q in self.questions]
+
+    def prompt(self, task):
+        return [user(task.id)]
+
+
+@pytest.fixture
+def job_env(tmp_path, monkeypatch):
+    """Fake dataset, fake samplers and stubbed start checks; returns a `sem` runner + state."""
+    state = {"commit": "c1", "sampler": FakeSampler(lambda q: ANSWERS[q]), "judge": FakeSampler(VERDICT.format("yes"))}
+    monkeypatch.setitem(dataset_mod.DATASETS, "arith", Arith)
+    monkeypatch.setattr(registry, "make_sampler",
+                        lambda spec, base_url=None: state["judge"] if "judge" in spec.model else state["sampler"])
+    monkeypatch.setattr(checks, "start_checks", lambda allow_dirty=False, **kw: {
+        "version": "0.5.0", "commit": state["commit"], "dirty": False,
+        "lock_check": {"ok": True, "lock_sha256": "l", "mismatches": []}})
+    jobs = str(tmp_path / "jobs")
+
+    def sem(*args):
+        return cli.main(list(args))
+
+    def run(*extra, name="j"):
+        return sem("run", "-m", "sglang/fake", "-d", "arith", "--job-name", name, "-o", jobs, "-n", "1",
+                   "--judge-model", "sglang/judge", *extra)
+
+    state.update(sem=sem, run=run, jobs=jobs, store=lambda name="j": JobStore(jobs, name))
+    return state
+
+
+def png(path, color="red"):
+    """A 4x4 PNG at path; returns the path."""
+    PILImage.new("RGB", (4, 4), color).save(path)
+    return str(path)
