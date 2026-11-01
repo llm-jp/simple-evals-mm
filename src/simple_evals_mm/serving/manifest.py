@@ -146,9 +146,17 @@ def redact_argv(argv: list[str], replace: dict[str, str] | None = None) -> list[
 
 
 # ---------------------------------------------------------------- digest / files
+# Hardware fields recorded but not compared: the driver (and the CUDA version it reports) can differ between ABCI
+# nodes without changing the engine's numerics; the GPU model and the torch / CUDA build inside the venv are compared.
+HARDWARE_INFO_ONLY = ("driver_version", "cuda_driver_version", "note")
+
+
 def stable(manifest: dict) -> dict:
-    """The manifest without the volatile part (hosts, ports, pids, times, paths of this session)."""
-    return {k: v for k, v in manifest.items() if k not in VOLATILE}
+    """The manifest without the volatile part (hosts, ports, pids, times, paths of this session; the GPU driver)."""
+    out = {k: v for k, v in manifest.items() if k not in VOLATILE}
+    if isinstance(out.get("hardware"), dict):
+        out["hardware"] = {k: v for k, v in out["hardware"].items() if k not in HARDWARE_INFO_ONLY}
+    return out
 
 
 def digest(manifest: dict) -> str:

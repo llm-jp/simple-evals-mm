@@ -461,3 +461,15 @@ def test_dry_run_on_real_engine_layout_has_no_side_effects(engine_venv, hf_cache
     m = json.loads(capsys.readouterr().out)
     assert m["launch"]["argv"][-2:] == ["--reasoning-parser", "gemma4"] and not jobs.exists()
     assert sys.executable  # the dry run never launched anything
+
+
+def test_driver_version_is_info_only():
+    """A different GPU driver (another ABCI node) keeps the manifest digest; a different GPU model or torch build does not."""
+    from simple_evals_mm.serving import manifest as mf
+
+    base = {"engine": {"name": "sglang"}, "hardware": {"gpus": {"NVIDIA H200": 8}, "driver_version": "580.1",
+                                                       "cuda_driver_version": "13.0", "torch": "2.11.0", "torch_cuda": "13.0"}}
+    other_driver = {**base, "hardware": {**base["hardware"], "driver_version": "590.2", "cuda_driver_version": "13.1"}}
+    assert mf.digest(base) == mf.digest(other_driver)
+    for key, val in (("gpus", {"NVIDIA H100": 8}), ("torch", "2.12.0"), ("torch_cuda", "13.1")):
+        assert mf.digest(base) != mf.digest({**base, "hardware": {**base["hardware"], key: val}})
