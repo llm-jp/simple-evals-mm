@@ -341,3 +341,18 @@ def test_lock_records_identity_base_url_and_concurrency(job_env):
     lock = st.read_lock()["sampler"]
     assert lock["model_identity"] == "pinned" and lock["served_identity"] == {"canonical_slug": "fake-2026"}
     assert st.read_trials("arith", 1)[0].trajectory.extra["n_concurrent"] == 2
+
+
+def test_sessions_are_kept_on_resume(job_env):
+    """Each run / resume appends a session (start time, commit, runtime-only options, endpoint row, python); earlier
+    sessions are not overwritten, and runtime-only options may differ."""
+    s = job_env
+    s["sampler"].endpoint = {"tag": "t", "price_per_mtok": {"prompt": 1}}
+    assert s["run"]("--generate-only", "-r", "1") == 0
+    s["sampler"].endpoint = {"tag": "t", "price_per_mtok": {"prompt": 2}}
+    assert s["run"]("-n", "3") == 0
+    sessions = s["store"]().read_lock()["sessions"]
+    assert [x["runtime"]["n_concurrent"] for x in sessions] == [1, 3]
+    assert [x["runtime"]["generate_only"] for x in sessions] == [True, False]
+    assert sessions[0]["runtime"]["retry"]["max_retries"] == 1 and sessions[1]["runtime"]["retry"]["max_retries"] == 2
+    assert [x["endpoint"]["price_per_mtok"]["prompt"] for x in sessions] == [1, 2] and all(x["commit"] == "c1" for x in sessions)

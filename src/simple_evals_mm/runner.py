@@ -35,6 +35,8 @@ from simple_evals_mm.samplers.base import endpoint_lock, lock_config
 RUNTIME_ONLY = ("job_name", "jobs_dir", "n_concurrent", "retry", "generate_only", "judge_model", "allow_dirty",
                 "skip_preflight")
 RESUME_REFUSED = "job directory already exists and cannot be resumed with a different config"
+# runtime-only options recorded per session in lock.json `sessions`
+SESSION_OPTIONS = ("n_concurrent", "retry", "judge_model", "generate_only", "skip_preflight", "allow_dirty")
 # Trials that mean the endpoint, not the task, failed: the circuit breaker counts endpoint_unavailable and
 # connection-level failures (refused, DNS, TLS; provider_failed with exception_info.connection). Rate limits, 5xx and
 # timeouts keep retrying with backoff and end as ordinary provider_failed (excluded, `sem job resume -f`).
@@ -220,6 +222,11 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
             "sampler": {**spec.resolution(), "config": sconf, **model_identity(spec, sconf)},
             "judge": judge_spec.resolution() if judge_spec else None,
             "agent": agent.config(), "skip_preflight": bool(cfg.get("skip_preflight"))}
+    # one entry per `sem run` / `sem job resume` of this job: what may differ between sessions
+    session = {"started_at": _now(), "commit": code.get("commit"), "dirty": code.get("dirty"),
+               "python": (code.get("python") or {}).get("version"),
+               "runtime": {k: cfg.get(k) for k in SESSION_OPTIONS}, "endpoint": sconf.get("endpoint"),
+               "base_url": sconf.get("base_url"), "env": dict(checks.ENV_STATE) or None}
 
     if st.exists():
         old_cfg, old_lock = st.read_config(), st.read_lock()
@@ -234,9 +241,12 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
         if problems:
             raise JobError(f"{RESUME_REFUSED} ({st.dir}):\n" + "\n".join(problems))
         lock["job_id"] = old_lock["job_id"]
-        print(f"[job] resuming {cfg['job_name']} ({lock['job_id']})")
+        lock["sessions"] = [*(old_lock.get("sessions") or []), session]
+        lock["skip_preflight"] = old_lock.get("skip_preflight")  # the first session's; later ones are in sessions
+        print(f"[job] resuming {cfg['job_name']} ({lock['job_id']}), session {len(lock['sessions'])}")
     else:
         lock["job_id"] = str(uuid.uuid4())
+        lock["sessions"] = [session]
     # generation_lock: the endpoint fields that change outputs, not the volatile catalog fields (pricing, uptime)
     job.sampler_config = lock_config(lock["sampler"]["config"])
     os.makedirs(st.dir, exist_ok=True)
