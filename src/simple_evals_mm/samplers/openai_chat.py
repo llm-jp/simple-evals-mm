@@ -74,6 +74,23 @@ def _norm_provider(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (name or "").split("/")[0].lower())
 
 
+_HARMONY_FINAL = re.compile(r"<\|channel\|>\s*final\s*<\|message\|>")
+_HARMONY_ANALYSIS = re.compile(r"<\|channel\|>\s*analysis\s*<\|message\|>(.*?)(?:<\|end\|>|<\|start\|>|<\|channel\|>|$)", re.S)
+
+
+def split_harmony(raw: str, reasoning: str = "") -> tuple[str, str]:
+    """(answer, reasoning) of a Harmony completion served with skip_special_tokens=False (v0.4 HarmonyServedSampler):
+      <|channel|>analysis<|message|>{cot}<|end|><|start|>assistant<|channel|>final<|message|>{answer}<|return|>
+    Text without channel markers (hf_server already split it) is returned as it is."""
+    if "<|channel|>" not in raw and "<|message|>" not in raw:
+        return raw, reasoning
+    matches = list(_HARMONY_FINAL.finditer(raw))
+    answer = raw[matches[-1].end():] if matches else ""
+    answer = re.sub(r"<\|(?:return|end|endoftext)\|>", "", answer).strip()
+    am = _HARMONY_ANALYSIS.search(raw)
+    return answer, (am.group(1).strip() if am else reasoning)
+
+
 class ThinkLeakError(RuntimeError):
     """The server returned the thinking trace inside `content` (no --reasoning-parser): grading it would be wrong."""
 
@@ -173,7 +190,7 @@ class OpenAIChatSampler(Sampler):
         import openai
 
         s = self.spec
-        conns = int(os.environ.get(f"{s.provider.upper()}_MAX_CONNS", "512" if s.provider in ("sglang", "vllm") else "64"))
+        conns = int(os.environ.get(f"{s.provider.upper()}_MAX_CONNS", "512" if s.provider in ("sglang", "vllm", "hf") else "64"))
         http = httpx.Client(limits=httpx.Limits(max_connections=conns, max_keepalive_connections=conns), timeout=3600)
         base_url = s.base_url(self._cli_base_url)
         if s.provider == "azure":
@@ -216,7 +233,7 @@ class OpenAIChatSampler(Sampler):
         return problems
 
     def effective_max_tokens(self) -> int:
-        m = self.spec.max_tokens
+        m = max(self.spec.max_tokens, self.spec.effective_effort_floor())
         return min(m, self.max_completion_cap) if self.max_completion_cap else m
 
     def request_body(self) -> dict:
@@ -226,11 +243,16 @@ class OpenAIChatSampler(Sampler):
         template_kwargs = dict(s.template_kwargs)
         if s.effort is not None:
             if s.effort_field == "reasoning":
-                body["reasoning"] = {"enabled": False} if s.effort == "none" else {"enabled": True} if s.toggle else {"effort": s.effort}
+                if s.effort == "none" and s.reasoning_none != "effort":
+                    body["reasoning"] = {"enabled": False}
+                else:
+                    body["reasoning"] = {"enabled": True} if s.toggle and s.effort != "none" else {"effort": s.effort}
             elif s.effort_field == "reasoning_effort":
                 body["reasoning_effort"] = s.effort
+            elif s.effort_field == "template_toggle":
+                template_kwargs[s.effort_key] = s.effort != "none"
             else:
-                template_kwargs["reasoning_effort"] = s.effort
+                template_kwargs[s.effort_key] = s.effort
         if template_kwargs:
             body["chat_template_kwargs"] = template_kwargs
         if s.provider == "openrouter":
@@ -240,7 +262,7 @@ class OpenAIChatSampler(Sampler):
                     prov["quantizations"] = list(s.quant)
                 body["provider"] = prov
             body["usage"] = {"include": True}
-        body.update(s.model_args)
+        body.update(s.extra_body)
         return body
 
     def config(self) -> dict:
@@ -320,13 +342,13 @@ class OpenAIChatSampler(Sampler):
         while s.max_request_mb and self._payload_bytes(api_messages) > s.max_request_mb * 1e6 and shrinks < 8:
             api_messages = self._shrink_images(api_messages, 0.8)
             shrinks += 1
-        served = s.provider in ("sglang", "vllm")
+        served = s.provider in ("sglang", "vllm", "hf")
         last = ""
         trial = rl = 0
         while True:
             rate_limited = False
             try:
-                resp = self.client.chat.completions.create(model=s.model, messages=api_messages, extra_body=body)
+                resp = self.client.chat.completions.create(model=s.request_model, messages=api_messages, extra_body=body)
             except openai.BadRequestError as e:
                 fitted = _fit_max_tokens(str(e), body[s.max_tokens_field]) if served else None
                 if fitted is not None:
@@ -379,7 +401,9 @@ class OpenAIChatSampler(Sampler):
         msg = choice.message
         text = (msg.content or "").strip()
         reasoning = _reasoning_of(msg)
-        if s.provider in ("sglang", "vllm") and "</think>" in text and not reasoning:
+        if s.response_parser == "harmony":
+            text, reasoning = split_harmony(text, reasoning)
+        if s.provider in ("sglang", "vllm", "hf") and "</think>" in text and not reasoning:
             raise ThinkLeakError("thinking trace in content (</think>) and no reasoning_content: serve with --reasoning-parser")
         usage = resp.usage
         details = getattr(usage, "completion_tokens_details", None) if usage else None
