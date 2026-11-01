@@ -98,9 +98,9 @@ def png_bytes(color="red", size=(4, 4)) -> bytes:
     return buf.getvalue()
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def image_dir(tmp_path, monkeypatch):
-    """Dataset image files (sources.image_file) go to a temporary directory."""
+    """Dataset image files (sources.image_file) go to a temporary directory (autouse: no test writes to data/)."""
     d = tmp_path / "images"
     monkeypatch.setattr(sources, "IMAGE_DIR", str(d))
     return d
