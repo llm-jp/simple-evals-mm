@@ -251,6 +251,11 @@ class JobStore:
             f.write(vid + "\n")
         os.replace(cur + ".part", cur)
 
+    def read_verification_meta(self, ds: str, vid: str | None = None) -> dict | None:
+        vid = vid or self.current_verification_id(ds)
+        p = os.path.join(self.verifier_dir(ds), vid, "meta.json") if vid else None
+        return _read_json(p) if p and os.path.exists(p) else None
+
     def read_verification(self, ds: str, vid: str | None = None) -> tuple[str | None, dict[int, list[VerifierResult]]]:
         vid = vid or self.current_verification_id(ds)
         if vid is None:

@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from simple_evals_mm import checks, errors
+from simple_evals_mm import checks, derive, errors
 from simple_evals_mm import dataset as dataset_mod
 from simple_evals_mm import store as store_mod
 from simple_evals_mm.agent import get_agent
@@ -29,14 +29,18 @@ from simple_evals_mm.common import subsample
 from simple_evals_mm.models import TrialResult, task_checksum
 from simple_evals_mm.samplers import registry
 from simple_evals_mm.samplers.base import endpoint_lock, lock_config
+from simple_evals_mm.serving import manifest as server_mf
 
 # Options that do not change any trial: a resumed job may differ in them (Harbor compares the config without
 # job_name / jobs_dir; concurrency, retries and the verification settings are added here).
+# The server manifest's PATH and --from are runtime-only too: the manifest digest is compared through lock.json, and a
+# derived job's copies are already in its trial files.
 RUNTIME_ONLY = ("job_name", "jobs_dir", "n_concurrent", "retry", "generate_only", "judge_model", "allow_dirty",
-                "skip_preflight")
+                "skip_preflight", "server", "from_job")
 RESUME_REFUSED = "job directory already exists and cannot be resumed with a different config"
 # runtime-only options recorded per session in lock.json `sessions`
-SESSION_OPTIONS = ("n_concurrent", "retry", "judge_model", "generate_only", "skip_preflight", "allow_dirty")
+SESSION_OPTIONS = ("n_concurrent", "retry", "judge_model", "generate_only", "skip_preflight", "allow_dirty", "server",
+                   "from_job")
 # Trials that mean the endpoint, not the task, failed: the circuit breaker counts endpoint_unavailable and
 # connection-level failures (refused, DNS, TLS; provider_failed with exception_info.connection). Rate limits, 5xx and
 # timeouts keep retrying with backoff and end as ordinary provider_failed (excluded, `sem job resume -f`).
@@ -51,6 +55,10 @@ DEFAULTS: dict = {
     "quantization": None, "model_args": {}, "dataset_args": {}, "agent": "direct", "agent_args": {}, "env": None,
     "judge_model": registry.DEFAULT_JUDGE, "generate_only": False, "api_key_name": None, "api_format": None,
     "allow_dirty": False, "skip_preflight": False,
+    # `sem serve` manifest of the server the served model runs on (base URL, identity checked at start, digest locked)
+    "server": None,
+    # `sem run --from JOB`: reuse / regrade / rerun the source job's trials per (dataset, attempt, task)
+    "from_job": None,
     # Harbor's RetryConfig: causes retried (None = those with retry=True in errors.POLICY), minus exclude_causes;
     # abort_after_consecutive: stop the job after this many consecutive trials ended in endpoint_unavailable /
     # provider_failed (0 = never)
@@ -96,6 +104,9 @@ class Job:
     sampler_config: dict = field(default_factory=dict)  # what generation_lock hashes
     tasks: dict = field(default_factory=dict)  # name -> list[Task]
     checksums: dict = field(default_factory=dict)  # name -> {task id: task_checksum}
+    judge_config: dict | None = None
+    server_manifest: dict | None = None  # `sem serve` manifest (--server)
+    derived: dict | None = None  # `--from` plan (derive.plan)
 
 
 # ---------------------------------------------------------------- selection
@@ -146,7 +157,8 @@ def _lock_digest(lock: dict) -> dict:
             "base_url": lock_config(sconf).get("base_url") if sconf else None,
             "settings": {k: (v or {}).get("value") for k, v in (sconf.get("settings") or {}).items()},
             "lock_check": {k: code.get("lock_check", {}).get(k) for k in ("ok", "lock_sha256", "mismatches")},
-            "datasets": {n: {k: d.get(k) for k in ("revision", "task_ids_sha256", "tasks_sha256", "n_tasks")}
+            "server": (lock.get("server") or {}).get("digest"),
+            "datasets": {n: {k: d.get(k) for k in ("revision", "ref", "task_ids_sha256", "tasks_sha256", "n_tasks")}
                          for n, d in lock.get("datasets", {}).items()}}
 
 
@@ -184,11 +196,24 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
     if diff is not None:
         code["diff_sha256"] = hashlib.sha256(diff.encode("utf-8")).hexdigest()
 
+    manifest = None
+    if cfg.get("server"):
+        try:
+            manifest = server_mf.read(cfg["server"])
+        except server_mf.ManifestError as e:
+            raise JobError(str(e)) from e
+        base_url = base_url or (manifest.get("runtime") or {}).get("base_url")
     spec = sampler_spec(cfg, base_url=base_url)
+    if manifest is not None:
+        problems = server_mf.check_spec(manifest, spec.provider, spec.model, spec.server_args)
+        if problems:
+            raise JobError(f"the server manifest {cfg['server']} does not match the job:\n- " + "\n- ".join(problems))
     sampler = registry.make_sampler(spec, base_url=base_url)
+    if manifest is not None:
+        sampler.server_manifest = manifest  # served settings / revision come from the manifest, not the local HF cache
     agent = get_agent(cfg["agent"], **(cfg.get("agent_args") or {}))
-    job = Job(cfg=cfg, store=st, lock={}, sampler=sampler, agent=agent)
-    dsets = {name: dataset_mod.get_dataset(name, **(cfg.get("dataset_args") or {}).get(name, {})) for name in cfg["datasets"]}
+    job = Job(cfg=cfg, store=st, lock={}, sampler=sampler, agent=agent, server_manifest=manifest)
+    dsets = load_datasets(cfg)
     judge_spec = registry.resolve(cfg["judge_model"]) if any(d.needs_judge for d in dsets.values()) else None
     judge = registry.make_sampler(judge_spec) if judge_spec is not None else None
     if not cfg.get("skip_preflight"):
@@ -197,6 +222,12 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
         if problems:
             raise JobError("preflight failed (--skip-preflight to run anyway):\n- " + "\n- ".join(problems))
     sampler.prepare()  # endpoint record + resolved settings: compared on resume, recorded in lock.json
+    if manifest is not None:  # the running server is the one the manifest describes (model, context, version, probe)
+        url = (sampler.base_url() if hasattr(sampler, "base_url") else None) or base_url or ""
+        problems = server_mf.verify_running(manifest, url,
+                                            key=os.environ.get(spec.api_key_name or "") or None)
+        if problems:
+            raise JobError(f"the server does not match its manifest {cfg['server']}:\n- " + "\n- ".join(problems))
     if judge is not None and not cfg.get("generate_only"):
         judge.prepare()
     # --generate-only: the judge is not prepared, so its config is not resolved; the trials' verifier_lock then holds
@@ -213,7 +244,8 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
             raise JobError(f"{name}: no task selected")
         job.datasets[name], job.tasks[name] = ds, tasks
         job.checksums[name] = {t.id: task_checksum(t) for t in tasks}
-        lock_ds[name] = {"revision": ds.revision, "task_ids_sha256": dataset_mod.task_ids_fingerprint(t.id for t in tasks),
+        lock_ds[name] = {"revision": ds.revision, "ref": ds.ref_info(),
+                         "task_ids_sha256": dataset_mod.task_ids_fingerprint(t.id for t in tasks),
                          "tasks_sha256": dataset_mod.tasks_sha256(job.checksums[name].items()),
                          "n_tasks": len(tasks), "config": ds.config(),
                          "verifier_lock": dataset_mod.verifier_lock(ds, judge_config, code.get("commit"))}
@@ -222,11 +254,17 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
             "sampler": {**spec.resolution(), "config": sconf, **model_identity(spec, sconf)},
             "judge": judge_spec.resolution() if judge_spec else None,
             "agent": agent.config(), "skip_preflight": bool(cfg.get("skip_preflight"))}
+    if manifest is not None:
+        lock["server"] = {"digest": server_mf.digest(manifest), "manifest": server_mf.stable(manifest)}
+    job.judge_config = judge_config
     # one entry per `sem run` / `sem job resume` of this job: what may differ between sessions
     session = {"started_at": _now(), "commit": code.get("commit"), "dirty": code.get("dirty"),
                "python": (code.get("python") or {}).get("version"),
                "runtime": {k: cfg.get(k) for k in SESSION_OPTIONS}, "endpoint": sconf.get("endpoint"),
                "base_url": sconf.get("base_url"), "env": dict(checks.ENV_STATE) or None}
+    if manifest is not None:  # the volatile part: which machine / process served this session
+        rt = manifest.get("runtime") or {}
+        session["server"] = {k: rt.get(k) for k in ("manifest_path", "host", "port", "base_url", "pid", "started_at")}
 
     if st.exists():
         old_cfg, old_lock = st.read_config(), st.read_lock()
@@ -243,12 +281,22 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
         lock["job_id"] = old_lock["job_id"]
         lock["sessions"] = [*(old_lock.get("sessions") or []), session]
         lock["skip_preflight"] = old_lock.get("skip_preflight")  # the first session's; later ones are in sessions
+        if old_lock.get("derived_from"):
+            lock["derived_from"] = old_lock["derived_from"]
         print(f"[job] resuming {cfg['job_name']} ({lock['job_id']}), session {len(lock['sessions'])}")
     else:
         lock["job_id"] = str(uuid.uuid4())
         lock["sessions"] = [session]
     # generation_lock: the endpoint fields that change outputs, not the volatile catalog fields (pricing, uptime)
     job.sampler_config = lock_config(lock["sampler"]["config"])
+    if cfg.get("from_job"):
+        src = store_mod.JobStore.from_path(cfg["from_job"])
+        if not src.exists():
+            raise JobError(f"--from {cfg['from_job']}: not a job directory")
+        job.derived = derive.plan(src, derive_context(job, lock))
+        lock["derived_from"] = {"job_id": src.read_lock().get("job_id"), "job": os.path.abspath(src.dir),
+                                "commit": (src.read_lock().get("code") or {}).get("commit"),
+                                "counts": {n: v["counts"] for n, v in job.derived.items()}}
     os.makedirs(st.dir, exist_ok=True)
     if diff is not None:
         with open(os.path.join(st.dir, "dirty.diff"), "w", encoding="utf-8") as f:
@@ -256,7 +304,42 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
     st.write_config(cfg)
     st.write_lock(lock)
     job.lock = lock
+    if job.derived is not None:
+        copied = derive.copy_trials(src, st, job.derived, lock["derived_from"]["job_id"],
+                                    {n: d["verifier_lock"] for n, d in lock_ds.items()})
+        for name, v in job.derived.items():
+            c = v["counts"]
+            print(f"[from] {name}: reuse {c['reuse']}, regrade {c['regrade']}, rerun {c['rerun']} "
+                  f"({copied.get(name, 0)} trial(s) copied)")
     return job
+
+
+def load_datasets(cfg: dict) -> dict:
+    """{name: Dataset} of the job's `-d` entries (`name` or `name@ref`); a dataset given twice is refused."""
+    out = {}
+    for entry in cfg["datasets"]:
+        name, _ = dataset_mod.split_ref(entry)
+        if name in out:
+            raise JobError(f"dataset {name} is given twice ({', '.join(e for e in cfg['datasets'] if e.startswith(name))})")
+        try:
+            out[name] = dataset_mod.get_dataset(entry, **(cfg.get("dataset_args") or {}).get(name, {}))
+        except ValueError as e:
+            raise JobError(str(e)) from e
+    return out
+
+
+def dataset_entries(cfg: dict) -> dict:
+    """{name: the `-d` entry (name or name@ref)}."""
+    return {dataset_mod.split_ref(e)[0]: e for e in cfg["datasets"]}
+
+
+def derive_context(job: Job, lock: dict) -> derive.Context:
+    return derive.Context(datasets=job.datasets, tasks=job.tasks, checksums=job.checksums,
+                          sampler_config=job.sampler_config, server_digest=(lock.get("server") or {}).get("digest"),
+                          commit=(lock.get("code") or {}).get("commit"),
+                          verifier_locks={n: d["verifier_lock"] for n, d in lock["datasets"].items()},
+                          judge_config=job.judge_config, n_attempts=job.cfg["n_attempts"],
+                          generate_only=bool(job.cfg.get("generate_only")))
 
 
 # ---------------------------------------------------------------- trials
@@ -290,7 +373,9 @@ def _run_trial(job: Job, name: str, k: int, task) -> TrialResult:
                         "cause": failure["cause"],
                         **{k: failure[k] for k in ("connection", "endpoint_changed") if failure.get(k)}} if failure else None,
         started_at=started, finished_at=_now(),
-        generation_lock=dataset_mod.generation_lock(traj, job.sampler_config, commit=job.lock["code"].get("commit")),
+        generation_lock=dataset_mod.generation_lock(traj, job.sampler_config,
+                                                    server_manifest_digest=(job.lock.get("server") or {}).get("digest"),
+                                                    commit=job.lock["code"].get("commit")),
         verifier_lock=job.lock["datasets"][name]["verifier_lock"])
     return trial
 
@@ -412,14 +497,15 @@ def verify_job(st: store_mod.JobStore, datasets: list[str] | None = None, judge_
     # the same start checks as `sem run`: a verification records the commit of the verifier code it ran
     code = checks.start_checks(allow_dirty=allow_dirty)
     out, refused = {}, []
-    for name in datasets or cfg["datasets"]:
+    entries = dataset_entries(cfg)
+    for name in datasets or list(entries):
         ks = [k for k in st.attempts(name) if st.is_complete(name, k)]
         incomplete = [k for k in st.attempts(name) if not st.is_complete(name, k)]
         if incomplete:
             print(f"[verify] {name}: attempts {incomplete} are incomplete (resume the job first); not verified")
         if not ks:
             continue
-        ds = dataset_mod.get_dataset(name, **(cfg.get("dataset_args") or {}).get(name, {}))
+        ds = dataset_mod.get_dataset(entries.get(name, name), **(cfg.get("dataset_args") or {}).get(name, {}))
         if ds.needs_judge and judge is None:
             judge = registry.make_sampler(registry.resolve(judge_slug))
             judge.prepare()
@@ -435,19 +521,28 @@ def verify_job(st: store_mod.JobStore, datasets: list[str] | None = None, judge_
             refused.append(f"{name}: {len(changed)} task(s) differ from the ones generated (task_checksum): "
                            f"{', '.join(changed[:10])}{' ...' if len(changed) > 10 else ''}")
             continue
-        results = {}
+        results, reused = {}, 0
+        jconf = judge.config() if judge is not None and ds.needs_judge else None
+        vlock = dataset_mod.verifier_lock(ds, jconf, code.get("commit"))
+        per_trial = type(ds).verify_all is dataset_mod.Dataset.verify_all  # corpus-level verifiers re-verify all
         for k in ks:
             trials = trials_of[k]
-            results[k] = ds.verify_all([by_id[t.task_name] for t in trials], [t.trajectory for t in trials],
-                                       judge if ds.needs_judge else None, max_retries=retry["max_retries"],
-                                       retry_on=lambda c: should_retry(c, retry))
+            copied = derive.reused_results(trials, name, k, vlock) if per_trial else {}
+            todo = [t for t in trials if t.task_name not in copied]
+            fresh = ds.verify_all([by_id[t.task_name] for t in todo], [t.trajectory for t in todo],
+                                  judge if ds.needs_judge else None, max_retries=retry["max_retries"],
+                                  retry_on=lambda c: should_retry(c, retry)) if todo else []
+            got = {t.task_name: g for t, g in zip(todo, fresh)} | copied
+            results[k] = [got[t.task_name] for t in trials]
+            reused += len(copied)
         vid = st.new_verification_id(name)
-        jconf = judge.config() if judge is not None and ds.needs_judge else None
         meta = {"dataset": name, "judge": jconf, "verifier_lock": dataset_mod.verifier_lock(ds, jconf, code.get("commit")),
                 "verifier_deps": dataset_mod.verifier_deps(ds),
                 "commit": code.get("commit"), "dirty": code.get("dirty"), "job_id": lock.get("job_id")}
         if changed:
             meta["task_changes"] = changed
+        if reused:  # `sem run --from`: verifier results copied from the source job (same verifier lock)
+            meta["reused_results"] = reused
         if code.get("diff") is not None:  # --allow-dirty: the diff the verifier code ran with (dirty.diff next to meta)
             meta["diff_sha256"] = hashlib.sha256(code["diff"].encode("utf-8")).hexdigest()
         st.write_verification(name, vid, results, meta)
@@ -464,11 +559,11 @@ def verify_job(st: store_mod.JobStore, datasets: list[str] | None = None, judge_
 def summarize_job(st: store_mod.JobStore) -> dict:
     cfg = st.read_config()
     out = {}
-    for name in cfg["datasets"]:
+    for name, entry in dataset_entries(cfg).items():
         vid, results = st.read_verification(name)
         ds = None
         try:
-            ds = dataset_mod.get_dataset(name, **(cfg.get("dataset_args") or {}).get(name, {}))
+            ds = dataset_mod.get_dataset(entry, **(cfg.get("dataset_args") or {}).get(name, {}))
         except Exception as e:  # noqa: BLE001 - a summary must not need the dataset class
             print(f"[summary] {name}: dataset class unavailable ({type(e).__name__}); default aggregation")
         agg = ds.aggregate if ds is not None else dataset_mod.aggregate
