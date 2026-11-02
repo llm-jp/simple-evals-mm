@@ -21,23 +21,15 @@ from __future__ import annotations
 import os
 from dataclasses import asdict, dataclass, field
 
-from simple_evals_mm.samplers.presets import (  # noqa: F401 - re-exported (v0.4 openrouter_sampler imports them here)
-    DEFAULT_JUDGE,
-    DSV41,
+from simple_evals_mm.samplers.presets import (
+    DEFAULT_JUDGE,  # noqa: F401 - part of the registry API (registry.DEFAULT_JUDGE)
     FAMILIES,
     FORMAT_ARGS,
-    GEMMA4,
-    GLM53,
     MODEL_ARGS,
-    OPENAI_SYSTEM_MESSAGE,
     OPENROUTER_IMAGE_POLICY,
-    OPENROUTER_MODELS,
     PRESETS,
     PROVIDER_ARGS,
-    QWEN35,
-    QWEN38,
     SERVED_ENGINES,
-    SERVED_MODELS,
     SPECIAL_SAMPLING,
 )
 
@@ -46,7 +38,7 @@ API_FORMATS = (CHAT, RESPONSES, GOOGLE)
 
 # Per provider: default base URL (None = must be given), the key / base-url variable NAMES (default
 # <PROVIDER>_API_KEY / <PROVIDER>_BASE_URL), retry budget, and the API formats it speaks (the first is the default;
-# openai / azure use the Responses API for gpt-5*, as v0.4 did).
+# openai / azure use the Responses API for gpt-5*).
 PROVIDERS: dict[str, dict] = {
     "openai": {"base_url": "https://api.openai.com/v1", "key_required": True, "max_tries": 60, "image_detail": "high",
                "formats": (CHAT, RESPONSES)},

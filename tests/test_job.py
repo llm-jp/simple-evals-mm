@@ -356,3 +356,13 @@ def test_sessions_are_kept_on_resume(job_env):
     assert [x["runtime"]["generate_only"] for x in sessions] == [True, False]
     assert sessions[0]["runtime"]["retry"]["max_retries"] == 1 and sessions[1]["runtime"]["retry"]["max_retries"] == 2
     assert [x["endpoint"]["price_per_mtok"]["prompt"] for x in sessions] == [1, 2] and all(x["commit"] == "c1" for x in sessions)
+
+
+def test_subsample_is_seeded_and_keeps_dataset_order():
+    """-l N: the same N tasks in every job, in dataset order, not the first N (a dataset sorted by category)."""
+    from simple_evals_mm.runner import subsample
+
+    items = list(range(100))
+    a, b = subsample(items, 10), subsample(items, 10)
+    assert a == b and a == sorted(a) and len(set(a)) == 10 and a != items[:10]
+    assert subsample(items, None) is items and subsample(items, 0) is items and subsample(items, 500) is items
