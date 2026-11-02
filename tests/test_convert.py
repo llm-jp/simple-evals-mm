@@ -15,7 +15,7 @@ from simple_evals_mm.common import SingleEvalResult
 from simple_evals_mm.dataset import Dataset
 from simple_evals_mm.models import Task, user
 from simple_evals_mm.store import JobStore
-from tests.fakes import VERDICT, FakeSampler, job_env  # noqa: F401 - fixture
+from tests.fakes import VERDICT, FakeSampler
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TASK_MODULE = "src/simple_evals_mm/tasks/arith.py"
@@ -70,7 +70,7 @@ def write_v04_run(runs_dir, run_id, tasks: dict, provenance: dict | None, judge=
         td = runs.task_dir(run_id, name)
         os.makedirs(td, exist_ok=True)
 
-        def write():
+        def write(name=name, reps=reps, td=td):
             means = []
             for k, rows in reps.items():
                 with open(os.path.join(td, f"items_r{k}.jsonl"), "w") as f:
@@ -227,7 +227,8 @@ def test_multiverse_dialogue_becomes_one_trial(tmp_path):
 
 
 # ---------------------------------------------------------------- judge cache
-def jarith_rows(gr=VERDICT.format("yes")):
+def jarith_rows(gr=None):
+    gr = gr or VERDICT.format("yes")
     return [row("2+2?", "2+2?", "4", "4", 1.0, grader_response=gr), row("3+3?", "3+3?", "6", "7", 0.0,
                                                                           grader_response=VERDICT.format("no"))]
 
@@ -329,9 +330,8 @@ def test_classification_reasons(job_env, tmp_path):
     with open(sp) as f:
         s = json.load(f)
     s["mean_score"] = 0.9
-    with runs.track(os.path.join(run, "arith"), "rescore"):
-        with open(sp, "w") as f:
-            f.write(json.dumps(s) + "\n")
+    with runs.track(os.path.join(run, "arith"), "rescore"), open(sp, "w") as f:
+        f.write(json.dumps(s) + "\n")
     rr = convert.convert_run(run, str(tmp_path / "jobs"), dry_run=True, repo=repo)
     agg = next(x for x in rr.audit if x["check"] == "aggregates")
     assert agg["status"] == "stale" and agg["differences"][0]["field"] == "mean_score"
@@ -360,3 +360,12 @@ def test_convert_all_cli(job_env, tmp_path, capsys):
     assert "legacy-verified" in out and "legacy-unverified" in out and "missing" in out
     assert "total judge calls needed beyond the cache: 0" in out
     assert not os.path.exists(os.path.join(job_env["jobs"], "a__legacy"))
+
+
+def test_convert_json_is_clean(job_env, tmp_path, capsys):
+    repo, _, common = code_repo(tmp_path / "code")
+    run = write_v04_run(tmp_path / "runs", "a", {"arith": {1: arith_rows()}}, provenance_for(common, "v1 = 2\n"))
+    capsys.readouterr()
+    assert job_env["sem"]("convert", run, "--dry-run", "--json", "--repo", repo) == 0
+    doc = json.loads(capsys.readouterr().out)  # stdout is the JSON document only
+    assert doc["classification"] == convert.VERIFIED and doc["job_dir"] is None
