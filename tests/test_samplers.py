@@ -314,8 +314,7 @@ def test_responses_parse_reasoning_refusal_tools(clean_env):
     d.update(status="incomplete", incomplete_details={"reason": "max_output_tokens"})
     d["output"] = []
     assert s._parse(OAIResponse.model_validate(d)).finish_reason == "length"
-    tools = s.to_api_messages([user("q")])
-    assert tools[0] == {"role": "developer", "content": [{"type": "input_text", "text": "You are a helpful assistant."}]}
+    assert s.to_api_messages([user("q")])[0]["role"] == "user"  # no system message for the judge family
 
 
 def test_retry_policy():
