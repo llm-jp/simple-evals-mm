@@ -314,8 +314,7 @@ def test_responses_parse_reasoning_refusal_tools(clean_env):
     d.update(status="incomplete", incomplete_details={"reason": "max_output_tokens"})
     d["output"] = []
     assert s._parse(OAIResponse.model_validate(d)).finish_reason == "length"
-    tools = s.to_api_messages([user("q")])
-    assert tools[0] == {"role": "developer", "content": [{"type": "input_text", "text": "You are a helpful assistant."}]}
+    assert s.to_api_messages([user("q")])[0]["role"] == "user"  # no system message for the judge family
 
 
 def test_retry_policy():
@@ -758,3 +757,13 @@ def test_served_identity_tracking():
     assert changes == {"system_fingerprint": ["fp1", "fp2"]} and moved is None  # recorded only
     changes, moved = track_identity(s, Response("a", model="m2", provider="P"))
     assert changes == {"model": ["m1", "m2"]} and "model 'm1' -> 'm2'" in moved
+
+
+def test_gpt4o_sends_no_system_message():
+    """Every model gets the same prompt: the gpt-4o presets carry no "You are a helpful assistant." developer message
+    (the request bodies are in tests/golden/samplers.json)."""
+    from simple_evals_mm.samplers import presets
+
+    for slug in ("openai/gpt-4o-2024-11-20", "azure/gpt-4o-2024-11-20", "openrouter/openai/gpt-4o-2024-11-20"):
+        assert not presets.PRESETS[slug].get("system_message"), slug
+    assert not any(p.get("system_message") for p in presets.PRESETS.values())

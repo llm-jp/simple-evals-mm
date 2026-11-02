@@ -98,3 +98,13 @@ def test_verifier_lock_inputs(monkeypatch):
     monkeypatch.setattr(checks, "dist_identity", lambda name: {"version": "0.0.0"})
     assert dataset_mod.verifier_lock(J(), judge, "c1") != lock
     assert not hasattr(dataset_mod, "verifier_code_digest")
+
+
+def test_judge_reply_stored_in_full():
+    """The judge record keeps the whole reply (no 4000-character cut), and the verdict is parsed from it."""
+    long = "reasoning " * 2000 + "\n" + VERDICT.format("yes")
+    traj = Direct().run(Task("t", answer="B"), Arith(), FakeSampler("The answer is B"), job_id="u", attempt=1, images=None)
+    res = verifiers.judge()(Task("t", answer="B"), traj, FakeSampler(long))
+    assert len(long) > 20000 and res.judge["response"] == long and res.reward == 1.0
+    raw, rec = verifiers.judge_call(FakeSampler(long), "q")
+    assert raw == rec["response"] == long
