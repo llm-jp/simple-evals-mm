@@ -20,6 +20,7 @@ uv run sem job show jobs/NAME | check jobs/NAME ; uv run sem jobs list
 uv run sem job resume -p jobs/NAME -f provider_failed                         # retry transient failures
 uv run sem datasets list | download | check ; uv run sem models list
 uv run sem serve sglang MODEL --engine-venv VENV --manifest M.json ; uv run sem run -m sglang/MODEL --server M.json
+uv run sem site build [site/leaderboard.yaml] [-o site/data.js]               # leaderboard data from verified jobs
 uv run python scripts/openrouter_smoke.py --models qwen/qwen3.8-27b          # one paid request per preset effort
 
 # tests (offline; fakes in tests/fakes.py, golden snapshots in tests/golden/)
@@ -46,6 +47,8 @@ uv run ruff check src tests
   `boxed()` / `click_in_box()` / `rules()` / `execute()`.
 - `samplers/`: one class per API format (`openai_chat.py`, `openai_responses.py`, `gemini.py`); `presets.py` model
   presets as data (exact slugs, families, OpenRouter pins); `registry.py` slug -> provider / format / settings.
+- `leaderboard.py`: `sem site build` (spec `site/leaderboard.yaml` -> `site/data.js`; refusal rules, provenance).
+  Every visible leaderboard change gets a dated entry in `site/changelog.js`.
 - `serving/`: `sem serve` (engine RECORD check, patches, manifest, supervisor), `hf_server.py` + `hf_backends.py`
   (OpenAI-compatible server for custom-architecture models).
 

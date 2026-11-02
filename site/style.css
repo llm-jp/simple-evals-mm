@@ -209,6 +209,14 @@ dl.settings dt { color: var(--text-secondary); font-weight: 600; }
 dl.settings dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
 dl.settings code { font-size: 12px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 dl.settings pre { margin: 2px 0 0; padding: 8px 10px; font-size: 12px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* v0.5 provenance: alias badge, per-dataset table (inside a <details>) */
+.effort-tag.alias { color: var(--text-secondary); border-style: dashed; }
+dl.settings details summary { cursor: pointer; color: var(--text-secondary); }
+.prov-wrap { overflow-x: auto; margin-top: 6px; }
+table.prov { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+table.prov th, table.prov td { padding: 3px 10px 3px 0; text-align: left; border-bottom: 1px solid var(--border); font-weight: normal; }
+table.prov th { color: var(--text-secondary); font-weight: 600; }
+table.prov tr.sel td { font-weight: 600; }
 
 /* theme toggle (top right): icon only; shows the current theme, a click switches to the other */
 .theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin-left: 4px;
