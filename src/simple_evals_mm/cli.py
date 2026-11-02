@@ -446,9 +446,7 @@ SECRET_NAME = re.compile(r"^(?:[A-Z0-9_]+_(?:API_KEY|KEY|TOKEN)|AZURE_OPENAI_(?:
 
 def load_env(path: str | None = None) -> dict:
     """Export the secret-looking names of .env (not overriding variables already set); returns {"exported": [...],
-    "ignored": [...]} (names only, recorded in lock.json sessions) and warns about the ignored names. Sets SEM_V05 so
-    the v0.4 samplers imported by the start checks do not load .env themselves."""
-    os.environ["SEM_V05"] = "1"
+    "ignored": [...]} (names only, recorded in lock.json sessions) and warns about the ignored names."""
     try:
         from dotenv import dotenv_values, find_dotenv
     except ImportError:

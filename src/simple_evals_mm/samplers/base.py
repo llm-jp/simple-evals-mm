@@ -253,7 +253,7 @@ def retry_call(send, *, label: str, max_tries: int, max_rate_limit_tries: int, c
             return send()
         except errors.SamplerError:
             raise
-        except Exception as e:  # noqa: BLE001 - classified below
+        except Exception as e:
             kind = classify(e)
             if kind == "fail":
                 raise errors.SamplerError(str(e), exc_type=type(e).__name__) from e

@@ -16,7 +16,6 @@
 
 from simple_evals_mm.tasks.ifeval_lib import instructions
 
-
 _KEYWORD = "keywords:"
 
 _LANGUAGE = "language:"

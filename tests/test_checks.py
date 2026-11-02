@@ -110,7 +110,7 @@ def test_dotenv_exports_secrets_only(tmp_path, monkeypatch, capsys):
     env.write_text("OPENROUTER_API_KEY=k1\nHF_TOKEN=t\nGEMINI_LOCATION=global\nOPENROUTER_BASE_URL=http://evil\n"
                    "OPENROUTER_TEMP=0.3\nGOOGLE_GENAI_USE_VERTEXAI=1\n")
     for k in ("OPENROUTER_API_KEY", "HF_TOKEN", "GEMINI_LOCATION", "OPENROUTER_BASE_URL", "OPENROUTER_TEMP",
-              "GOOGLE_GENAI_USE_VERTEXAI", "SEM_V05"):
+              "GOOGLE_GENAI_USE_VERTEXAI"):
         monkeypatch.setenv(k, "")  # restored (unset) at teardown
         monkeypatch.delenv(k)
     monkeypatch.setattr(checks, "ENV_STATE", {})
@@ -120,5 +120,5 @@ def test_dotenv_exports_secrets_only(tmp_path, monkeypatch, capsys):
     import os
 
     assert os.environ["OPENROUTER_API_KEY"] == "k1" and "OPENROUTER_BASE_URL" not in os.environ
-    assert os.environ["SEM_V05"] == "1" and checks.ENV_STATE["dotenv_exported"] == out["exported"]
+    assert checks.ENV_STATE["dotenv_exported"] == out["exported"]
     assert "OPENROUTER_TEMP" in capsys.readouterr().err
