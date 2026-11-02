@@ -1,0 +1,8 @@
+{
+  "name": "sglang_pr47809",
+  "upstream_ref": "https://github.com/sgl-project/sglang/pull/47809",
+  "description": "Triton extend attention honors custom masks past the causal tile: _fwd_kernel's stage 2 walks the whole extend region when a custom mask is set (sglang PR #47809, 0.5.23 backport). Without it, Gemma 3/4 image tokens attend bidirectionally only within their own 32-128-token query tile; Gemma-4-12B-it CountBenchQA 69 -> 96, same answers as HF transformers on 100/100.",
+  "engine": "sglang",
+  "engine_versions": ["0.5.23"],
+  "files": ["sglang/kernels/ops/attention/extend_attention.py"]
+}
