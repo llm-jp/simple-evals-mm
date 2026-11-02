@@ -39,7 +39,7 @@ def test_presets_and_errors(monkeypatch, endpoints):
     judge = registry.make_sampler(registry.resolve(registry.DEFAULT_JUDGE))
     judge.prepare()
     jb = judge.request_body()
-    assert jb["reasoning"] == {"effort": "none"} and jb["max_tokens"] == 128000  # the endpoint maximum, no small cap
+    assert jb["reasoning"] == {"effort": "medium"} and jb["max_tokens"] == 128000  # the endpoint maximum, no small cap
     # the matched endpoint's tag; no quantization filter when OpenRouter lists "unknown" (closed models)
     assert jb["provider"] == {"order": ["openai"], "allow_fallbacks": False}
     for bad, kw in (("noprovider", {}), ("bogus/x", {}), ("openrouter/qwen/qwen3.8-27b", {"effort": "max"}),
