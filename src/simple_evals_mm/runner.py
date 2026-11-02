@@ -268,6 +268,9 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
 
     if st.exists():
         old_cfg, old_lock = st.read_config(), st.read_lock()
+        if old_lock.get("legacy"):
+            raise JobError(f"{st.dir} is a legacy job converted from a v0.4 run (sem convert): it cannot be resumed; "
+                           "start a new job (`sem run --from` reruns its trials)")
         problems = diff_dicts(_comparable(old_cfg), _comparable(cfg)) + diff_dicts(_lock_digest(old_lock), _lock_digest(lock))
         for name in dsets:
             old_ds = (old_lock.get("datasets") or {}).get(name) or {}

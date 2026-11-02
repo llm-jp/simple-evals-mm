@@ -79,6 +79,8 @@ def plan(src: store_mod.JobStore, ctx: Context, changed_datasets=None) -> dict:
     if changed_datasets is None:
         from simple_evals_mm.provenance import changed_datasets
     src_lock = src.read_lock()
+    if src_lock.get("legacy"):
+        return _legacy_plan(src, ctx)
     src_commit = (src_lock.get("code") or {}).get("commit")
     same_commit = src_commit == ctx.commit
     src_server = (src_lock.get("server") or {}).get("digest")
@@ -147,6 +149,22 @@ def plan(src: store_mod.JobStore, ctx: Context, changed_datasets=None) -> dict:
                      "source_verification": vid}
     return out
 
+
+
+LEGACY_RERUN = ("legacy trial converted from v0.4 (sem convert): generation_lock unknown (null), so it cannot be shown "
+                "identical; no option forces reuse")
+
+
+def _legacy_plan(src: store_mod.JobStore, ctx: Context) -> dict:
+    """A `sem convert` job as the source: its trials have generation_lock null (v0.4 did not record what was sent), so
+    every trial is RERUN."""
+    out = {}
+    for name in ctx.datasets:
+        decisions = {(k, task.id): Decision(RERUN, LEGACY_RERUN) for k in range(1, ctx.n_attempts + 1) for task in ctx.tasks[name]}
+        out[name] = {"decisions": decisions, "counts": {REUSE: 0, REGRADE: 0, RERUN: len(decisions)},
+                     "reasons": {f"{RERUN}: {LEGACY_RERUN}": len(decisions)} if decisions else {},
+                     "source_verification": src.current_verification_id(name)}
+    return out
 
 
 def summary(p: dict) -> dict:
