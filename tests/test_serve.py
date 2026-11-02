@@ -208,12 +208,13 @@ def test_patch_accepted_in_place_and_as_overlay(engine_venv, tmp_path):
 
 
 def test_registered_patches_load():
-    """The repository's patches: patch.json complete, files present (sglang PR #43753, minimal and full form)."""
+    """The repository's patches: patch.json complete, files present, each pointing at its upstream PR."""
     names = stack.available_patches()
-    assert {"sglang_pr43753", "sglang_pr43753_full"} <= set(names)
+    assert {"sglang_pr43753", "sglang_pr43753_full", "sglang_pr47809"} <= set(names)
     for n in names:
         p = stack.load_patch(n)
-        assert "github.com/sgl-project/sglang/pull/43753" in p["upstream_ref"] and p["files"]
+        pr = n.removeprefix("sglang_pr").removesuffix("_full")
+        assert p["upstream_ref"] == f"https://github.com/sgl-project/sglang/pull/{pr}" and p["files"]
 
 
 # ---------------------------------------------------------------- chat template / manifest
