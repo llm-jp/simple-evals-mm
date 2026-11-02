@@ -1,5 +1,7 @@
-# Weekly check of the pinned dataset revisions against upstream (`sem datasets check`): when a pin is outdated,
-# open (or update) the issue labelled `dataset-update`. Needs no secrets beyond GITHUB_TOKEN; a gated Hugging Face
+# Weekly check of the pinned dataset revisions and the locked unversioned source files (datasets.lock) against
+# upstream (`sem datasets check`), and of the small ungated text datasets against datasets.lock
+# (`sem datasets lock --check`): when something is outdated or differs, open (or update) the issue labelled
+# `dataset-update`. Needs no secrets beyond GITHUB_TOKEN; a gated Hugging Face
 # repository whose metadata needs HF_TOKEN is reported as "skipped" instead of failing the check.
 name: Dataset revisions check
 
@@ -24,6 +26,10 @@ jobs:
           set +e
           uv run --frozen sem datasets check > report.txt
           rc=$?
+          echo "--- sem datasets lock --check (small text datasets)" >> report.txt
+          uv run --frozen sem datasets lock --check -d gpqa,mmlu,math,simpleqa,aime26,ifeval,ifbench,humaneval >> report.txt 2>&1
+          lrc=$?
+          if [ "$lrc" != 0 ] && [ "$rc" != 1 ]; then rc=1; fi
           cat report.txt
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
       - name: Open or update the dataset-update issue
@@ -39,7 +45,7 @@ jobs:
             cat report.txt
             echo '```'
             echo
-            echo "Review the upstream change, then bump the pin in the dataset code (a new revision changes task ids / results) or add it to dataset_admin.HELD with the reason."
+            echo "Review the upstream change, then bump the pin in the dataset code (a new revision changes task ids / results) or add it to dataset_admin.HELD with the reason; for a changed source file or task digest, review it and run \`sem datasets lock -d <dataset>\`."
           } > body.md
           n=$(gh issue list --label dataset-update --state open --json number --jq '.[0].number')
           if [ -n "$n" ]; then

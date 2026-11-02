@@ -1,5 +1,9 @@
 from tests import golden
-from tests.fakes import image_dir, job_env  # noqa: F401 - fixtures of the tests
+from tests.fakes import (  # noqa: F401 - fixtures of the tests
+    data_lock,
+    image_dir,
+    job_env,
+)
 
 
 def pytest_addoption(parser):

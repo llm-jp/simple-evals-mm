@@ -7,7 +7,7 @@ from typing import ClassVar
 import pytest
 from PIL import Image as PILImage
 
-from simple_evals_mm import atif, checks, cli, sources
+from simple_evals_mm import atif, checks, cli, datalock, sources
 from simple_evals_mm import dataset as dataset_mod
 from simple_evals_mm.agent import Direct
 from simple_evals_mm.dataset import Dataset
@@ -81,6 +81,16 @@ def job_env(tmp_path, monkeypatch):
         "version": "0.5.0", "commit": state["commit"], "dirty": False,
         "lock_check": {"ok": True, "lock_sha256": "l", "mismatches": []}})
     jobs = str(tmp_path / "jobs")
+    real_entry = datalock.entry
+
+    def entry(name):  # datasets the test registers get an entry matching their data unless the test wrote one
+        e = real_entry(name)
+        if e is None and name in dataset_mod.DATASETS:
+            ds = dataset_mod.get_dataset(name)
+            e = {"revision": ds.revision, **datalock.digest(ds.load())}
+        return e
+
+    monkeypatch.setattr(datalock, "entry", entry)
 
     def sem(*args):
         return cli.main(list(args))
@@ -103,6 +113,16 @@ def png_bytes(color="red", size=(4, 4)) -> bytes:
     buf = io.BytesIO()
     PILImage.new("RGB", size, color).save(buf, format="PNG")
     return buf.getvalue()
+
+
+@pytest.fixture(autouse=True)
+def data_lock(tmp_path, monkeypatch):
+    """The tests' datasets.lock: a file in tmp_path (absent until a test writes it), never the committed one."""
+    path = tmp_path / "datasets.lock.json"
+    monkeypatch.setattr(datalock, "LOCK_PATH", path)
+    datalock.reset()
+    yield path
+    datalock.reset()
 
 
 @pytest.fixture(autouse=True)
