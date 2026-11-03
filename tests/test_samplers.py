@@ -610,6 +610,101 @@ def test_endpoint_unavailable_classification(clean_env, endpoints, monkeypatch, 
     assert e.value.cause == errors.PROVIDER_FAILED
 
 
+def _dropping_server(mode: str):
+    """A TCP server that reads each request and then closes the connection without an answer ("drop") or with a
+    TCP reset ("reset"): a served engine being killed by the `sem serve` watchdog. Returns (port, accepted list, stop)."""
+    import socket
+    import struct
+    import threading
+
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(16)
+    srv.settimeout(0.2)
+    accepted, stop = [], threading.Event()
+
+    def loop():
+        while not stop.is_set():
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                continue
+            accepted.append(1)
+            c.settimeout(2)
+            try:
+                c.recv(65536)
+            except OSError:
+                pass
+            if mode == "reset":
+                c.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            c.close()
+        srv.close()
+
+    threading.Thread(target=loop, daemon=True).start()
+    return srv.getsockname()[1], accepted, stop
+
+
+@pytest.mark.parametrize("mode", ["drop", "reset", "refused"])
+def test_served_connection_loss_reaches_the_breaker(clean_env, endpoints, monkeypatch, mode):
+    """A restarting served engine (connection dropped / reset mid-request, then refused): the real OpenAI client raises
+    APIConnectionError, our loop retries it (the SDK does not: one connection per attempt), and the final error is a
+    connection failure (endpoint_unavailable, connection=True) that the runner's circuit breaker counts."""
+    import socket
+
+    from simple_evals_mm import runner
+    from simple_evals_mm.samplers import openai_chat
+
+    monkeypatch.setattr(openai_chat.time, "sleep", lambda s: None)
+    if mode == "refused":
+        with socket.socket() as so:
+            so.bind(("127.0.0.1", 0))
+            port = so.getsockname()[1]
+        accepted, stop = None, None
+    else:
+        port, accepted, stop = _dropping_server(mode)
+    try:
+        url = f"http://127.0.0.1:{port}/v1"
+        s = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", base_url=url), base_url=url)
+        assert s.base_url() == url
+        s.spec.max_tries = 2
+        with pytest.raises(errors.SamplerError) as e:
+            s([user("q")])
+    finally:
+        if stop is not None:
+            stop.set()
+    assert (e.value.cause, e.value.connection) == (errors.ENDPOINT_UNAVAILABLE, True)
+    assert "APIConnectionError" in e.value.message
+    if accepted is not None:
+        assert len(accepted) == 3  # 1 + max_tries attempts: the SDK's own retries are off
+    trial = NS(exception_info={"cause": e.value.cause, "connection": e.value.connection})
+    assert runner._breaker(trial)
+    # and as provider_failed with the connection flag (an API provider): still counted
+    trial.exception_info = {"cause": errors.PROVIDER_FAILED, "connection": True}
+    assert runner._breaker(trial)
+
+
+def test_request_timeout_is_explicit(clean_env, endpoints):
+    """served engines 6 h, APIs 3600 s, Gemini the SDK's; passed to the client with max_retries=0; recorded in the
+    sampler config but not in the locks (runtime-only, like n_concurrent)."""
+    from simple_evals_mm.samplers.base import lock_config
+
+    served = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B"))
+    assert served.spec.request_timeout_s == registry.SERVED_REQUEST_TIMEOUT_S == 21600
+    c = served.client
+    assert (c.timeout, c.max_retries, c._client.timeout.read) == (21600, 0, 21600)
+    clean_env.setenv("OPENROUTER_API_KEY", "k")
+    api = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    assert api.spec.request_timeout_s == 3600 and (api.client.timeout, api.client.max_retries) == (3600, 0)
+    assert registry.resolve("gemini/gemini-3.1-pro-preview").request_timeout_s is None
+    short = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", request_timeout_s=120))
+    assert short.client.timeout == 120
+    cfg, cfg_short = served.config(), short.config()
+    assert cfg["request_timeout_s"] == 21600 and cfg_short["request_timeout_s"] == 120
+    assert "request_timeout_s" not in lock_config(cfg) and lock_config(cfg) == lock_config(cfg_short)
+    with pytest.raises(ValueError, match="positive"):
+        registry.resolve("sglang/Qwen/Qwen3.5-9B", request_timeout_s=0)
+
+
 # ---------------------------------------------------------------- what was really sent (audit #108)
 def test_chat_records_sent_images_seed_and_max_tokens(clean_env, endpoints, png, tmp_path, monkeypatch):
     """Per request: the images as really sent (after the request-size shrink), the seed (chat `seed`), the max_tokens

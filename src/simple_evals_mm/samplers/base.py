@@ -19,6 +19,11 @@ ENDPOINT_LOCK_KEYS = ("provider_name", "tag", "quantization", "context_length", 
                       "output_token_limit")
 
 
+# Sampler config fields that never change an output (the client's per-request timeout): recorded in lock.json, left
+# out of the locks and the resume comparison
+RUNTIME_FIELDS = ("request_timeout_s",)
+
+
 def endpoint_lock(endpoint: dict | None) -> dict | None:
     """The output-relevant part of a sampler's endpoint record (OpenRouter pinned row / served server identity)."""
     if not endpoint:
@@ -30,11 +35,12 @@ def lock_config(config: dict | None) -> dict | None:
     """A sampler config as the locks hash it: the endpoint record through endpoint_lock (no pricing, uptime,
     supported_parameters). A served engine's base URL is left out: it names the machine of this session (the compute
     node), and the server's identity (model id, root, max_model_len, version, generation_config.json) is in the
-    endpoint record."""
+    endpoint record. RUNTIME_FIELDS (the request timeout) are left out."""
     if config is None:
         return None
     served = config.get("provider") in ("sglang", "vllm", "hf")
-    out = {k: v for k, v in config.items() if k != "endpoint" and not (served and k == "base_url")}
+    out = {k: v for k, v in config.items()
+           if k != "endpoint" and k not in RUNTIME_FIELDS and not (served and k == "base_url")}
     if "endpoint" in config:
         out["endpoint"] = endpoint_lock(config.get("endpoint"))
     return out
