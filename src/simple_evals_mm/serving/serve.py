@@ -10,11 +10,16 @@ venv, supervise it and write the server manifest (serving/manifest.py) that `sem
      loaded through a sitecustomize overlay on PYTHONPATH (the venv is never modified).
   2. chat template: always passed explicitly (--chat-template), by default the model snapshot's own template written
      next to the manifest, so the engine never auto-selects a built-in template; its sha256 is recorded.
-  3. launch: the engine in a new process group; restart loop; health wait; on exit (signal, Ctrl-C) the process
-     group is killed and the manifest's status becomes "stopped".
+  3. launch: the engine in a new process group, <engine_venv>/bin first on PATH (ninja and the other tools of the
+     engine venv: JIT kernel builds); restart loop; health wait; on exit (signal, Ctrl-C) the process group is killed
+     and the manifest's status becomes "stopped".
   4. after the health wait (and after every restart): /v1/models + the rendered-prompt probe (tokenize endpoint). The
      first launch writes the manifest (the file appears once the server is ready); after a restart a different probe
      hash, served identity or engine identity is fatal: the server is stopped and the reason recorded.
+  5. watchdog: while serving, GET /health every --watch-interval s; --watch-failures consecutive failures (non-200 or
+     no answer within WATCH_TIMEOUT_S) or a crash marker in the engine log (ENGINE_CRASH_MARKERS: a scheduler that
+     died while the HTTP process stays up) kill the process group and restart through the loop above (identity and
+     probe re-checked); each watchdog restart is recorded in runtime.watchdog_restarts.
 
 `--dry-run` builds and prints the manifest without launching (no probe, no hardware beyond nvidia-smi); exit 1 when the
 engine check refuses.
@@ -32,6 +37,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 
@@ -53,6 +59,17 @@ MANAGED_FLAGS = {"--model-path", "--model", "--host", "--port", "--dp-size", "--
 ENV_PREFIXES = ("SGLANG_", "VLLM_", "TORCH_", "PYTORCH_", "CUBLAS_", "NVIDIA_TF32", "FLASHINFER_", "NCCL_ALGO",
                 "TRITON_", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "GEMMA_", "MUSE_", "HARMONY_", "QWEN_DECODE",
                 "SWEEP_", "REP_PEN", "EVAL_CHAT_TEMPLATE")
+# Lines of the engine log that mean the engine can no longer generate although its HTTP process may still answer:
+# sglang's scheduler (managers/scheduler.py, 0.5.23), vLLM's engine core (v1/engine/core.py, 0.32). hf_server respawns
+# dead workers itself and its /health turns 503 when no worker is ready.
+ENGINE_CRASH_MARKERS = {"sglang": ("Scheduler hit an exception",), "vllm": ("EngineCore encountered a fatal error",),
+                        "hf": ()}
+WATCH_INTERVAL_S = 30.0
+WATCH_FAILURES = 4
+# sglang answers /health by generating one token and waits up to SGLANG_HEALTH_CHECK_TIMEOUT (20 s) for it
+WATCH_TIMEOUT_S = 20.0
+# PATH as recorded in the manifest (the inherited part names this machine)
+PATH_RECORDED = "<engine_venv>/bin" + os.pathsep + "<inherited>"
 DETERMINISTIC = {"sglang": "--enable-deterministic-inference", "vllm": "VLLM_BATCH_INVARIANT=1",
                  "hf": "--deterministic (torch.use_deterministic_algorithms)"}
 
@@ -180,6 +197,7 @@ def build_manifest(args, *, venv: str, run_hardware=subprocess.run, cache: str |
     port = args.port or DEFAULT_PORTS[engine]
     host = args.host
     tpl_path = "<chat-template>"
+    venv_bin = os.path.dirname(os.path.abspath(python))  # <venv>/bin, or <venv>/.venv/bin (stack.venv_python)
     argv, env = build_argv(engine, python, args.model, host=host, port=port, dp=args.dp, tp=args.tp,
                            chat_template=tpl_path, deterministic=args.deterministic, server_args=server_args,
                            extra=extra, batch=args.batch, revision=model.get("revision"))
@@ -190,7 +208,7 @@ def build_manifest(args, *, venv: str, run_hardware=subprocess.run, cache: str |
                    "dp": args.dp, "tp": args.tp, "deterministic": {"on": bool(args.deterministic),
                                                                      "how": DETERMINISTIC[engine] if args.deterministic else None},
                    "batch": args.batch if engine == "hf" else None, "server_args": server_args,
-                   "env_set": dict(env, **({"PYTHONPATH": "<overlay>"} if loaded else {})),
+                   "env_set": dict(env, PATH=PATH_RECORDED, **({"PYTHONPATH": "<overlay>"} if loaded else {})),
                    "env_recorded": recorded_env(dict(os.environ)),
                    "inherited_pythonpath_dropped": bool(os.environ.get("PYTHONPATH"))},
         "chat_template": tpl,
@@ -202,9 +220,17 @@ def build_manifest(args, *, venv: str, run_hardware=subprocess.run, cache: str |
                     "engine_venv": os.path.abspath(venv), "status": "starting", "created_at": _now(), "restarts": [],
                     "events": []},
     }
+    env = dict(env, PATH=engine_path(venv_bin))
     ctx = {"argv": argv, "env": env, "python": python, "chat_template_text": tpl_text, "patches": loaded,
            "problems": problems, "snapshot": model.get("path")}
     return manifest, ctx
+
+
+def engine_path(venv_bin: str, inherited: str | None = None) -> str:
+    """PATH of the engine: the engine venv's bin/ first (ninja for flashinfer / sglang JIT kernel builds, the venv's
+    console scripts), then the inherited PATH."""
+    inherited = os.environ.get("PATH", "") if inherited is None else inherited
+    return venv_bin + (os.pathsep + inherited if inherited else "")
 
 
 def _hf_version() -> str:
@@ -250,6 +276,77 @@ def wait_health(base_url: str, proc, timeout_s: float, interval: float = 5.0, sl
     return False
 
 
+def health_ok(base_url: str, timeout: float = WATCH_TIMEOUT_S) -> tuple[bool, str]:
+    """(GET <root>/health answered 200 within timeout, what it answered)."""
+    try:
+        with urllib.request.urlopen(mf.root_url(base_url) + "/health", timeout=timeout) as r:
+            return r.status == 200, f"HTTP {r.status}"
+    except urllib.error.HTTPError as e:
+        return False, f"HTTP {e.code}"
+    except Exception as e:  # noqa: BLE001 - no answer: refused, reset, timeout
+        return False, f"{type(e).__name__}: {e}"[:200]
+
+
+class LogScanner:
+    """New lines of the engine log (from the offset of this launch) containing a crash marker."""
+
+    def __init__(self, path: str | None, markers: tuple[str, ...]):
+        self.path, self.markers = path, tuple(markers)
+        self.offset = self._size()
+        self._rest = b""
+
+    def _size(self) -> int:
+        try:
+            return os.path.getsize(self.path) if self.path else 0
+        except OSError:
+            return 0
+
+    def scan(self) -> str | None:
+        """The first new line with a marker, or None."""
+        if not self.path or not self.markers:
+            return None
+        try:
+            with open(self.path, "rb") as f:
+                f.seek(self.offset)
+                data = f.read()
+        except OSError:
+            return None
+        self.offset += len(data)
+        lines = (self._rest + data).split(b"\n")
+        self._rest = lines.pop()[-4096:]  # an unfinished last line: completed by the next read
+        for raw in lines:
+            line = raw.decode("utf-8", "replace")
+            if any(m in line for m in self.markers):
+                return line.strip()[:300]
+        return None
+
+
+def watch(proc, base_url: str, scanner: LogScanner, state: dict, *, interval: float, failures: int,
+          timeout: float = WATCH_TIMEOUT_S, health=health_ok) -> str | None:
+    """Wait while the engine runs. Returns the reason the watchdog gave up on it (None: the process exited, or a
+    stop was requested). interval <= 0: no watchdog (wait for the process only)."""
+    fails, last = 0, ""
+    next_check = time.monotonic() + interval
+    while proc.poll() is None and not state["stop"]:
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=min(1.0, interval) if interval > 0 else 1.0)
+        if interval <= 0 or proc.poll() is not None or state["stop"] or time.monotonic() < next_check:
+            continue
+        next_check = time.monotonic() + interval
+        hit = scanner.scan()
+        if hit:
+            return f"engine log: {hit}"
+        ok, what = health(base_url, timeout)
+        if ok:
+            fails = 0
+            continue
+        fails, last = fails + 1, what
+        print(f"[serve] watchdog: /health failed ({what}), {fails}/{failures} in a row", file=sys.stderr, flush=True)
+        if fails >= failures:
+            return f"/health failed {fails} times in a row (last: {last})"
+    return None
+
+
 def _kill(proc, grace: float = 30.0) -> None:
     if proc is None or proc.poll() is not None:
         return
@@ -277,10 +374,17 @@ def identity_changes(first: dict, now: dict) -> list[str]:
 
 def supervise(manifest: dict, ctx: dict, path: str, *, health_timeout: float = 3600.0, restart_delay: float = 10.0,
               max_failed_starts: int = 3, recheck_engine=None, log_path: str | None = None, popen=subprocess.Popen,
-              interval: float = 5.0, max_restarts: int | None = None) -> int:
-    """Run the engine until a signal (0), a fatal identity change after a restart (3) or repeated failed starts (4).
-    recheck_engine() -> engine identity dict, compared after each restart (installed_sha256 + patches)."""
+              interval: float = 5.0, max_restarts: int | None = None, watch_interval: float = WATCH_INTERVAL_S,
+              watch_failures: int = WATCH_FAILURES, watch_timeout: float = WATCH_TIMEOUT_S, kill_grace: float = 30.0) -> int:
+    """Run the engine until a signal (0), a fatal identity change after a restart (3), repeated failed starts (4) or
+    the restart limit (5). recheck_engine() -> engine identity dict, compared after each restart (installed_sha256 +
+    patches). While serving, the watchdog (watch()) restarts an engine whose /health keeps failing or whose log shows
+    a crash marker (watch_interval <= 0: off)."""
     rt = manifest["runtime"]
+    markers = ENGINE_CRASH_MARKERS.get((manifest.get("engine") or {}).get("name"), ())
+    rt["watchdog"] = {"interval_s": watch_interval, "failures": watch_failures, "timeout_s": watch_timeout,
+                      "log_markers": list(markers)} if watch_interval > 0 else {"interval_s": 0, "note": "off"}
+    rt.setdefault("watchdog_restarts", [])
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)  # nothing unrecorded on the engine's import path
     env.update(ctx["env"])
@@ -299,6 +403,9 @@ def supervise(manifest: dict, ctx: dict, path: str, *, health_timeout: float = 3
     failed_starts = launches = 0
     try:
         while not state["stop"]:
+            if log is not subprocess.DEVNULL:
+                log.flush()
+            scanner = LogScanner(log_path, markers)  # this launch's lines only
             proc = popen(ctx["argv"], env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             state["proc"] = proc
             launches += 1
@@ -350,11 +457,17 @@ def supervise(manifest: dict, ctx: dict, path: str, *, health_timeout: float = 3
                 rt["restarts"].append({"at": _now(), "probe": probe.get("sha256") or probe.get("status")})
                 mf.write(path, manifest)
                 print(f"[serve] restarted ({len(rt['restarts'])}); identity unchanged", flush=True)
-            while proc.poll() is None and not state["stop"]:
-                with contextlib.suppress(subprocess.TimeoutExpired):
-                    proc.wait(timeout=1.0)
+            reason = watch(proc, rt["base_url"], scanner, state, interval=watch_interval, failures=watch_failures,
+                           timeout=watch_timeout)
             if state["stop"]:
                 break
+            if reason is not None:
+                print(f"[serve] watchdog: {reason}; killing the engine (process group {proc.pid}) and restarting",
+                      file=sys.stderr, flush=True)
+                _kill(proc, grace=kill_grace)
+                rt["watchdog_restarts"].append({"at": _now(), "reason": reason})
+                rt["events"].append({"at": _now(), "event": f"watchdog restart: {reason}"})
+                mf.write(path, manifest)
             rt["events"].append({"at": _now(), "event": f"engine exited ({proc.returncode})"})
             if max_restarts is not None and launches > max_restarts:
                 rt["status"] = "stopped: restart limit"
@@ -396,6 +509,11 @@ def add_parser(sub) -> None:
     a("--manifest", help="manifest path (default <jobs_dir>/_servers/<id>.json)")
     a("-o", "--jobs-dir")
     a("--health-timeout", type=float, default=3600.0)
+    a("--watch-interval", type=float, default=WATCH_INTERVAL_S,
+      help=f"seconds between watchdog /health checks while serving (default {WATCH_INTERVAL_S:g}; 0 = off)")
+    a("--watch-failures", type=int, default=WATCH_FAILURES,
+      help=f"consecutive failed /health checks (non-200 or no answer in {WATCH_TIMEOUT_S:g} s) that restart the engine "
+           f"(default {WATCH_FAILURES})")
     a("--log", help="engine log file (default next to the manifest)")
     a("--dry-run", action="store_true", help="build and print the manifest without launching")
     p.epilog = "Extra engine args follow `--` (recorded in the manifest's argv)."
@@ -410,7 +528,7 @@ def split_extra(argv: list[str]) -> tuple[list[str], list[str]]:
 
 
 CONFIG_KEYS = ("engine_venv", "patch", "chat_template", "model_arg", "port", "host", "dp", "tp", "batch", "deterministic",
-               "manifest", "jobs_dir", "health_timeout", "log", "extra")
+               "manifest", "jobs_dir", "health_timeout", "log", "extra", "watch_interval", "watch_failures")
 
 
 def apply_config(args) -> None:
@@ -423,7 +541,8 @@ def apply_config(args) -> None:
     unknown = set(y) - set(CONFIG_KEYS)
     if unknown:
         raise ServeError(f"{args.config}: unknown keys {sorted(unknown)} (known: {', '.join(CONFIG_KEYS)})")
-    defaults = {"host": "0.0.0.0", "dp": 1, "tp": 1, "batch": 1, "health_timeout": 3600.0}
+    defaults = {"host": "0.0.0.0", "dp": 1, "tp": 1, "batch": 1, "health_timeout": 3600.0,
+                "watch_interval": WATCH_INTERVAL_S, "watch_failures": WATCH_FAILURES}
     for k, v in y.items():
         cur = getattr(args, k, None)
         if cur in (None, False, [], defaults.get(k)):  # CLI options override the file
@@ -471,6 +590,7 @@ def cmd_serve(args) -> int:
             e["version"] = _hf_version()
         return e
 
-    return supervise(manifest, ctx, path, health_timeout=args.health_timeout, recheck_engine=recheck, log_path=rt["log"])
+    return supervise(manifest, ctx, path, health_timeout=args.health_timeout, recheck_engine=recheck, log_path=rt["log"],
+                     watch_interval=args.watch_interval, watch_failures=args.watch_failures)
 
 

@@ -27,6 +27,11 @@ args = sys.argv[1:]
 port = int(args[args.index("--port") + 1])
 model = args[args.index("--model-path") + 1]
 state = os.environ["FAKE_STATE"]
+with open(os.path.join(state, "env.json"), "w") as f:
+    json.dump({"PATH": os.environ.get("PATH"), "pid": os.getpid()}, f)
+for name in ("unhealthy", "marker"):  # a fresh process is healthy
+    if os.path.exists(os.path.join(state, name)):
+        os.remove(os.path.join(state, name))
 
 
 def tokens():
@@ -44,7 +49,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self._send(200, {})
+            self._send(503 if os.path.exists(os.path.join(state, "unhealthy")) else 200, {})
         elif self.path == "/v1/models":
             self._send(200, {"data": [{"id": model, "root": model, "max_model_len": 4096}]})
         elif self.path == "/server_info":
@@ -72,6 +77,10 @@ def crash_watch():
         if os.path.exists(p):
             os.remove(p)
             os._exit(1)
+        p = os.path.join(state, "marker")
+        if os.path.exists(p):  # a scheduler dies, the HTTP process stays up and healthy
+            os.remove(p)
+            print("[2026-11-03 02:20:03 DP5] Scheduler hit an exception: Traceback (most recent call last):", flush=True)
 
 
 threading.Thread(target=crash_watch, daemon=True).start()
@@ -328,6 +337,108 @@ def test_restart_with_same_identity_is_recorded(engine_venv, hf_cache, tmp_path,
     th.join(timeout=60)
     m = mf.read(path)
     assert out["rc"] == 5 and len(m["runtime"]["restarts"]) == 1 and mf.digest(m) == first
+
+
+def _wait(cond, timeout=60.0):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if cond():
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _pid(state):
+    return json.loads((state / "env.json").read_text())["pid"]
+
+
+WATCH = {"watch_interval": 0.1, "watch_failures": 2, "watch_timeout": 2.0, "kill_grace": 5.0}
+
+
+def test_engine_venv_bin_first_on_path(engine_venv, hf_cache, tmp_path, monkeypatch):
+    """ninja and the other tools of the engine venv are found by the engine (JIT kernel builds); the manifest records
+    the placeholder form, not this machine's PATH."""
+    monkeypatch.setenv("PATH", "/usr/local/bin" + os.pathsep + "/usr/bin")
+    monkeypatch.setattr(stack, "hf_cache_dir", lambda: hf_cache)
+    m, ctx = serve.build_manifest(_args("sglang", "google/gemma-4-12B-it"), venv=engine_venv, run_hardware=_no_gpu)
+    assert m["launch"]["env_set"]["PATH"] == "<engine_venv>/bin" + os.pathsep + "<inherited>"
+    assert ctx["env"]["PATH"] == os.pathsep.join([os.path.join(engine_venv, "bin"), "/usr/local/bin", "/usr/bin"])
+    # a venv nested as <dir>/.venv (vllm_venv layout): its bin/ is the one put first
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    os.symlink(engine_venv, nested / ".venv")
+    _, ctx2 = serve.build_manifest(_args("sglang", "google/gemma-4-12B-it"), venv=str(nested), run_hardware=_no_gpu)
+    assert ctx2["env"]["PATH"].split(os.pathsep)[0] == str(nested / ".venv" / "bin")
+    # the launched engine gets it
+    state, _path, th, out = _start(engine_venv, hf_cache, tmp_path, monkeypatch, [1], max_restarts=0)
+    assert json.loads((state / "env.json").read_text())["PATH"].split(os.pathsep)[0] == os.path.join(engine_venv, "bin")
+    (state / "crash").write_text("")
+    th.join(timeout=60)
+    assert out["rc"] == 5
+
+
+def test_watchdog_restarts_on_failing_health(engine_venv, hf_cache, tmp_path, monkeypatch):
+    log = str(tmp_path / "engine.log")
+    state, path, th, out = _start(engine_venv, hf_cache, tmp_path, monkeypatch, [1, 2], max_restarts=1, log_path=log,
+                                  **WATCH)
+    first, pid = mf.digest(mf.read(path)), _pid(state)
+    (state / "unhealthy").write_text("")  # the HTTP process answers, but 503
+    assert _wait(lambda: mf.read(path)["runtime"]["restarts"])
+    m = mf.read(path)
+    (w,) = m["runtime"]["watchdog_restarts"]
+    assert w["reason"] == "/health failed 2 times in a row (last: HTTP 503)" and w["at"]
+    assert _pid(state) != pid and mf.digest(m) == first  # restarted through the loop; identity re-checked, unchanged
+    assert any(e["event"].startswith("watchdog restart:") for e in m["runtime"]["events"])
+    assert m["runtime"]["watchdog"]["log_markers"] == ["Scheduler hit an exception"]
+    (state / "crash").write_text("")
+    th.join(timeout=60)
+    assert out["rc"] == 5
+
+
+def test_watchdog_restarts_on_log_marker(engine_venv, hf_cache, tmp_path, monkeypatch):
+    """A scheduler crash in the engine log restarts at once, although /health still answers 200."""
+    log = str(tmp_path / "engine.log")
+    state, path, th, out = _start(engine_venv, hf_cache, tmp_path, monkeypatch, [1, 2], max_restarts=1, log_path=log,
+                                  **{**WATCH, "watch_failures": 1000})
+    pid = _pid(state)
+    (state / "marker").write_text("")
+    assert _wait(lambda: mf.read(path)["runtime"]["restarts"])
+    (w,) = mf.read(path)["runtime"]["watchdog_restarts"]
+    assert w["reason"].startswith("engine log: ") and "DP5] Scheduler hit an exception" in w["reason"]
+    assert _pid(state) != pid
+    time.sleep(0.5)  # the marker of the first launch is not matched again by the new one
+    assert len(mf.read(path)["runtime"]["watchdog_restarts"]) == 1
+    (state / "crash").write_text("")
+    th.join(timeout=60)
+    assert out["rc"] == 5
+
+
+def test_watchdog_leaves_healthy_server_alone(engine_venv, hf_cache, tmp_path, monkeypatch):
+    log = str(tmp_path / "engine.log")
+    state, path, th, out = _start(engine_venv, hf_cache, tmp_path, monkeypatch, [1], max_restarts=0, log_path=log, **WATCH)
+    pid = _pid(state)
+    time.sleep(1.5)  # ~15 watchdog checks
+    m = mf.read(path)
+    assert m["runtime"]["status"] == "serving" and _pid(state) == pid and m["runtime"]["watchdog_restarts"] == []
+    (state / "crash").write_text("")
+    th.join(timeout=60)
+    m = mf.read(path)
+    assert out["rc"] == 5 and m["runtime"]["watchdog_restarts"] == []
+    assert [e["event"] for e in m["runtime"]["events"]] == ["engine exited (1)"]
+
+
+def test_log_scanner_reads_new_complete_lines(tmp_path):
+    p = tmp_path / "e.log"
+    p.write_text("[DP0] Scheduler hit an exception: old launch\n")
+    sc = serve.LogScanner(str(p), ("Scheduler hit an exception",))
+    assert sc.scan() is None  # only lines written after the launch
+    with open(p, "a") as f:
+        f.write("ok\n[DP1] Scheduler hit an ")
+    assert sc.scan() is None  # the unfinished line is kept
+    with open(p, "a") as f:
+        f.write("exception: boom\n")
+    assert sc.scan() == "[DP1] Scheduler hit an exception: boom"
+    assert serve.LogScanner(str(tmp_path / "missing.log"), ("x",)).scan() is None
 
 
 # ---------------------------------------------------------------- client side

@@ -59,6 +59,15 @@ PROVIDERS: dict[str, dict] = {
 }
 
 
+# Per-request timeout of the HTTP client (SamplerSpec.request_timeout_s, `--request-timeout-s`). Served engines: long
+# enough for the longest generation (a 128k-token reasoning trace at a slow decode rate under full batch load); a dead
+# server is detected by `sem serve`'s watchdog, whose restart drops the connections (connection errors reach the
+# circuit breaker), not by this timeout. APIs: the value used since v0.4. Gemini / Vertex: the SDK's (no client
+# timeout) unless given.
+SERVED_REQUEST_TIMEOUT_S = 6 * 3600.0
+API_REQUEST_TIMEOUT_S = 3600.0
+
+
 # providers whose <PROVIDER>_BASE_URL variable is refused (only --base-url may redirect them)
 PUBLIC_APIS = ("openrouter", "openai", "gemini")
 # google-genai reads these from the environment and would switch the backend / endpoint behind our back
@@ -119,6 +128,9 @@ class SamplerSpec:
     max_request_mb: float | None = None
     max_tries: int = 60
     max_rate_limit_tries: int = 600
+    # per-request HTTP timeout (s; None = the SDK's): recorded in the sampler config, runtime-only for the locks
+    # (samplers.base.RUNTIME_FIELDS), like n_concurrent
+    request_timeout_s: float | None = None
     alias: bool = False  # undated / alias model id (presets._alias): lock.json sampler.model_identity "alias"
     seed: str = "on"  # "off": the per-trial seed is not sent (--model-arg seed=off)
     vertex_project: str | None = None  # Vertex AI project / location (--model-arg, else GEMINI_PROJECT_ID / _LOCATION)
@@ -257,7 +269,8 @@ def apply_model_args(spec: SamplerSpec, preset: dict, model_args: dict) -> None:
 def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, max_output_tokens: int | None = None,
             temperature: float | None = None, top_p: float | None = None, top_k: int | None = None,
             provider_pin: str | None = None, quantization: str | None = None, model_args: dict | None = None,
-            base_url: str | None = None, api_key_name: str | None = None, api_format: str | None = None) -> SamplerSpec:
+            base_url: str | None = None, api_key_name: str | None = None, api_format: str | None = None,
+            request_timeout_s: float | None = None) -> SamplerSpec:
     """The full sampler spec of a slug: preset < --model-arg < CLI options; key / base-url variable names resolved.
     Provider / model defaults (OpenRouter default_parameters, generation_config.json, Gemini models.get) and the
     endpoint maximum of max_output_tokens are resolved later, at Sampler.prepare()."""
@@ -310,6 +323,14 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
         spec.provider_pin = provider_pin.split(",")
     if quantization:
         spec.quant = quantization.split(",")
+    if request_timeout_s is not None:
+        if float(request_timeout_s) <= 0:
+            raise ValueError(f"--request-timeout-s must be positive, got {request_timeout_s}")
+        spec.request_timeout_s = float(request_timeout_s)
+    elif pinfo.get("served"):
+        spec.request_timeout_s = SERVED_REQUEST_TIMEOUT_S
+    elif spec.api_format != GOOGLE:
+        spec.request_timeout_s = API_REQUEST_TIMEOUT_S
     default_key = pinfo.get("key_var", f"{provider.upper()}_API_KEY")
     spec.api_key_name = api_key_name or key_var or default_key or None
     env_url = url_var or pinfo.get("base_url_var") or f"{provider.upper()}_BASE_URL"
