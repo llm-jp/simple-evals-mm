@@ -56,7 +56,7 @@ class Context:
     commit: str | None
     verifier_locks: dict  # name -> the new job's verifier lock (dataset_mod.verifier_lock)
     judge_config: dict | None
-    n_attempts: int
+    n_attempts: dict | int  # {dataset: attempts} (an int: the same for every dataset)
     generate_only: bool = False
 
 
@@ -114,7 +114,8 @@ def plan(src: store_mod.JobStore, ctx: Context, changed_datasets=None) -> dict:
             ver_reason = None if vmeta.get("verifier_lock") == want else \
                 "another verifier lock (judge identity / settings, dataset args or verifier dependencies)"
         src_trials = {k: {t.task_name: t for t in src.read_trials(name, k)} for k in src.attempts(name)}
-        for k in range(1, ctx.n_attempts + 1):
+        n = ctx.n_attempts.get(name, 1) if isinstance(ctx.n_attempts, dict) else ctx.n_attempts
+        for k in range(1, n + 1):
             for task in ctx.tasks[name]:
                 t = src_trials.get(k, {}).get(task.id)
                 if commit_error:
