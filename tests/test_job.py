@@ -390,3 +390,17 @@ def test_subsample_is_seeded_and_keeps_dataset_order():
     a, b = subsample(items, 10), subsample(items, 10)
     assert a == b and a == sorted(a) and len(set(a)) == 10 and a != items[:10]
     assert subsample(items, None) is items and subsample(items, 0) is items and subsample(items, 500) is items
+
+
+def test_trials_with_unicode_line_separators_read_back(job_env):
+    """A model answer containing U+2028 / U+2029 / \\x85 / \\x0c / \\x1e is stored raw (ensure_ascii=False); reading the
+    trials file splits on "\\n" only, so each trial stays one record and a resume reuses them (str.splitlines() once cut
+    such a line in two and every resume of the job crashed with JSONDecodeError)."""
+    s = job_env
+    s["sampler"].reply = lambda q: "4 x y\x85z\x0cw\x1ev"
+    assert s["run"]() == 0
+    st = s["store"]()
+    trials = st.read_trials("arith", 1)
+    assert len(trials) == 3 and all(" " in t.trajectory.final_text for t in trials)
+    s["sampler"].calls = []
+    assert s["run"]() == 0 and s["sampler"].calls == []  # resume reads them back: nothing regenerated
