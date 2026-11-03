@@ -126,6 +126,11 @@ class Dataset:
     verifies_failures: bool = False
     metrics = metrics_mod.DEFAULT  # metrics.mean() + metrics.category_mean(); applied to each attempt's results
     verify_threads: int = 8  # concurrent judge calls
+    # task.data keys holding file paths (images, documents, problem files): "image", "images" (a path or a list of
+    # paths), "turns.*.images" ("*" = every list element). task_checksum hashes these files by content, resolving
+    # relative paths against the data root (sources.DATA_ROOT, not the working directory); a missing file raises. Any
+    # other string is hashed as text: `sem datasets lock` refuses task data with an undeclared existing file path.
+    file_fields: ClassVar[tuple[str, ...]] = ()
     # the --dataset-arg keys this dataset reads (name -> type); any other key is refused
     accepted_args: ClassVar[dict] = {}
     # third-party distributions the verifier runs (their installed version / git commit go into verifier_lock: our own
