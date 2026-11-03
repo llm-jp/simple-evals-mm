@@ -2,6 +2,9 @@
 
 The commit pins our code; this file pins the data the code reads. Per registered dataset:
 
+Entry names: the dataset name, or `name[key=value,...]` for a dataset arg that selects other data (Dataset.data_args,
+e.g. `mathvision[split=test]`): that data has its own n_tasks / tasks_sha256.
+
     revision       the dataset's pinned revision (dataset code)
     n_tasks        number of tasks load() returns (ALL tasks: before -l / -t / -i / -x and the dataset's own subset())
     tasks_sha256   dataset.tasks_sha256 over the sorted (task_id, task_checksum) pairs of those tasks (the job lock's
@@ -155,6 +158,16 @@ def digest(tasks, file_fields=()) -> dict:
     return {"n_tasks": len(tasks), "tasks_sha256": tasks_sha256((t.id, task_checksum(t, file_fields)) for t in tasks)}
 
 
+def lock_key(ds) -> str:
+    """The entry name of `ds`: the dataset name, or `name[key=value]` for a non-default data arg (MathVision's split)."""
+    return getattr(ds, "lock_key", None) or ds.name
+
+
+def lock_command(ds) -> str:
+    key = lock_key(ds)
+    return f"`sem datasets lock -d '{key}'`" if key != ds.name else f"`sem datasets lock -d {ds.name}`"
+
+
 def is_default(ds) -> bool:
     """The dataset at its class-default revision (no `@ref`, no revision dataset arg): the lock applies."""
     return ds.ref is None and ds.revision == type(ds).revision
@@ -164,9 +177,11 @@ def compare(ds, got: dict, rec: Recorder | None = None) -> list[dict]:
     """Differences between the loaded data (`got` = digest()) and the lock entry of `ds`, plus the recorded source
     mismatches. [] = matches."""
     problems = list(rec.mismatches) if rec is not None else []
-    e = entry(ds.name)
+    key = lock_key(ds)
+    e = entry(key)
     if e is None:
-        return problems + [{"what": "entry", "note": "no datasets.lock entry (`sem datasets lock -d " + ds.name + "`)"}]
+        which = "" if key == ds.name else f" {key}"
+        return problems + [{"what": "entry", "note": f"no datasets.lock entry{which} ({lock_command(ds)})"}]
     if "missing" in e:
         return problems + [{"what": "entry", "note": f"no datasets.lock entry: {e['missing']}"}]
     for k, v in (("revision", ds.revision), ("n_tasks", got["n_tasks"]), ("tasks_sha256", got["tasks_sha256"])):
@@ -206,8 +221,10 @@ def preflight(ds, allow: bool = False) -> list[str]:
     """Before loading: a default-revision dataset needs a usable entry (else the job would be refused after load)."""
     if allow or not is_default(ds):
         return []
-    e = entry(ds.name)
+    key = lock_key(ds)
+    e = entry(key)
     if e is None or "missing" in e:
         missing = f": {e['missing']}" if e else ""
-        return [f"{ds.name}: no datasets.lock entry{missing} (--allow-data-mismatch runs it anyway and records it)"]
+        which = "" if key == ds.name else f" {key}"
+        return [f"{ds.name}: no datasets.lock entry{which}{missing} (--allow-data-mismatch runs it anyway and records it)"]
     return []

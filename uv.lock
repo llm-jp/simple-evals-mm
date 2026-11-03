@@ -781,7 +781,7 @@ wheels = [
 [[package]]
 name = "ifbench"
 version = "0.2.0"
-source = { git = "https://github.com/allenai/IFBench.git?rev=1c40f0c10d9b5c5c2f10a175a28007ebb64f7f4d#1c40f0c10d9b5c5c2f10a175a28007ebb64f7f4d" }
+source = { git = "https://github.com/allenai/IFBench.git?rev=cd189a9c2889526d8af901d2103fd3e1ffcea6df#cd189a9c2889526d8af901d2103fd3e1ffcea6df" }
 dependencies = [
     { name = "absl-py" },
     { name = "emoji" },
@@ -1986,7 +1986,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.5.0" },
     { name = "google-genai", specifier = ">=1.64.0" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "ifbench", git = "https://github.com/allenai/IFBench.git?rev=1c40f0c10d9b5c5c2f10a175a28007ebb64f7f4d" },
+    { name = "ifbench", git = "https://github.com/allenai/IFBench.git?rev=cd189a9c2889526d8af901d2103fd3e1ffcea6df" },
     { name = "immutabledict", specifier = ">=4.2" },
     { name = "langdetect", specifier = ">=1.0.9" },
     { name = "latex2sympy2-extended", specifier = ">=1.11.0" },

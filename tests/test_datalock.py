@@ -212,6 +212,39 @@ def test_datasets_lock_writes_and_checks(monkeypatch, capsys):
     capsys.readouterr()
 
 
+def test_data_arg_has_its_own_entry(monkeypatch, capsys):
+    """A data arg with a non-default value (MathVision's split) is locked and checked as `name[key=value]`: written by
+    `sem datasets lock -d name --dataset-arg name.key=value` (or `-d 'name[key=value]'`), rechecked with all datasets."""
+    from typing import ClassVar
+
+    from simple_evals_mm import cli
+
+    class Split(Arith):
+        name = "splitty"
+        accepted_args: ClassVar[dict] = {"split": str}
+        data_args: ClassVar[dict] = {"split": "small"}
+
+        def load(self):
+            return super().load()[: 1 if self.args.get("split", "small") == "small" else 3]
+
+    monkeypatch.setitem(dataset_mod.DATASETS, "splitty", Split)
+    assert cli.main(["datasets", "lock", "-d", "splitty"]) == 0
+    assert cli.main(["datasets", "lock", "-d", "splitty", "--dataset-arg", "splitty.split=big"]) == 0
+    lock = json.loads(datalock.LOCK_PATH.read_text())["datasets"]
+    assert lock["splitty"]["n_tasks"] == 1 and lock["splitty[split=big]"]["n_tasks"] == 3
+    big = Split(split="big")
+    assert datalock.check_dataset(big, big.load()) == {"data_lock": "ok"}
+    assert datalock.check_dataset(Split(split="small"), Split().load()) == {"data_lock": "ok"}  # the default: plain entry
+    assert cli.main(["datasets", "lock", "-d", "splitty[split=big]", "--check"]) == 0
+    monkeypatch.setattr(dataset_mod, "DATASETS", {"splitty": Split})
+    rows, code = dataset_admin.lock(None, check=True, shared=False)  # all = registered + keyed entries
+    assert code == 0 and [r["dataset"] for r in rows] == ["splitty", "splitty[split=big]"]
+    _lock({"splitty": lock["splitty"]})
+    with pytest.raises(datalock.DataMismatch, match=r"no datasets.lock entry splitty\[split=big\]"):
+        datalock.check_dataset(big, big.load())
+    capsys.readouterr()
+
+
 def test_upstream_check_of_locked_sources():
     big = "https://example.org/big.tar"
     _lock({"x": {"sources": [_src(b"small"), {"url": big, "sha256": "f" * 64, "size": 10**9},
@@ -274,6 +307,10 @@ def test_committed_lock_covers_every_registered_dataset():
     assert path.parent.name == "simple_evals_mm" and path.exists()
     lock = json.loads(path.read_text())
     assert lock["format"] == datalock.FORMAT
+    for key in lock["datasets"]:  # keyed entries name a registered dataset and its data args
+        name, args = dataset_mod.parse_lock_key(key)
+        assert name in dataset_mod.DATASETS and set(args) <= set(dataset_mod.dataset_class(name).data_args), key
+        assert dataset_mod.get_dataset(name, **args).lock_key == key
     for name in dataset_mod.DATASETS:
         e = lock["datasets"].get(name)
         assert e is not None, f"{name}: no datasets.lock entry (`sem datasets lock -d {name}`)"

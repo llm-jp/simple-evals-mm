@@ -20,7 +20,7 @@ dependencies = [
     "langdetect>=1.0.9",
     "nltk>=3.9",
     "immutabledict>=4.2",
-    "ifbench @ git+https://github.com/allenai/IFBench.git@1c40f0c10d9b5c5c2f10a175a28007ebb64f7f4d",
+    "ifbench @ git+https://github.com/allenai/IFBench.git@cd189a9c2889526d8af901d2103fd3e1ffcea6df",
 ]
 
 [project.optional-dependencies]

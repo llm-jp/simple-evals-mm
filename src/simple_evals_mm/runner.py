@@ -50,8 +50,15 @@ BREAKER_CAUSES = (errors.ENDPOINT_UNAVAILABLE,)
 BREAKER_TRIPPED = ("the pinned endpoint is failing; resume later with `sem job resume`, or start a new job with another "
                    "--provider for the unfinished datasets (`sem job show` lists them)")
 
+class JobError(errors.UserError, RuntimeError):
+    pass
+
+
 DEFAULTS: dict = {
-    "model": None, "datasets": [], "job_name": None, "jobs_dir": store_mod.DEFAULT_JOBS_DIR, "n_attempts": 1,
+    "model": None, "datasets": [], "job_name": None, "jobs_dir": store_mod.DEFAULT_JOBS_DIR,
+    # attempts per dataset: None = each dataset's default_attempts; an int (-k) applies to every dataset; a dict
+    # {dataset: n} (job config) sets some, the others keep their default. Resolved to {dataset: n} in config.json
+    "n_attempts": None,
     "n_concurrent": 4, "n_tasks": None, "task_ids": None, "include": None, "exclude": None,
     "preset": None, "effort": None, "max_output_tokens": None, "temperature": None, "top_p": None, "top_k": None, "provider": None,
     "quantization": None, "model_args": {}, "dataset_args": {}, "agent": "direct", "agent_args": {}, "env": None,
@@ -74,6 +81,26 @@ DEFAULTS: dict = {
     "retry": {"max_retries": 2, "include_causes": None, "exclude_causes": [], "abort_after_consecutive": 20,
               "connection_budget_s": 1200},
 }
+
+
+def attempts_for(n_attempts, name: str, ds=None) -> int:
+    """The attempts of dataset `name` under the job's n_attempts (None / int / {dataset: n}; see DEFAULTS); without a
+    value the dataset's default_attempts (`ds` None: the registered class)."""
+    n = n_attempts.get(name) if isinstance(n_attempts, dict) else n_attempts
+    if n is None:
+        n = getattr(ds if ds is not None else dataset_mod.dataset_class(name), "default_attempts", 1)
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        raise JobError(f"n_attempts for {name}: expected a positive integer, got {n!r}")
+    return n
+
+
+def resolve_attempts(n_attempts, datasets: dict) -> dict[str, int]:
+    """{dataset: attempts} for the job's datasets (the form config.json records and resume compares)."""
+    if isinstance(n_attempts, dict):
+        unknown = sorted(set(n_attempts) - set(datasets))
+        if unknown:
+            raise JobError(f"n_attempts names datasets the job does not run: {', '.join(unknown)}")
+    return {name: attempts_for(n_attempts, name, ds) for name, ds in datasets.items()}
 
 
 def should_retry(cause: str | None, retry: dict) -> bool:
@@ -107,10 +134,6 @@ def load_checked(name: str, ds, allow: bool = False) -> tuple[list, dict]:
     with datalock.track(name, allow=allow) as rec:
         tasks = ds.load()
     return tasks, datalock.check_dataset(ds, tasks, rec, allow)
-
-
-class JobError(errors.UserError, RuntimeError):
-    pass
 
 
 @dataclass
@@ -248,8 +271,9 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
     if budget is not None and hasattr(sampler, "connection_budget_s"):
         sampler.connection_budget_s = float(budget)
     agent = get_agent(cfg["agent"], **(cfg.get("agent_args") or {}))
-    job = Job(cfg=cfg, store=st, lock={}, sampler=sampler, agent=agent, server_manifest=manifest)
     dsets = load_datasets(cfg)
+    cfg = {**cfg, "n_attempts": resolve_attempts(cfg.get("n_attempts"), dsets)}  # recorded per dataset
+    job = Job(cfg=cfg, store=st, lock={}, sampler=sampler, agent=agent, server_manifest=manifest)
     judge_spec = registry.resolve(cfg["judge_model"]) if any(d.needs_judge for d in dsets.values()) else None
     judge = registry.make_sampler(judge_spec) if judge_spec is not None else None
     if not cfg.get("skip_preflight"):
@@ -307,6 +331,10 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
 
     if st.exists():
         old_cfg, old_lock = st.read_config(), st.read_lock()
+        try:  # a job written with one n_attempts for every dataset compares as that number per dataset
+            old_cfg = {**old_cfg, "n_attempts": resolve_attempts(old_cfg.get("n_attempts"), dsets)}
+        except JobError:
+            pass  # names other datasets: the diff below refuses the resume
         problems = diff_dicts(_comparable(old_cfg), _comparable(cfg)) + diff_dicts(_lock_digest(old_lock), _lock_digest(lock))
         for name in dsets:
             old_ds = (old_lock.get("datasets") or {}).get(name) or {}
@@ -379,7 +407,7 @@ def derive_context(job: Job, lock: dict) -> derive.Context:
                           sampler_config=job.sampler_config, server_digest=(lock.get("server") or {}).get("digest"),
                           commit=(lock.get("code") or {}).get("commit"),
                           verifier_locks={n: d["verifier_lock"] for n, d in lock["datasets"].items()},
-                          judge_config=job.judge_config, n_attempts=job.cfg["n_attempts"],
+                          judge_config=job.judge_config, n_attempts=dict(job.cfg["n_attempts"]),
                           generate_only=bool(job.cfg.get("generate_only")))
 
 
@@ -441,7 +469,7 @@ def run_trials(job: Job) -> None:
     st, todo, remaining = job.store, [], {}
     for name, tasks in job.tasks.items():
         ds_meta = job.lock["datasets"][name]
-        for k in range(1, job.cfg["n_attempts"] + 1):
+        for k in range(1, attempts_for(job.cfg["n_attempts"], name, job.datasets.get(name)) + 1):
             if st.is_complete(name, k):
                 continue
             done = {t.task_name for t in st.read_trials(name, k)}
@@ -600,6 +628,15 @@ def verify_job(st: store_mod.JobStore, datasets: list[str] | None = None, judge_
 
 
 # ---------------------------------------------------------------- summary
+def planned_attempts(cfg: dict, name: str, ds=None) -> int | None:
+    """The attempts the job config plans for `name` (a job written before per-dataset attempts holds one int for all);
+    None when it cannot be resolved (no dataset class)."""
+    try:
+        return attempts_for(cfg.get("n_attempts"), name, ds)
+    except Exception:  # noqa: BLE001 - a summary must not need the dataset class
+        return None
+
+
 def summarize_job(st: store_mod.JobStore) -> dict:
     cfg = st.read_config()
     try:
@@ -620,12 +657,13 @@ def summarize_job(st: store_mod.JobStore) -> dict:
         judge_cost = [(r.judge or {}).get("cost_usd") for rs in results.values() for r in rs]
         out[name] = {
             "verification_id": vid,
+            "n_attempts": planned_attempts(cfg, name, ds),
             "attempts": {f"a{k}": a for k, a in per_attempt.items()},
             **dataset_mod.summarize(list(per_attempt.values())),
             "trial_files": {f"a{k}": ("complete" if st.is_complete(name, k) else "incomplete") for k in st.attempts(name)},
             # trials written / tasks selected, per attempt (the attempts the job asks for, written or not)
             "trials": {f"a{k}": {"done": st.count_trials(name, k), "total": (lock_ds.get(name) or {}).get("n_tasks")}
-                       for k in sorted(set(st.attempts(name)) | set(range(1, int(cfg.get("n_attempts") or 1) + 1)))},
+                       for k in sorted(set(st.attempts(name)) | set(range(1, (planned_attempts(cfg, name, ds) or 1) + 1)))},
             "model_cost_usd": round(sum(c for c in model_cost if c is not None), 6) if any(c is not None for c in model_cost) else None,
             "judge_cost_usd": round(sum(c for c in judge_cost if c is not None), 6) if any(c is not None for c in judge_cost) else None,
         }
