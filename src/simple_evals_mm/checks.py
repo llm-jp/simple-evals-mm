@@ -6,7 +6,9 @@
     the project itself is skipped), and git-sourced ones the locked commit (direct_url.json commit_id);
   * the installed files of the client and verifier libraries (RECORD_VERIFIED) match their wheel RECORD (sha256 of
     every entry): an edited site-packages file is a failure;
-  * commit + package version (+ whether the install is editable) + the Python version and platform;
+  * commit + `git describe --tags --long` + package version (+ whether the install is editable) + the Python version
+    and platform; the installed version (from the git tags, hatch-vcs) must name HEAD: its +g<hash> is HEAD's, or on
+    an exactly tagged commit it equals the tag (a stale editable install after `uv run --no-sync` is refused);
   * eager import of every simple_evals_mm module reachable from v0.5 (a failure is a start-check failure) and of the
     third-party verifier libraries; package resources are read at import, so later edits or pulls do not change a
     running process.
@@ -32,8 +34,8 @@ PACKAGE = "simple_evals_mm"
 PROJECT = "simple-evals-mm"
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# modules not imported eagerly: the HF server and its backends pull torch / transformers / fastapi (seconds of import
-# time and GPU-side state) and run in the server process, never in a job
+# modules not imported eagerly: the HF server and its backends pull torch / transformers (seconds of import time and
+# GPU-side state; the optional `hf-server` extra, often not installed) and run in the server process, never in a job
 SKIP_IMPORT = (
     "simple_evals_mm.serving.hf_server",
     "simple_evals_mm.serving.hf_backends",
@@ -51,6 +53,20 @@ RECORD_VERIFIED = ("openai", "google-genai", "httpx", "pillow", "datasets", "hug
 # fixed for the process: "module:function"
 EXTRA_IMPORTS = ("ifbench.instructions_registry", "langdetect")
 LOADERS = ("simple_evals_mm.tasks.ifbench:_verifiers",)
+
+
+# optional extras: name -> the distributions it installs that the start record reports (installed or not). Jobs never
+# need them; their modules are in SKIP_IMPORT, so a venv without the extra passes the start checks.
+EXTRAS = {"hf-server": ("torch", "transformers", "accelerate", "timm", "torchvision", "sentencepiece", "protobuf")}
+
+
+def extras_info() -> dict:
+    """{extra: {"installed": bool, "missing": [...]}}: whether each optional extra's distributions are installed."""
+    out = {}
+    for extra, dists in EXTRAS.items():
+        missing = [d for d in dists if dist_identity(d)["version"] is None]
+        out[extra] = {"installed": not missing, "missing": missing}
+    return out
 
 
 # set by cli.load_env: the .env names exported / ignored (names only; recorded in lock.json sessions)
@@ -146,6 +162,50 @@ def package_info() -> dict:
     except md.PackageNotFoundError:
         version, editable = None, None
     return {"version": version, "editable": editable}
+
+
+def git_describe(repo: str) -> str | None:
+    """`git describe --tags --long` (v0.4.0-122-ga56670f), None without a tag."""
+    try:
+        return _git(repo, "describe", "--tags", "--long").strip() or None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+_LOCAL_HASH = re.compile(r"^g([0-9a-f]{4,40})$")
+
+
+def version_check(repo: str, version: str | None, head: str | None = None) -> str | None:
+    """The problem with the installed package version, or None. The version comes from the git tags (hatch-vcs,
+    pyproject.toml): between tags it carries the commit it was built at (0.5.0.dev3+ga56670f95[.d20261103]); an editable
+    install whose +g<hash> is not HEAD is stale (the metadata was built at another commit, e.g. `uv run --no-sync` after
+    a pull). On an exactly tagged commit the version has no +g<hash>: it must then equal the tag."""
+    if not version:
+        return f"{PROJECT} is not installed (run `uv sync --frozen`)"
+    head = head or _git(repo, "rev-parse", "HEAD").strip()
+    try:
+        from packaging.version import InvalidVersion, Version
+
+        v = Version(version)
+    except (ImportError, InvalidVersion):
+        return f"installed version {version!r} is not a PEP 440 version"
+    built = next((m.group(1) for part in (v.local or "").split(".") if (m := _LOCAL_HASH.match(part))), None)
+    stale = "(run `uv sync --frozen`; `uv run --no-sync` keeps a stale editable install)"
+    if built is not None:
+        if not head.startswith(built):
+            return f"installed version {version} was built at commit {built}, HEAD is {head[:12]} {stale}"
+        return None
+    try:
+        tag = _git(repo, "describe", "--tags", "--exact-match", "HEAD").strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return f"installed version {version} names no commit and HEAD {head[:12]} is not tagged {stale}"
+    try:
+        tagged = Version(tag.removeprefix("v"))
+    except InvalidVersion:
+        return f"HEAD is tagged {tag!r}, not a version tag; installed version {version}"
+    if tagged.public != v.public:
+        return f"installed version {version} differs from the tag {tag} of HEAD {stale}"
+    return None
 
 
 def dist_identity(name: str) -> dict:
@@ -247,19 +307,23 @@ def eager_import(skip: tuple[str, ...] = SKIP_IMPORT) -> dict:
             getattr(importlib.import_module(mod), fn)()
         except Exception as e:  # noqa: BLE001
             failed[ref] = f"{type(e).__name__}: {e}"[:200]
-    _IMPORTED = {"imported": imported, "skipped": skipped, "failed": failed}
+    _IMPORTED = {"imported": imported, "skipped": skipped, "failed": failed, "extras": extras_info()}
     return _IMPORTED
 
 
 def start_checks(allow_dirty: bool = False, repo: str | None = None, lock_path: str | None = None,
-                 package_dir: str = PACKAGE_DIR, do_import: bool = True, verify_record: bool = True) -> dict:
+                 package_dir: str = PACKAGE_DIR, do_import: bool = True, verify_record: bool = True,
+                 version: str | None = None) -> dict:
     """Run every start check; returns the lock.json `code` section. Raises CheckError on a dirty tree, a failed lock
-    check, installed files that differ from their RECORD or a failed eager import unless allow_dirty (then the job is
-    marked dirty, the problems are recorded and the diff is returned under "diff")."""
+    check, installed files that differ from their RECORD, a stale installed version (its +g<hash> is not HEAD) or a
+    failed eager import unless allow_dirty (then the job is marked dirty, the problems are recorded and the diff is
+    returned under "diff"). `version`: the installed package version to check (default: the installed metadata)."""
     # import first: what this process runs is then what the clean-tree check below sees (later edits cannot matter)
     imports = eager_import() if do_import else None
     repo = repo or repo_root(package_dir)
-    out: dict = {**package_info(), "commit": None, "dirty": False, "python": python_info()}
+    out: dict = {**package_info(), "commit": None, "describe": None, "dirty": False, "python": python_info()}
+    if version is not None:
+        out["version"] = version
     problems = []
     if imports and imports["failed"]:
         problems.append("modules failed to import:\n  " + "\n  ".join(f"{k}: {v}" for k, v in imports["failed"].items()))
@@ -268,6 +332,11 @@ def start_checks(allow_dirty: bool = False, repo: str | None = None, lock_path: 
     else:
         st = git_state(repo, package_dir)
         out["commit"] = st["commit"]
+        out["describe"] = git_describe(repo)
+        vp = version_check(repo, out["version"], st["commit"])
+        out["version_ok"] = vp is None
+        if vp:
+            problems.append(vp)
         if st["status"]:
             problems.append("uncommitted changes:\n  " + "\n  ".join(st["status"][:20]))
         if st["ignored_py"]:
