@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 from dataclasses import asdict, dataclass, field
 
+from simple_evals_mm.errors import ConfigError, SetupError
 from simple_evals_mm.samplers.presets import (
     DEFAULT_JUDGE,  # noqa: F401 - part of the registry API (registry.DEFAULT_JUDGE)
     FAMILIES,
@@ -77,7 +78,7 @@ GOOGLE_ENV = ("GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_GENAI_USE_ENTERPRISE", "GOOGL
 def check_google_env() -> None:
     bad = [v for v in GOOGLE_ENV if os.environ.get(v) is not None]
     if bad:
-        raise ValueError(f"{', '.join(bad)} set: google-genai would switch the backend / endpoint from the environment. "
+        raise ConfigError(f"{', '.join(bad)} set: google-genai would switch the backend / endpoint from the environment. "
                          f"Unset them (`unset {' '.join(bad)}`, and remove them from .env); choose the backend with the "
                          "slug (gemini/ or vertex/) and the endpoint with --base-url")
 
@@ -162,7 +163,7 @@ class SamplerSpec:
     def api_key(self) -> str | None:
         v = os.environ.get(self.api_key_name or "")
         if not v and self.api_key_required:
-            raise RuntimeError(f"{self.api_key_name} is not set (needed for provider {self.provider})")
+            raise SetupError(f"{self.api_key_name} is not set (needed for provider {self.provider})")
         return v or "EMPTY"
 
     def resolution(self) -> dict:
@@ -182,9 +183,9 @@ class SamplerSpec:
 def parse_slug(slug: str) -> tuple[str, str]:
     provider, sep, model = slug.partition("/")
     if not sep or not model:
-        raise ValueError(f"model must be PROVIDER/MODEL, got {slug!r} (providers: {', '.join(PROVIDERS)})")
+        raise ConfigError(f"model must be PROVIDER/MODEL, got {slug!r} (providers: {', '.join(PROVIDERS)})")
     if provider not in PROVIDERS:
-        raise ValueError(f"unknown provider {provider!r} in {slug!r} (providers: {', '.join(PROVIDERS)})")
+        raise ConfigError(f"unknown provider {provider!r} in {slug!r} (providers: {', '.join(PROVIDERS)})")
     return provider, model
 
 
@@ -199,12 +200,12 @@ def find_preset(provider: str, model: str, preset: str | None = None) -> tuple[s
         return "none", {}
     if preset is not None:
         if preset not in FAMILIES:
-            raise ValueError(f"unknown --preset {preset!r} (families: {', '.join(FAMILIES)}; or 'none')")
+            raise ConfigError(f"unknown --preset {preset!r} (families: {', '.join(FAMILIES)}; or 'none')")
         return preset, {**FAMILIES[preset], "family": preset}
     key = f"{provider}/{model}"
     if key in PRESETS:
         return key, dict(PRESETS[key])
-    raise ValueError(
+    raise ConfigError(
         f"no preset for {key!r}: presets are exact slugs (`sem models list`). Add an entry to samplers/presets.py "
         f"(PRESETS, or SERVED_MODELS for a served HF id), apply a family with --preset FAMILY ({', '.join(FAMILIES)}), "
         "or run with --preset none (no model-specific settings: only the CLI options, max_output_tokens = the endpoint "
@@ -227,9 +228,9 @@ def _cast(name: str, decl, v):
         else:
             out = decl.type(v)
     except (TypeError, ValueError) as e:
-        raise ValueError(f"--model-arg {name}: expected {decl.type.__name__}, got {v!r} ({e})") from e
+        raise ConfigError(f"--model-arg {name}: expected {decl.type.__name__}, got {v!r} ({e})") from e
     if decl.choices and out not in decl.choices:
-        raise ValueError(f"--model-arg {name} must be one of {decl.choices}, got {out!r}")
+        raise ConfigError(f"--model-arg {name} must be one of {decl.choices}, got {out!r}")
     return out
 
 
@@ -239,7 +240,7 @@ def apply_model_args(spec: SamplerSpec, preset: dict, model_args: dict) -> None:
     allowed = allowed_model_args(spec, preset)
     unknown = sorted(set(model_args) - set(allowed))
     if unknown:
-        raise ValueError(f"{spec.provider}/{spec.model}: unknown --model-arg {', '.join(unknown)} "
+        raise ConfigError(f"{spec.provider}/{spec.model}: unknown --model-arg {', '.join(unknown)} "
                          f"(accepted: {', '.join(allowed) or 'none'})")
     vals = {k: _cast(k, MODEL_ARGS[k], v) for k, v in model_args.items()}
     for k, v in sorted(vals.items(), key=lambda kv: MODEL_ARGS[kv[0]].target != "special"):
@@ -279,7 +280,7 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
     if provider in ("gemini", "vertex"):
         check_google_env()
     if api_format and api_format not in pinfo["formats"]:
-        raise ValueError(f"--api-format {api_format!r} is not available for provider {provider} "
+        raise ConfigError(f"--api-format {api_format!r} is not available for provider {provider} "
                          f"(supported: {', '.join(pinfo['formats'])}; all formats: {', '.join(API_FORMATS)})")
     preset_name, preset = find_preset(provider, model, preset)
     spec = SamplerSpec(provider=provider, model=model, preset=preset_name, max_tries=pinfo["max_tries"], image_detail=pinfo.get("image_detail"),
@@ -312,20 +313,20 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
         spec.max_output_tokens = int(max_output_tokens)
     if effort is not None:
         if spec.efforts == ():
-            raise ValueError(f"{slug}: the model has no reasoning effort control")
+            raise ConfigError(f"{slug}: the model has no reasoning effort control")
         if spec.efforts is not None and effort not in spec.efforts:
-            raise ValueError(f"{slug}: --effort must be one of {spec.efforts}, got {effort!r}")
+            raise ConfigError(f"{slug}: --effort must be one of {spec.efforts}, got {effort!r}")
         spec.effort = effort
         spec.effort_source = "cli"
     if provider_pin:
         if provider != "openrouter":
-            raise ValueError("--provider pins an OpenRouter provider; it needs an openrouter/... model")
+            raise ConfigError("--provider pins an OpenRouter provider; it needs an openrouter/... model")
         spec.provider_pin = provider_pin.split(",")
     if quantization:
         spec.quant = quantization.split(",")
     if request_timeout_s is not None:
         if float(request_timeout_s) <= 0:
-            raise ValueError(f"--request-timeout-s must be positive, got {request_timeout_s}")
+            raise ConfigError(f"--request-timeout-s must be positive, got {request_timeout_s}")
         spec.request_timeout_s = float(request_timeout_s)
     elif pinfo.get("served"):
         spec.request_timeout_s = SERVED_REQUEST_TIMEOUT_S
@@ -337,12 +338,12 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
     if base_url:
         spec.base_url_source = "--base-url"
     elif os.environ.get(env_url) and provider in PUBLIC_APIS:
-        raise ValueError(f"{env_url} is set: a {provider} base URL is taken from --base-url only (pass --base-url "
+        raise ConfigError(f"{env_url} is set: a {provider} base URL is taken from --base-url only (pass --base-url "
                          f"explicitly, or unset {env_url} and remove it from .env)")
     elif os.environ.get(env_url):
         spec.base_url_source = env_url
     elif pinfo["base_url"] is None:
-        raise ValueError(f"provider {provider!r} has no default base URL: pass --base-url or set {env_url}")
+        raise ConfigError(f"provider {provider!r} has no default base URL: pass --base-url or set {env_url}")
     else:
         spec.base_url_source = "default"
     if provider == "vertex":  # explicit, recorded; never the SDK's ADC project / global location
@@ -365,7 +366,7 @@ def make_sampler(spec: SamplerSpec, base_url: str | None = None):
         from simple_evals_mm.samplers.gemini import GeminiSampler
 
         return GeminiSampler(spec, base_url=base_url)
-    raise ValueError(f"api format {spec.api_format!r} is not implemented")
+    raise NotImplementedError(f"api format {spec.api_format!r} is not implemented")
 
 
 def preset_rows() -> list[dict]:

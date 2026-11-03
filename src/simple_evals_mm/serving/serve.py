@@ -41,6 +41,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 
+from simple_evals_mm.errors import UserError
 from simple_evals_mm.serving import manifest as mf
 from simple_evals_mm.serving import stack
 
@@ -74,7 +75,7 @@ DETERMINISTIC = {"sglang": "--enable-deterministic-inference", "vllm": "VLLM_BAT
                  "hf": "--deterministic (torch.use_deterministic_algorithms)"}
 
 
-class ServeError(RuntimeError):
+class ServeError(UserError, RuntimeError):
     pass
 
 
@@ -553,6 +554,13 @@ def cmd_serve(args) -> int:
     try:
         apply_config(args)
         venv = args.engine_venv or (sys.prefix if args.engine == "hf" else None)
+        if args.engine == "hf" and not args.engine_venv:
+            import importlib.util
+
+            missing = [m for m in ("torch", "transformers") if importlib.util.find_spec(m) is None]
+            if missing:
+                raise ServeError(f"the hf engine runs in this venv and needs the hf-server extra ({', '.join(missing)} "
+                                 "not installed): uv sync --frozen --extra hf-server")
         if not venv:
             raise ServeError(f"--engine-venv is required for {args.engine} (not a dependency of this repo)")
         manifest, ctx = build_manifest(args, venv=venv)

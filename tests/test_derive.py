@@ -67,7 +67,7 @@ def test_identical_config_reuses_everything(env, capsys):
     src = s["store"]("a")
     s["sampler"].calls = []
     capsys.readouterr()
-    assert s["run"]("--from", src.dir, "--dry-run", name="b") == 0
+    assert s["run"]("--from", src.dir, "--dry-run", "--json", name="b") == 0
     plan = json.loads(capsys.readouterr().out)["from"]["datasets"]["arith"]
     assert plan["counts"] == {"reuse": 3, "regrade": 0, "rerun": 0}
     assert s["run"]("--from", src.dir, name="b") == 0
@@ -106,7 +106,7 @@ def test_sampler_setting_changed_reruns(env, capsys):
     assert s["run"](name="a") == 0
     s["sampler"].calls = []
     capsys.readouterr()
-    assert s["run"]("--from", s["store"]("a").dir, "--temperature", "0.3", "--dry-run", name="b") == 0
+    assert s["run"]("--from", s["store"]("a").dir, "--temperature", "0.3", "--dry-run", "--json", name="b") == 0
     plan = json.loads(capsys.readouterr().out)["from"]["datasets"]["arith"]
     assert plan["counts"] == {"reuse": 0, "regrade": 0, "rerun": 3}
     assert any("generation_lock differs (sampler sampling.temperature" in r for r in plan["reasons"])

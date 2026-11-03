@@ -36,13 +36,15 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from simple_evals_mm.errors import UserError
+
 LOCK_PATH = Path(__file__).with_name("datasets.lock.json")
 COMMITTED = LOCK_PATH  # the file in the package (LOCK_PATH may be redirected by tests)
 FORMAT = "sem-datasets-lock/1"
 _cache: dict | None = None
 
 
-class DataMismatch(RuntimeError):
+class DataMismatch(UserError, RuntimeError):
     """The data differs from datasets.lock (refused unless --allow-data-mismatch)."""
 
 
@@ -144,12 +146,13 @@ def check_source(url: str, sha256: str, size: int, what: str = "") -> None:
 
 
 # ---------------------------------------------------------------- datasets
-def digest(tasks) -> dict:
-    """n_tasks + tasks_sha256 of ALL loaded tasks (the job lock's definition)."""
+def digest(tasks, file_fields=()) -> dict:
+    """n_tasks + tasks_sha256 of ALL loaded tasks (the job lock's definition); file_fields: the dataset's
+    Dataset.file_fields (hashed by content)."""
     from simple_evals_mm.dataset import tasks_sha256
     from simple_evals_mm.models import task_checksum
 
-    return {"n_tasks": len(tasks), "tasks_sha256": tasks_sha256((t.id, task_checksum(t)) for t in tasks)}
+    return {"n_tasks": len(tasks), "tasks_sha256": tasks_sha256((t.id, task_checksum(t, file_fields)) for t in tasks)}
 
 
 def is_default(ds) -> bool:
@@ -189,7 +192,7 @@ def check_dataset(ds, tasks, rec: Recorder | None = None, allow: bool = False) -
     A mismatch (or no entry) raises DataMismatch unless `allow` (--allow-data-mismatch), which records the details."""
     if not is_default(ds):
         return {"data_lock": "none"}
-    problems = compare(ds, digest(tasks), rec)
+    problems = compare(ds, digest(tasks, ds.file_fields), rec)
     if not problems:
         return {"data_lock": "ok"}
     if not allow:

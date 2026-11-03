@@ -7,11 +7,15 @@ import threading
 from io import BytesIO
 from urllib.parse import urlsplit, urlunsplit
 
+from simple_evals_mm.errors import SetupError
 from simple_evals_mm.models import Message, Response
 
 SAMPLING_FIELDS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "frequency_penalty", "repetition_penalty")
 NOT_REPORTED = "provider default (not reported)"
 UNRESOLVED = "not resolved yet (prepare)"
+# recorded next to an OpenRouter effort (settings.effort.note): the level is not what the provider receives
+OPENROUTER_EFFORT_NOTE = ("OpenRouter maps reasoning.effort to the provider's own parameter (reasoning effort, thinking "
+                          "budget tokens or level); undocumented levels are mapped to the nearest supported one")
 # Endpoint fields that change outputs: part of the resume comparison (runner._lock_digest) and of every trial's
 # generation_lock. Volatile catalog fields (pricing, uptime, latency, supported_parameters) are left out.
 ENDPOINT_LOCK_KEYS = ("provider_name", "tag", "quantization", "context_length", "max_completion_tokens", "model_id",
@@ -82,7 +86,7 @@ class Sampler:
                 return
             self._prepare()
             if self.effective_max_output_tokens() is None:
-                raise RuntimeError(f"{self.slug}: the endpoint maximum of max_output_tokens is unknown "
+                raise SetupError(f"{self.slug}: the endpoint maximum of max_output_tokens is unknown "
                                    f"({self._no_max_reason()}): pass --max-output-tokens N")
             req, cap = self.spec.max_output_tokens, self.endpoint_max
             if req and cap and req > cap:
@@ -130,6 +134,8 @@ class Sampler:
                 out[k] = {"value": None, "source": unknown}
         if s.effort is not None:
             out["effort"] = {"value": s.effort, "source": s.effort_source or "cli"}
+            if s.provider == "openrouter" and s.effort_field == "reasoning":
+                out["effort"]["note"] = OPENROUTER_EFFORT_NOTE
         else:
             out["effort"] = {"value": None, "source": "not applicable (no effort control)" if s.efforts == () else NOT_REPORTED}
         eff, req = self.effective_max_output_tokens(), s.max_output_tokens

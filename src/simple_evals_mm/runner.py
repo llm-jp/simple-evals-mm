@@ -109,7 +109,7 @@ def load_checked(name: str, ds, allow: bool = False) -> tuple[list, dict]:
     return tasks, datalock.check_dataset(ds, tasks, rec, allow)
 
 
-class JobError(RuntimeError):
+class JobError(errors.UserError, RuntimeError):
     pass
 
 
@@ -282,7 +282,7 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
         if not tasks:
             raise JobError(f"{name}: no task selected")
         job.datasets[name], job.tasks[name] = ds, tasks
-        job.checksums[name] = {t.id: task_checksum(t) for t in tasks}
+        job.checksums[name] = {t.id: task_checksum(t, ds.file_fields) for t in tasks}
         lock_ds[name] = {"revision": ds.revision, "ref": ds.ref_info(),
                          "task_ids_sha256": dataset_mod.task_ids_fingerprint(t.id for t in tasks),
                          "tasks_sha256": dataset_mod.tasks_sha256(job.checksums[name].items()),
@@ -300,7 +300,7 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
     session = {"started_at": _now(), "commit": code.get("commit"), "dirty": code.get("dirty"),
                "python": (code.get("python") or {}).get("version"),
                "runtime": {k: cfg.get(k) for k in SESSION_OPTIONS}, "endpoint": sconf.get("endpoint"),
-               "base_url": sconf.get("base_url"), "env": dict(checks.ENV_STATE) or None}
+               "base_url": sconf.get("base_url"), "env": dict(checks.ENV_STATE) or None, "entry": checks.entry_point()}
     if manifest is not None:  # the volatile part: which machine / process served this session
         rt = manifest.get("runtime") or {}
         session["server"] = {k: rt.get(k) for k in ("manifest_path", "host", "port", "base_url", "pid", "started_at")}
@@ -406,7 +406,7 @@ def _run_trial(job: Job, name: str, k: int, task) -> TrialResult:
     failure = traj.failure
     trial = TrialResult(
         task_name=task.id, trial_name=traj.trajectory_id, attempt=k,
-        task_checksum=job.checksums.get(name, {}).get(task.id) or task_checksum(task),
+        task_checksum=job.checksums.get(name, {}).get(task.id) or task_checksum(task, ds.file_fields),
         agent_info={"name": traj.agent.name, "version": traj.agent.version, "model_name": traj.agent.model_name},
         trajectory=traj,
         usage={"prompt_tokens": fm.total_prompt_tokens or 0, "completion_tokens": fm.total_completion_tokens or 0,
@@ -560,7 +560,7 @@ def verify_job(st: store_mod.JobStore, datasets: list[str] | None = None, judge_
             if missing:
                 raise JobError(f"{name} a{k}: trial task ids not in the dataset: {missing[:5]}")
         changed = sorted({t.task_name for trials in trials_of.values() for t in trials
-                          if t.task_checksum and t.task_checksum != task_checksum(by_id[t.task_name])})
+                          if t.task_checksum and t.task_checksum != task_checksum(by_id[t.task_name], ds.file_fields)})
         if changed and not allow_task_change:
             refused.append(f"{name}: {len(changed)} task(s) differ from the ones generated (task_checksum): "
                            f"{', '.join(changed[:10])}{' ...' if len(changed) > 10 else ''}")
@@ -602,6 +602,10 @@ def verify_job(st: store_mod.JobStore, datasets: list[str] | None = None, judge_
 # ---------------------------------------------------------------- summary
 def summarize_job(st: store_mod.JobStore) -> dict:
     cfg = st.read_config()
+    try:
+        lock_ds = st.read_lock().get("datasets") or {}
+    except OSError:
+        lock_ds = {}
     out = {}
     for name, entry in dataset_entries(cfg).items():
         vid, results = st.read_verification(name)
@@ -619,6 +623,9 @@ def summarize_job(st: store_mod.JobStore) -> dict:
             "attempts": {f"a{k}": a for k, a in per_attempt.items()},
             **dataset_mod.summarize(list(per_attempt.values())),
             "trial_files": {f"a{k}": ("complete" if st.is_complete(name, k) else "incomplete") for k in st.attempts(name)},
+            # trials written / tasks selected, per attempt (the attempts the job asks for, written or not)
+            "trials": {f"a{k}": {"done": st.count_trials(name, k), "total": (lock_ds.get(name) or {}).get("n_tasks")}
+                       for k in sorted(set(st.attempts(name)) | set(range(1, int(cfg.get("n_attempts") or 1) + 1)))},
             "model_cost_usd": round(sum(c for c in model_cost if c is not None), 6) if any(c is not None for c in model_cost) else None,
             "judge_cost_usd": round(sum(c for c in judge_cost if c is not None), 6) if any(c is not None for c in judge_cost) else None,
         }

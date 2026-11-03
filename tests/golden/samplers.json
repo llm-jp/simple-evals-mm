@@ -102,6 +102,7 @@
  },
  "chat: gemma-4 sglang": {
   "body": {
+   "chat_template_kwargs": {"enable_thinking": false},
    "max_tokens": 8192,
    "messages": [
     {

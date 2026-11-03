@@ -98,7 +98,7 @@ def test_dry_run_reports_the_ref(job_env, monkeypatch, capsys):
     s = job_env
     monkeypatch.setitem(dataset_mod.DATASETS, "arith", RefArith)
     capsys.readouterr()
-    assert s["sem"]("run", "-m", "sglang/fake", "-d", f"arith@{SHA}", "-o", s["jobs"], "--dry-run",
+    assert s["sem"]("run", "-m", "sglang/fake", "-d", f"arith@{SHA}", "-o", s["jobs"], "--dry-run", "--json",
                     "--judge-model", "sglang/judge") == 0
     plan = json.loads(capsys.readouterr().out)
     assert plan["datasets"]["arith"]["revision"] == SHA and plan["datasets"]["arith"]["ref"] == SHA

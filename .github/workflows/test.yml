@@ -1,0 +1,33 @@
+# Offline tests on every pull request and push to main: lint, the offline test suite (fakes and golden snapshots; no
+# API keys, no GPU, no dataset downloads) and an import check of the scripts. The hf-server extra (torch, transformers)
+# is not installed: its tests skip.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the package version comes from the git tags (hatch-vcs)
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run --frozen ruff check src tests
+      - run: uv run --frozen pytest -m "not api and not local_model and not network"
+      - name: Import check of scripts/*.py
+        run: |
+          set -e
+          for f in scripts/*.py; do
+            # build_leaderboard.py is the v0.4 builder, replaced by draft PR #114: skipped until that lands
+            [ "$f" = scripts/build_leaderboard.py ] && continue
+            echo "import $f"
+            uv run --frozen python -c "import importlib.util, sys; s = importlib.util.spec_from_file_location('m', sys.argv[1]); s.loader.exec_module(importlib.util.module_from_spec(s))" "$f"
+          done
