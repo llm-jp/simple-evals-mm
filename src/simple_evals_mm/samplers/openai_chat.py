@@ -18,6 +18,12 @@ A dead served engine is not detected by the timeout: `sem serve`'s watchdog rest
 connections, and the connection errors (refused / reset: APIConnectionError, errors.is_connection_error) end, after
 the retries, as a connection failure the runner's circuit breaker counts.
 
+Connection-level failures of a served engine (refused / reset / DNS) have their own wall-clock budget
+(connection_budget_s, the job's retry.connection_budget_s, default 20 min: a watchdog restart plus the model load),
+separate from max_tries: once it is spent the request ends as endpoint_unavailable (connection). With a `sem serve`
+manifest (server_manifest_path), each connection failure re-reads it: a status "stopped: ..." (the server gave up)
+ends the request at once as endpoint_unavailable, no further retries.
+
 prepare() resolves the effective settings (samplers/base.py Sampler): OpenRouter's /models row (default_parameters,
 canonical_slug, hugging_face_id) and the pinned endpoint row (max_completion_tokens); a served engine's /v1/models
 (model id, root, max_model_len), its version and the model's generation_config.json.
@@ -285,8 +291,32 @@ def _encode_pil(img, max_px: int | None, max_b64_mb: float | None) -> str:
     return data
 
 
+CONNECTION_BUDGET_S = 20 * 60.0
+
+
+def manifest_stopped(path: str | None) -> str | None:
+    """The `sem serve` manifest's runtime.status when it says the server stopped, else None (unreadable: None)."""
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            st = str((json.load(f).get("runtime") or {}).get("status") or "")
+    except (OSError, ValueError):
+        return None
+    return st if st.startswith("stopped") else None
+
+
 class OpenAIChatSampler(Sampler):
     api_format = "openai_chat_completions"
+    # served engines: wall-clock budget of consecutive connection-level failures (runner: retry.connection_budget_s)
+    connection_budget_s: float = CONNECTION_BUDGET_S
+    server_manifest_path: str | None = None  # `sem run --server MANIFEST`: re-read on connection failures
+
+    def clock(self) -> float:  # tests: a fake clock
+        return time.monotonic()
+
+    def sleep(self, seconds: float) -> None:
+        time.sleep(seconds)
 
     def __init__(self, spec, base_url: str | None = None):
         super().__init__(spec)
@@ -528,7 +558,8 @@ class OpenAIChatSampler(Sampler):
             shrinks += 1
         served = self.served
         last, refused_conn = "", False
-        trial = rl = 0
+        trial = rl = conn = 0
+        conn_since: float | None = None  # start of the current run of connection failures
         while True:
             rate_limited = refused_conn = False
             try:
@@ -572,6 +603,25 @@ class OpenAIChatSampler(Sampler):
                     r.extra = {"sent_images": self._sent_images(api_messages), "max_tokens_sent": body[s.max_tokens_field],
                                "seed": body.get("seed"), "response_id": getattr(resp, "id", None)}
                     return r
+            if served and refused_conn:
+                stopped = manifest_stopped(self.server_manifest_path)
+                if stopped:
+                    raise errors.SamplerError(f"the server is down for good (manifest status {stopped!r}): {last}",
+                                              errors.ENDPOINT_UNAVAILABLE, exc_type="ServerStopped", connection=True)
+                now = self.clock()
+                conn_since = now if conn_since is None else conn_since
+                conn += 1
+                if now - conn_since >= self.connection_budget_s:
+                    raise errors.SamplerError(f"connection failures for {now - conn_since:.0f} s (budget "
+                                              f"{self.connection_budget_s:.0f} s, {conn} attempts): {last}",
+                                              errors.ENDPOINT_UNAVAILABLE, exc_type="ConnectionBudgetExhausted",
+                                              connection=True)
+                backoff = min(2 ** min(conn, 6), 60)
+                print(f"[{s.provider}] {s.model}: {last} (connection failure {conn}, "
+                      f"{now - conn_since:.0f}/{self.connection_budget_s:.0f} s, retry in {backoff}s)", flush=True)
+                self.sleep(backoff)
+                continue
+            conn_since = None
             if rate_limited:
                 rl += 1
                 if rl > s.max_rate_limit_tries:
@@ -582,8 +632,8 @@ class OpenAIChatSampler(Sampler):
                 if trial > s.max_tries:
                     break
                 backoff = min(2 ** trial, 60)
-                print(f"[{s.provider}] {s.model}: {last} (attempt {trial}/{s.max_tries}, retry in {backoff}s)")
-            time.sleep(backoff)
+                print(f"[{s.provider}] {s.model}: {last} (attempt {trial}/{s.max_tries}, retry in {backoff}s)", flush=True)
+            self.sleep(backoff)
         # a served engine that still refuses connections after every retry is down, not overloaded
         cause = errors.ENDPOINT_UNAVAILABLE if served and refused_conn else errors.PROVIDER_FAILED
         raise errors.SamplerError(f"gave up after {trial} errors / {rl} rate limits: {last}", cause, exc_type="RetryExhausted",

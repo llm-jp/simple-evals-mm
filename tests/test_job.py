@@ -311,6 +311,30 @@ def test_breaker_counts_connection_failures_not_rate_limits(job_env, monkeypatch
     assert "circuit breaker" in capsys.readouterr().err and s["store"]("down").read_trials("arith", 1) == []
 
 
+def test_breaker_trips_on_spent_connection_budget(job_env, monkeypatch, tmp_path, capsys):
+    """A served engine that stays unreachable: every trial ends as endpoint_unavailable (connection budget spent or
+    the manifest says stopped); after retry.abort_after_consecutive of them the job stops with the resume message,
+    the progress line printed. retry.connection_budget_s reaches the sampler and is recorded per session."""
+    s = job_env
+    qs = [f"q{i}" for i in range(8)]
+    monkeypatch.setattr(Arith, "questions", qs)
+    monkeypatch.setattr(Arith, "truth", {q: "ok" for q in qs})
+    s["sampler"].connection_budget_s = None
+    s["sampler"].fail = {"q": errors.SamplerError("connection failures for 1200 s (budget 1200 s): APIConnectionError",
+                                                  errors.ENDPOINT_UNAVAILABLE, exc_type="ConnectionBudgetExhausted",
+                                                  connection=True)}
+    cfg = tmp_path / "job.yaml"
+    cfg.write_text(json.dumps({"retry": {"abort_after_consecutive": 3, "connection_budget_s": 300}}))
+    capsys.readouterr()
+    assert s["run"]("-c", str(cfg), name="gone") == 2
+    out = capsys.readouterr()
+    assert "3 consecutive trial(s) failed at the endpoint" in out.out
+    assert "circuit breaker: 3 consecutive" in out.err and "sem job resume" in out.err
+    assert s["sampler"].connection_budget_s == 300.0
+    assert s["store"]("gone").read_trials("arith", 1) == []  # not written: a resume regenerates them
+    assert s["store"]("gone").read_lock()["sessions"][0]["runtime"]["retry"]["connection_budget_s"] == 300
+
+
 def test_endpoint_change_within_a_job_stops_it(job_env, monkeypatch, capsys):
     """A response from another model / provider than the first one this sampler saw: the trial is not written and
     the job stops like the circuit breaker; a system_fingerprint change is only recorded."""

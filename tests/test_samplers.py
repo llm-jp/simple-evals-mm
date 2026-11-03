@@ -600,6 +600,7 @@ def test_endpoint_unavailable_classification(clean_env, endpoints, monkeypatch, 
 
     served = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B"))
     served.spec.max_tries = 2
+    served.connection_budget_s = 0  # connection failures: their own wall-clock budget (test_connection_budget...)
     served._client = raising(openai.APIConnectionError(request=req))
     with pytest.raises(errors.SamplerError) as e:
         served([user("q")])
@@ -644,11 +645,69 @@ def _dropping_server(mode: str):
     return srv.getsockname()[1], accepted, stop
 
 
+def _fake_clock(sampler, budget):
+    """The sampler's clock advances only by its own sleeps."""
+    t = [0.0]
+    sampler.slept = []
+    sampler.connection_budget_s = budget
+    sampler.clock = lambda: t[0]
+
+    def sleep(x):
+        sampler.slept.append(x)
+        t[0] += x
+
+    sampler.sleep = sleep
+
+
+def _refused_url():
+    import socket
+
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        return f"http://127.0.0.1:{so.getsockname()[1]}/v1"
+
+
+def test_connection_budget_is_separate_from_max_tries(clean_env, endpoints):
+    """Connection failures do not use max_tries (here 1): they retry until the wall-clock budget is spent (fake
+    clock), then end as endpoint_unavailable with the connection flag."""
+    url = _refused_url()
+    s = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", base_url=url), base_url=url)
+    s.spec.max_tries = 1
+    _fake_clock(s, budget=1200)
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert (e.value.cause, e.value.connection, e.value.exc_type) == (errors.ENDPOINT_UNAVAILABLE, True,
+                                                                     "ConnectionBudgetExhausted")
+    assert sum(s.slept[:-1]) < 1200 <= sum(s.slept) and max(s.slept) == 60 and len(s.slept) > 2
+    assert "budget 1200 s" in e.value.message
+
+
+def test_stopped_server_manifest_ends_at_once(clean_env, endpoints, tmp_path):
+    """`sem run --server MANIFEST`: on a connection failure the manifest is re-read; "stopped: ..." (sem serve gave up)
+    ends the request at once, no retry; a serving manifest keeps retrying within the budget."""
+    url = _refused_url()
+    man = tmp_path / "server.json"
+    man.write_text(json.dumps({"format": "sem-server/1", "runtime": {"status": "stopped: 3 failed starts"}}))
+    s = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", base_url=url), base_url=url)
+    s.server_manifest_path = str(man)
+    _fake_clock(s, budget=1200)
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert (e.value.cause, e.value.connection, e.value.exc_type) == (errors.ENDPOINT_UNAVAILABLE, True, "ServerStopped")
+    assert "stopped: 3 failed starts" in e.value.message and s.slept == []
+    man.write_text(json.dumps({"format": "sem-server/1", "runtime": {"status": "serving"}}))
+    _fake_clock(s, budget=30)
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.exc_type == "ConnectionBudgetExhausted" and s.slept
+
+
 @pytest.mark.parametrize("mode", ["drop", "reset", "refused"])
 def test_served_connection_loss_reaches_the_breaker(clean_env, endpoints, monkeypatch, mode):
     """A restarting served engine (connection dropped / reset mid-request, then refused): the real OpenAI client raises
     APIConnectionError, our loop retries it (the SDK does not: one connection per attempt), and the final error is a
-    connection failure (endpoint_unavailable, connection=True) that the runner's circuit breaker counts."""
+    connection failure (endpoint_unavailable, connection=True) that the runner's circuit breaker counts. Connection
+    failures are retried against their own wall-clock budget (fake clock: 10 s -> attempts at t = 0, 2, 6, 14)."""
     import socket
 
     from simple_evals_mm import runner
@@ -667,15 +726,17 @@ def test_served_connection_loss_reaches_the_breaker(clean_env, endpoints, monkey
         s = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", base_url=url), base_url=url)
         assert s.base_url() == url
         s.spec.max_tries = 2
+        _fake_clock(s, budget=10)
         with pytest.raises(errors.SamplerError) as e:
             s([user("q")])
     finally:
         if stop is not None:
             stop.set()
     assert (e.value.cause, e.value.connection) == (errors.ENDPOINT_UNAVAILABLE, True)
-    assert "APIConnectionError" in e.value.message
+    assert "APIConnectionError" in e.value.message and e.value.exc_type == "ConnectionBudgetExhausted"
+    assert s.slept == [2, 4, 8]
     if accepted is not None:
-        assert len(accepted) == 3  # 1 + max_tries attempts: the SDK's own retries are off
+        assert len(accepted) == 4  # one connection per attempt: the SDK's own retries are off
     trial = NS(exception_info={"cause": e.value.cause, "connection": e.value.connection})
     assert runner._breaker(trial)
     # and as provider_failed with the connection flag (an API provider): still counted

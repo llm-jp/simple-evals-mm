@@ -13,11 +13,13 @@
 from __future__ import annotations
 
 import concurrent.futures
+import contextlib
 import fnmatch
 import hashlib
 import json
 import os
 import random
+import sys
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -67,7 +69,10 @@ DEFAULTS: dict = {
     # Harbor's RetryConfig: causes retried (None = those with retry=True in errors.POLICY), minus exclude_causes;
     # abort_after_consecutive: stop the job after this many consecutive trials ended in endpoint_unavailable /
     # provider_failed (0 = never)
-    "retry": {"max_retries": 2, "include_causes": None, "exclude_causes": [], "abort_after_consecutive": 20},
+    # connection_budget_s: wall-clock budget of a served engine's consecutive connection failures within one request
+    # (a watchdog restart plus the model load), then endpoint_unavailable
+    "retry": {"max_retries": 2, "include_causes": None, "exclude_causes": [], "abort_after_consecutive": 20,
+              "connection_budget_s": 1200},
 }
 
 
@@ -210,6 +215,8 @@ def diff_dicts(old: dict, new: dict, prefix: str = "") -> list[str]:
 
 # ---------------------------------------------------------------- start
 def start_job(cfg: dict, base_url: str | None = None) -> Job:
+    with contextlib.suppress(AttributeError, ValueError):  # progress reaches the job log as it happens (PBS: a file)
+        sys.stdout.reconfigure(line_buffering=True)
     if not cfg.get("model"):
         raise JobError("-m/--model is required")
     if not cfg.get("datasets"):
@@ -236,6 +243,10 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
     sampler = registry.make_sampler(spec, base_url=base_url)
     if manifest is not None:
         sampler.server_manifest = manifest  # served settings / revision come from the manifest, not the local HF cache
+        sampler.server_manifest_path = cfg["server"]  # re-read on connection failures: a stopped server ends at once
+    budget = (cfg.get("retry") or {}).get("connection_budget_s", DEFAULTS["retry"]["connection_budget_s"])
+    if budget is not None and hasattr(sampler, "connection_budget_s"):
+        sampler.connection_budget_s = float(budget)
     agent = get_agent(cfg["agent"], **(cfg.get("agent_args") or {}))
     job = Job(cfg=cfg, store=st, lock={}, sampler=sampler, agent=agent, server_manifest=manifest)
     dsets = load_datasets(cfg)
@@ -387,7 +398,8 @@ def _run_trial(job: Job, name: str, k: int, task) -> TrialResult:
         if not should_retry(cause, rc):
             break
         if retry < rc["max_retries"]:
-            print(f"[trial] {name}/{task.id} a{k}: {cause} ({(traj.failure or {}).get('error', '')[:120]}), retry {retry + 1}")
+            print(f"[trial] {name}/{task.id} a{k}: {cause} ({(traj.failure or {}).get('error', '')[:120]}), retry {retry + 1}",
+                  flush=True)
     traj.extra["retries"] = retry
     traj.extra["n_concurrent"] = job.cfg["n_concurrent"]
     fm = traj.final_metrics
@@ -489,7 +501,8 @@ def run_trials(job: Job) -> None:
                             if changed:
                                 endpoint_change = (trial.exception_info or {}).get("message")
                             print(f"[job] {len(streak)} consecutive trial(s) failed at the endpoint "
-                                  f"(last: {(trial.exception_info or {}).get('message', '')[:200]}); no new trials")
+                                  f"(last: {(trial.exception_info or {}).get('message', '')[:200]}); no new trials",
+                                  flush=True)
                             streak = []
                     else:
                         for n, t in streak:  # the streak is broken: those were ordinary transient failures
