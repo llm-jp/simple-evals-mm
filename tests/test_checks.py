@@ -145,7 +145,7 @@ def test_version_check_against_head_and_tags(repo):
     old = head
     new = _commit(r)
     problem = checks.version_check(str(r), f"0.1.dev1+g{old[:9]}")
-    assert problem and old[:9] in problem and new[:12] in problem and "uv sync --frozen" in problem
+    assert problem and old[:9] in problem and new[:12] in problem and "--reinstall-package simple-evals-mm" in problem
     assert "is not tagged" in checks.version_check(str(r), "0.5.0")
     _git(r, "tag", "v0.5.0")
     assert checks.version_check(str(r), "0.5.0") is None  # exactly on the tag: no local part

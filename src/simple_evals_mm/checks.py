@@ -190,7 +190,10 @@ def version_check(repo: str, version: str | None, head: str | None = None) -> st
     except (ImportError, InvalidVersion):
         return f"installed version {version!r} is not a PEP 440 version"
     built = next((m.group(1) for part in (v.local or "").split(".") if (m := _LOCAL_HASH.match(part))), None)
-    stale = "(run `uv sync --frozen`; `uv run --no-sync` keeps a stale editable install)"
+    # uv rebuilds the editable install when the commit moves (pyproject [tool.uv] cache-keys), except after
+    # `uv run --no-sync` and in a git worktree (uv does not see a worktree's commit): then reinstall the package
+    stale = ("(run `uv sync --frozen --reinstall-package simple-evals-mm`; `uv run --no-sync` and git worktrees keep a "
+             "stale editable install)")
     if built is not None:
         if not head.startswith(built):
             return f"installed version {version} was built at commit {built}, HEAD is {head[:12]} {stale}"

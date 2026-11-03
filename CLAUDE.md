@@ -64,7 +64,8 @@ Rules that keep jobs reproducible:
   the task checksum hashes them by content, relative paths resolve against `sources.DATA_ROOT` (the checkout holding
   `data/`, never the working directory), a missing file raises, and `sem datasets lock` refuses undeclared paths.
 - The installed package version must name HEAD (start check): after a pull or commit, `uv sync --frozen` (or plain
-  `uv run --frozen`) rebuilds the editable install; `uv run --no-sync` keeps a stale one and `sem run` refuses it.
+  `uv run --frozen`) rebuilds the editable install; `uv run --no-sync` and git worktrees (uv does not see a
+  worktree's commit) keep a stale one, which `sem run` refuses: `uv sync --frozen --reinstall-package simple-evals-mm`.
 - `src/simple_evals_mm/datasets.lock.json` pins the data (n_tasks / tasks_sha256 per dataset, sha256 of unversioned
   source files, the nltk data and the OmniDocBench evaluator image); unversioned files are fetched with
   `sources.fetch` / `download` / `fetch_bytes` (checked against the lock). After an intended data change:
