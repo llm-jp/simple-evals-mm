@@ -7,6 +7,7 @@
 #   nice -n 19 bash scripts/release_check.sh        # on a login node
 #
 # Steps (each PASS / FAIL / SKIP in the summary; exit 1 on any FAIL):
+#   0. uv sync --frozen --reinstall-package simple-evals-mm (the editable install at HEAD)
 #   1. sem run -m fake/scripted -d <all datasets> -l N -k 1 --generate-only, killed partway (SIGKILL)
 #   2. sem job resume (the torn last line is cut, the missing trials generated), sem job show (every trial written)
 #   3. sem job regrade --judge-model fake/judge, sem job show (every dataset verified), sem job check
@@ -62,6 +63,12 @@ sys.exit(1 if bad else 0)
 EOF
 
 echo "[release-check] jobs dir $DIR (logs in $LOG)"
+# the editable install must be built at HEAD (`sem run` refuses a stale one: git worktrees, `uv run --no-sync`)
+if uv sync --frozen --reinstall-package simple-evals-mm > "$LOG/uv_sync.log" 2>&1; then
+  step "0 uv sync (install at HEAD)" PASS
+else
+  step "0 uv sync (install at HEAD)" FAIL "$LOG/uv_sync.log"
+fi
 
 # ---- the datasets
 ALL=$($SEM datasets list --json > "$LOG/datasets.json" && py names < "$LOG/datasets.json")
@@ -108,6 +115,9 @@ else
   step "1 run (generate-only)" "$([ "$RC" = 0 ] && echo PASS || echo FAIL)" "finished before the kill (rc $RC; $LOG/run.log)"
 fi
 
+if [ ! -f "$DIR/$JOB/config.json" ]; then
+  step "2-4 job steps" SKIP "no job to resume (step 1 failed)"
+else
 # ---- 2. resume + show
 if $SEM job resume -p "$DIR/$JOB" -n 8 > "$LOG/resume.log" 2>&1; then
   step "2 job resume" PASS
@@ -138,6 +148,8 @@ if [ "$RC" = 0 ] && [ "$RERUN" = 0 ] && [ "$NFROM" -gt 0 ]; then
   step "4 run --from (same commit)" PASS "$NFROM datasets, 0 rerun"
 else
   step "4 run --from (same commit)" FAIL "rc $RC, rerun $RERUN ($LOG/from.log)"
+fi
+
 fi
 
 # ---- 5. datasets.lock
