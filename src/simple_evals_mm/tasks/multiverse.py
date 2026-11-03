@@ -83,7 +83,8 @@ def dialogues() -> dict:
         path = ensure_local_data(
             os.path.join(DATA, "dialogues.jsonl"), _build_data, HF_REPO
         )
-        _D = {d["index"]: d for d in (json.loads(line) for line in open(path))}
+        with open(path) as f:
+            _D = {d["index"]: d for d in (json.loads(line) for line in f)}
     return _D
 
 
