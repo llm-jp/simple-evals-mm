@@ -129,8 +129,14 @@ def png_bytes(color="red", size=(4, 4)) -> bytes:
 
 
 @pytest.fixture(autouse=True)
-def data_lock(tmp_path, monkeypatch):
-    """The tests' datasets.lock: a file in tmp_path (absent until a test writes it), never the committed one."""
+def data_lock(tmp_path, monkeypatch, request):
+    """The tests' datasets.lock: a file in tmp_path (absent until a test writes it), never the committed one. Live
+    tests (-m network) load the real data, so they check it against the committed lock (read only)."""
+    if request.node.get_closest_marker("network"):
+        datalock.reset()
+        yield datalock.LOCK_PATH
+        datalock.reset()
+        return
     path = tmp_path / "datasets.lock.json"
     monkeypatch.setattr(datalock, "LOCK_PATH", path)
     datalock.reset()

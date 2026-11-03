@@ -91,7 +91,7 @@ def test_full_job_with_real_runner(job_env, fake_provider, monkeypatch):
     monkeypatch.setitem(dataset_mod.DATASETS, "fopen", FakeOpen)
     sem, jobs = job_env["sem"], job_env["jobs"]
     assert sem("run", "-m", "fake/scripted", "-d", "fmcq,fopen", "--judge-model", "fake/judge", "--job-name", "f",
-               "-o", jobs, "-n", "4") == 0
+               "-o", jobs, "-n", "4", "-k", "1") == 0
     st = job_env["store"]("f")
     from simple_evals_mm import runner
 
@@ -111,6 +111,6 @@ def test_full_job_with_real_runner(job_env, fake_provider, monkeypatch):
     assert sem("job", "check", st.dir) == 0
     # a derived job on the same commit reuses every trial
     assert sem("run", "-m", "fake/scripted", "-d", "fmcq,fopen", "--judge-model", "fake/judge", "--job-name", "g",
-               "-o", jobs, "-n", "4", "--from", st.dir) == 0
+               "-o", jobs, "-n", "4", "-k", "1", "--from", st.dir) == 0
     lock = job_env["store"]("g").read_lock()
     assert all(c["rerun"] == 0 and c["reuse"] == 46 for c in lock["derived_from"]["counts"].values())
