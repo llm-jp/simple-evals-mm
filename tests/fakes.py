@@ -16,6 +16,7 @@ from simple_evals_mm.samplers import registry
 from simple_evals_mm.samplers.base import message_images
 from simple_evals_mm.store import JobStore
 
+REAL_MAKE_SAMPLER = registry.make_sampler  # before any fixture patches it (fake_provider restores it)
 VERDICT = "extracted_final_answer: x\nreasoning: t\ncorrect: {}\nconfidence: 100"
 
 
@@ -102,6 +103,17 @@ def job_env(tmp_path, monkeypatch):
 
     state.update(sem=sem, run=run, jobs=jobs, store=lambda name="j": JobStore(jobs, name))
     return state
+
+
+@pytest.fixture
+def fake_provider(monkeypatch):
+    """The scripted test-only `fake/` provider (samplers/fake.py) registered for this test, through the real
+    make_sampler (also when job_env patched it)."""
+    from simple_evals_mm.samplers import fake
+
+    fake.enable(monkeypatch.setitem)
+    monkeypatch.setattr(registry, "make_sampler", REAL_MAKE_SAMPLER)
+    return fake
 
 
 def png(path, color="red"):
