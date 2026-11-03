@@ -8,6 +8,7 @@ import pytest
 from simple_evals_mm import errors
 from simple_evals_mm.models import Image, user
 from simple_evals_mm.samplers import registry
+from simple_evals_mm.samplers.base import OPENROUTER_EFFORT_NOTE
 from tests import golden
 
 
@@ -369,7 +370,8 @@ def test_model_args(clean_env):
     assert g.public()["model_args"] == {"max_soft_tokens": "1120", "repetition_penalty": 1.05}  # recorded as given
     h = registry.resolve("hf/llm-jp/llm-jp-4-vl-9b-beta", model_args={"date": "none", "identity": "You are X.", "decode": "qwen"})
     hb = registry.make_sampler(h).request_body()
-    assert hb["chat_template_kwargs"] == {"conversation_start_date": "", "model_identity": "You are X."}
+    # Harmony's default effort (medium) is sent explicitly
+    assert hb["chat_template_kwargs"] == {"conversation_start_date": "", "model_identity": "You are X.", "reasoning_effort": "medium"}
     assert {k: hb[k] for k in ("temperature", "top_p", "top_k", "repetition_penalty")} == {"temperature": 1.0, "top_p": 1.0, "top_k": 40, "repetition_penalty": 1.3}
     assert registry.resolve("sglang/llm-jp/llm-jp-4.1-8b-thinking").template_kwargs == {"conversation_start_date": "2026-10-01"}
     o = registry.resolve("openrouter/qwen/qwen3.8-27b", temperature=0.6, model_args={"sampling": "default", "max_image_px": 2048})
@@ -509,7 +511,9 @@ def test_settings_precedence_cli_preset_provider(clean_env, endpoints):
     assert (st["temperature"]["source"], st["top_p"]["source"], st["frequency_penalty"]["source"]) == (
         "cli", preset, "openrouter:default_parameters")
     assert "repetition_penalty" not in body and st["repetition_penalty"] == {"value": None, "source": "provider default (not reported)"}
-    assert st["effort"] == {"value": None, "source": "provider default (not reported)"}
+    # the preset's default effort is sent explicitly; OpenRouter maps it to the provider's parameter (noted)
+    assert st["effort"] == {"value": "xhigh", "source": preset, "note": OPENROUTER_EFFORT_NOTE}
+    assert body["reasoning"] == {"effort": "xhigh"}
     assert s.config()["endpoint"]["canonical_slug"] == "qwen/qwen3.8-27b-2026"
 
     luna = registry.make_sampler(registry.resolve("openrouter/openai/gpt-6-luna"))  # no preset sampling
@@ -517,7 +521,8 @@ def test_settings_precedence_cli_preset_provider(clean_env, endpoints):
     luna.prepare()
     assert luna.request_body()["temperature"] == 1 and "top_p" not in luna.request_body()
     assert luna.config()["settings"]["temperature"] == {"value": 1, "source": "openrouter:default_parameters"}
-    assert luna.config()["settings"]["effort"] == {"value": "medium", "source": "preset:openrouter/openai/gpt-6-luna"}
+    assert luna.config()["settings"]["effort"] == {"value": "medium", "source": "preset:openrouter/openai/gpt-6-luna",
+                                                   "note": OPENROUTER_EFFORT_NOTE}
 
 
 def test_settings_generation_config_under_preset_none(clean_env, endpoints, monkeypatch, tmp_path):
@@ -923,3 +928,38 @@ def test_gpt4o_sends_no_system_message():
     for slug in ("openai/gpt-4o-2024-11-20", "azure/gpt-4o-2024-11-20", "openrouter/openai/gpt-4o-2024-11-20"):
         assert not presets.PRESETS[slug].get("system_message"), slug
     assert not any(p.get("system_message") for p in presets.PRESETS.values())
+
+
+# ---------------------------------------------------------------- default effort of reasoning presets
+def test_every_preset_with_effort_levels_has_a_default():
+    """A preset (or family) that lists effort levels names its default level, which is one of them: it is sent
+    explicitly and recorded with source preset:<name>, so a job never runs on the provider's unrecorded default."""
+    from simple_evals_mm.samplers.presets import FAMILIES, PRESETS
+
+    for name, p in [*PRESETS.items(), *((f"--preset {k}", v) for k, v in FAMILIES.items())]:
+        if p.get("efforts"):
+            assert p.get("effort") in p["efforts"], f"{name}: default effort {p.get('effort')!r} not in {p['efforts']}"
+    spec = registry.resolve("sglang/Qwen/Qwen3.8-27B")
+    assert (spec.effort, spec.effort_source) == ("xhigh", "preset:qwen3.8")
+    assert registry.resolve("sglang/Qwen/Qwen3.8-27B", effort="low").effort_source == "cli"
+    # gemma-4: thinking off by default, sent as enable_thinking=false
+    g = registry.make_sampler(registry.resolve("sglang/google/gemma-4-12B-it", max_output_tokens=10))
+    assert g.request_body()["chat_template_kwargs"] == {"enable_thinking": False}
+    assert registry.make_sampler(registry.resolve("openrouter/google/gemma-4-31b-it")).request_body()["reasoning"] == {"enabled": False}
+
+
+def test_openrouter_refuses_effort_the_endpoint_cannot_take(clean_env, endpoints):
+    """An effort (requested or the preset's default) on an endpoint whose supported_parameters lack reasoning /
+    reasoning_effort is refused at prepare() (OpenRouter would drop it silently); an endpoint with them passes."""
+    endpoints["row"]["supported_parameters"] = ["max_tokens", "temperature"]
+    s = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    with pytest.raises(errors.SetupError, match="preset's default effort .* --preset none"):
+        s.prepare()
+    with pytest.raises(errors.SetupError, match="drop --effort"):
+        registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b", effort="low")).prepare()
+    # no effort control in the preset: nothing to refuse
+    registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-flash")).prepare()
+    endpoints["row"]["supported_parameters"] = ["max_tokens", "reasoning"]
+    ok = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    ok.prepare()
+    assert ok.request_body()["reasoning"] == {"effort": "xhigh"}

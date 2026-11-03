@@ -177,7 +177,8 @@ def fetch_model_info(model_id: str, timeout: float = 30.0, base_url: str = "http
     if row is None:
         return {}
     return {"default_parameters": dict(row.get("default_parameters") or {}), "canonical_slug": row.get("canonical_slug"),
-            "hugging_face_id": row.get("hugging_face_id"), "catalog_context_length": row.get("context_length")}
+            "hugging_face_id": row.get("hugging_face_id"), "catalog_context_length": row.get("context_length"),
+            "supported_parameters": row.get("supported_parameters")}
 
 
 def _get_json(url: str, key: str | None, timeout: float):
@@ -389,6 +390,7 @@ class OpenAIChatSampler(Sampler):
                 elif ep.get("context_length"):
                     self.endpoint_max, self.endpoint_max_source = ep["context_length"], "openrouter:endpoint context_length"
             self.endpoint_info = endpoint
+            self._check_effort_supported(endpoint)
         elif self.served:
             info = fetch_server_info(s.base_url(self._cli_base_url) or "", s.provider, os.environ.get(s.api_key_name or ""))
             if info is None:
@@ -402,6 +404,18 @@ class OpenAIChatSampler(Sampler):
             if info.get("max_model_len"):
                 self.endpoint_max, self.endpoint_max_source = int(info["max_model_len"]), f"{s.provider}:max_model_len"
             self.endpoint_info = info
+
+    def _check_effort_supported(self, endpoint: dict) -> None:
+        """An effort (requested or the preset's default) on an OpenRouter endpoint whose supported_parameters (the
+        pinned endpoint's row, else the model's) lack reasoning / reasoning_effort would be dropped silently: refuse."""
+        s, sp = self.spec, endpoint.get("supported_parameters")
+        if s.effort is None or s.effort_field != "reasoning" or sp is None or {"reasoning", "reasoning_effort"} & set(sp):
+            return
+        where = f"endpoint {endpoint.get('tag')}" if endpoint.get("tag") else "model"
+        fix = ("drop --effort" if s.effort_source == "cli" else
+               "the preset's default effort is wrong for this endpoint: fix the preset (efforts / effort) or run with --preset none")
+        raise errors.SetupError(f"{s.model}: effort {s.effort!r} ({s.effort_source}) cannot be sent: the OpenRouter {where} does "
+                                f"not support reasoning / reasoning_effort (supported_parameters: {', '.join(sp)}); {fix}")
 
     def _no_max_reason(self) -> str:
         if self.spec.provider == "openrouter":
