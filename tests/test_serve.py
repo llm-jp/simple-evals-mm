@@ -549,6 +549,24 @@ def test_job_with_server_manifest(job_env, served, tmp_path, capsys):
     assert "does not match its manifest" in capsys.readouterr().err
 
 
+def test_job_resume_with_another_server_manifest(job_env, served, tmp_path):
+    """`sem job resume --server M2`: a restarted server writes its manifest elsewhere; the resume runs against M2
+    (same locked identity) instead of the path in config.json, and each session records the manifest it used."""
+    s = job_env
+    path, m = _manifest(served, tmp_path)
+    assert s["run"]("--server", path, "-n", "1") == 0
+    st = s["store"]()
+    path2, _ = _manifest(served, tmp_path, "restarted.json", runtime={**m["runtime"], "port": 7, "pid": 8})
+    os.remove(path)  # the old manifest is gone: the resume must not read it
+    assert s["sem"]("job", "resume", "-p", st.dir, "--server", path2) == 0
+    sessions = st.read_lock()["sessions"]
+    assert [x["runtime"]["server"] for x in sessions] == [path, path2]
+    assert sessions[-1]["server"]["port"] == 7 and st.read_config()["server"] == path2
+    # a manifest of another stack is still refused
+    path3, _ = _manifest(served, tmp_path, "other.json", chat_template={"sha256": "other"})
+    assert s["sem"]("job", "resume", "-p", st.dir, "--server", path3) == 2
+
+
 def test_sampler_takes_generation_config_from_manifest(served, tmp_path, monkeypatch):
     from simple_evals_mm.samplers import registry
 

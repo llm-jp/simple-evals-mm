@@ -25,6 +25,7 @@ from typing import ClassVar
 from simple_evals_mm import errors
 from simple_evals_mm import metrics as metrics_mod
 from simple_evals_mm.atif import Trajectory
+from simple_evals_mm.errors import ConfigError
 from simple_evals_mm.models import Message, Task, VerifierResult
 
 # name -> "module:Class" (lazy) or the class itself (tests register fakes)
@@ -93,7 +94,7 @@ def split_ref(entry: str) -> tuple[str, str | None]:
     """`-d name@ref` -> (name, ref); `-d name` -> (name, None)."""
     name, sep, ref = entry.partition("@")
     if sep and not ref:
-        raise ValueError(f"-d {entry}: empty ref after @")
+        raise ConfigError(f"-d {entry}: empty ref after @")
     return name, (ref if sep else None)
 
 
@@ -103,7 +104,7 @@ def get_dataset(name: str, **args) -> Dataset:
     name, ref = split_ref(name)
     cls = DATASETS.get(name)
     if cls is None:
-        raise ValueError(f"unknown dataset {name!r} (v0.5 datasets: {', '.join(sorted(DATASETS))})")
+        raise ConfigError(f"unknown dataset {name!r} (v0.5 datasets: {', '.join(sorted(DATASETS))})")
     if isinstance(cls, str):
         mod, attr = cls.split(":")
         cls = getattr(importlib.import_module(mod), attr)
@@ -147,7 +148,7 @@ class Dataset:
         unknown = sorted(set(args) - set(self.accepted_args))
         if unknown:
             accepted = ", ".join(f"{k} ({t.__name__})" for k, t in self.accepted_args.items()) or "none"
-            raise ValueError(f"{self.name or type(self).__name__}: unknown --dataset-arg {', '.join(unknown)} "
+            raise ConfigError(f"{self.name or type(self).__name__}: unknown --dataset-arg {', '.join(unknown)} "
                              f"(accepted: {accepted})")
         self.args = args  # --dataset-arg values (recorded in the job config)
 
@@ -196,7 +197,7 @@ class Dataset:
     def use_ref(self, ref: str) -> None:
         """Select `ref` instead of the class default revision (`-d name@ref`)."""
         if not self.accepts_ref:
-            raise ValueError(f"{self.name}: does not accept a ref (`-d {self.name}@{ref}`); its revision is pinned in code")
+            raise ConfigError(f"{self.name}: does not accept a ref (`-d {self.name}@{ref}`); its revision is pinned in code")
         self.revision = self.resolve_ref(ref)
         self.ref = ref
 
@@ -205,7 +206,7 @@ class Dataset:
         import re
 
         if not re.fullmatch(r"[0-9a-f]{40}", ref):
-            raise ValueError(f"{self.name}@{ref}: give the full 40-digit commit sha (branches and tags move)")
+            raise ConfigError(f"{self.name}@{ref}: give the full 40-digit commit sha (branches and tags move)")
         return ref
 
     def ref_info(self) -> dict | None:

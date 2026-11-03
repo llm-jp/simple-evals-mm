@@ -366,22 +366,22 @@ class OpenAIChatSampler(Sampler):
             url = (self.base_url() or "").rstrip("/")  # the catalog of the API the requests go to
             info = fetch_model_info(s.model, base_url=url)
             if info is None:
-                raise RuntimeError(f"{s.model}: OpenRouter's model catalog ({url}/models) is unreachable: the job cannot "
+                raise errors.SetupError(f"{s.model}: OpenRouter's model catalog ({url}/models) is unreachable: the job cannot "
                                    "start because the settings it would run with (default_parameters, the pinned endpoint "
                                    "row, the endpoint maximum of max_output_tokens) cannot be resolved and recorded")
             if not info:
-                raise RuntimeError(f"{s.model}: not in OpenRouter's model catalog (GET /models)")
+                raise errors.SetupError(f"{s.model}: not in OpenRouter's model catalog (GET /models)")
             self.model_defaults = {k: v for k, v in info.pop("default_parameters").items() if k in SAMPLING_FIELDS and v is not None}
             self.model_defaults_source = "openrouter:default_parameters"
             endpoint = {"model_id": s.model, **info}
             if s.provider_pin:
                 ep = fetch_endpoint_info(s.model, s.provider_pin, s.quant, base_url=url)
                 if ep is None:
-                    raise RuntimeError(f"{s.model}: OpenRouter's endpoint catalog ({url}/models/{s.model}/endpoints) is "
+                    raise errors.SetupError(f"{s.model}: OpenRouter's endpoint catalog ({url}/models/{s.model}/endpoints) is "
                                        "unreachable: the job cannot start because the pinned endpoint row (tag, "
                                        "quantization, max_completion_tokens) cannot be resolved and recorded")
                 if not ep.get("matched"):
-                    raise RuntimeError(f"{s.model}: no OpenRouter endpoint matches provider={s.provider_pin} quant={s.quant}; "
+                    raise errors.SetupError(f"{s.model}: no OpenRouter endpoint matches provider={s.provider_pin} quant={s.quant}; "
                                        f"available: {ep.get('available_tags')}")
                 endpoint.update(ep)
                 if ep.get("max_completion_tokens"):
@@ -392,7 +392,7 @@ class OpenAIChatSampler(Sampler):
         elif self.served:
             info = fetch_server_info(s.base_url(self._cli_base_url) or "", s.provider, os.environ.get(s.api_key_name or ""))
             if info is None:
-                raise RuntimeError(f"{s.provider}: the server ({s.base_url_source}) does not answer GET /models")
+                raise errors.SetupError(f"{s.provider}: the server ({s.base_url_source}) does not answer GET /models")
             manifest = getattr(self, "server_manifest", None)
             if manifest is not None:  # `sem serve` manifest: the snapshot the server loaded, not the client's HF cache
                 self.model_defaults, info["generation_config"] = manifest_generation_config(manifest)

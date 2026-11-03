@@ -41,6 +41,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 
+from simple_evals_mm.errors import UserError
 from simple_evals_mm.serving import manifest as mf
 from simple_evals_mm.serving import stack
 
@@ -74,7 +75,7 @@ DETERMINISTIC = {"sglang": "--enable-deterministic-inference", "vllm": "VLLM_BAT
                  "hf": "--deterministic (torch.use_deterministic_algorithms)"}
 
 
-class ServeError(RuntimeError):
+class ServeError(UserError, RuntimeError):
     pass
 
 

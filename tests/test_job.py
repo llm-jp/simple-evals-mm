@@ -144,7 +144,7 @@ def test_trial_locks_and_dry_run(job_env, capsys):
     assert len({t.generation_lock for t in a1}) == 3 and len({t.verifier_lock for t in a1 + a2}) == 1
     assert st.read_lock()["datasets"]["arith"]["verifier_lock"] == a1[0].verifier_lock
     capsys.readouterr()
-    assert s["run"]("-k", "3", "--dry-run") == 0
+    assert s["run"]("-k", "3", "--dry-run", "--json") == 0
     plan = json.loads(capsys.readouterr().out)
     assert {k: plan["datasets"]["arith"][k] for k in ("n_tasks", "trials_done", "trials_to_run")} == {"n_tasks": 3, "trials_done": 6, "trials_to_run": 3}
     assert plan["model"]["api_key_var"] == "SGLANG_API_KEY" and plan["model"]["api_format"] == "openai_chat_completions"
@@ -404,3 +404,98 @@ def test_trials_with_unicode_line_separators_read_back(job_env):
     assert len(trials) == 3 and all(" " in t.trajectory.final_text for t in trials)
     s["sampler"].calls = []
     assert s["run"]() == 0 and s["sampler"].calls == []  # resume reads them back: nothing regenerated
+
+
+def test_store_round_trip_fuzz(job_env, monkeypatch):
+    """Trials with line / paragraph separators, NEL, form feed, the C0 separators, other control characters, lone
+    surrogates and a ~1 MB answer are written and read back unchanged, and a resume regenerates nothing. Lone
+    surrogates in a model answer are replaced by U+FFFD on the response path (counted in the step's extra); the
+    store writer itself also survives one (written as its JSON escape, read back as the same string)."""
+    import random
+
+    from simple_evals_mm import store
+
+    rnd = random.Random(0)
+    weird = "  \x85\x0c\x1c\x1d\x1e\x00\x01\x07\x1b\x7f\t\r\n\"\\"
+    big = "".join(rnd.choice("ab \n" + weird + "日本語") for _ in range(1 << 20))
+    answers = {"2+2?": "4" + weird, "3+3?": "lone \ud800 and \udfff end", "capital of France?": big}
+    s = job_env
+    s["sampler"].reply = lambda q: answers[q]
+    assert s["run"]() == 0
+    st = s["store"]()
+    got = {t.task_name: t for t in st.read_trials("arith", 1)}
+    assert got["2+2?"].trajectory.final_text == "4" + weird
+    assert got["capital of France?"].trajectory.final_text == big
+    lone = got["3+3?"].trajectory
+    assert lone.final_text == "lone � and � end" and lone.agent_steps[-1].extra["surrogates_replaced"] == 2
+    assert st.check() == []
+    s["sampler"].calls = []
+    assert s["run"]() == 0 and s["sampler"].calls == []  # resume reads every trial back: 0 regenerated
+
+    # the writer on its own: a trial that still carries a lone surrogate (any other path) is not lost
+    t = got["2+2?"]
+    t.trajectory.steps[-1].message = "x\udc80y" + weird
+    store.write_trial(str(st.dir), "fuzz", t)
+    (back,) = store.iter_trials(str(st.dir), "fuzz", 1)
+    assert back.trajectory.steps[-1].message == "x\udc80y" + weird
+
+
+def test_unexpected_error_shows_a_traceback(job_env, monkeypatch, capsys):
+    """A bug (here a ValueError inside run_trials) prints the full traceback and exits 1; an expected failure
+    (JobError, CheckError, a bad option) stays one line (exit 2)."""
+    s = job_env
+
+    def boom(job):
+        raise ValueError("bug inside run_trials")
+
+    monkeypatch.setattr(runner, "run_trials", boom)
+    assert s["run"]() == 1
+    err = capsys.readouterr().err
+    assert "Traceback (most recent call last)" in err and "bug inside run_trials" in err and "in boom" in err
+    assert s["run"]("--effort", "high", "-m", "sglang/Qwen/Qwen3.5-9B", name="x") == 2  # no effort control: one line
+    err = capsys.readouterr().err
+    assert "Traceback" not in err and err.startswith("error: ") and "no reasoning effort control" in err
+
+
+def test_job_show_and_compact_dry_run(job_env, capsys):
+    s = job_env
+    assert s["run"]("-k", "2", "--generate-only") == 0
+    st = s["store"]()
+    capsys.readouterr()
+    assert s["sem"]("job", "show", st.dir) == 0
+    out = capsys.readouterr().out
+    assert "a1 3/3, a2 3/3" in out and " no " in out and "—" in out  # done/total, not verified, no cost reported
+    assert s["sem"]("job", "regrade", st.dir) == 0
+    capsys.readouterr()
+    assert s["sem"]("job", "show", st.dir) == 0
+    vid = st.current_verification_id("arith")
+    assert f"yes ({vid})" in capsys.readouterr().out
+    assert s["sem"]("job", "show", st.dir, "--json") == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown["summary"]["arith"]["trials"] == {"a1": {"done": 3, "total": 3}, "a2": {"done": 3, "total": 3}}
+
+    s["sampler"].config = lambda: {"settings": {"temperature": {"value": 0.6, "source": "cli"},
+                                                "effort": {"value": "high", "source": "preset:x", "note": "mapped"}}}
+    assert s["run"]("-k", "3", "--dry-run") == 0  # compact: settings table (field | value | source) + plan counts
+    out = capsys.readouterr().out
+    assert any(line.split() == ["field", "value", "source"] for line in out.splitlines())
+    assert any(line.split() == ["effort", "high", "preset:x"] for line in out.splitlines()) and "note (effort): mapped" in out
+    assert "arith" in out and "3 trial(s) to run, 6 done" in out and "--json" in out
+    sessions = st.read_lock()["sessions"]
+    assert all(set(x["entry"]) == {"argv0", "main_module"} for x in sessions)
+
+
+def test_help_and_version_do_not_read_env(tmp_path, monkeypatch, capsys):
+    """--help / --version exit before .env is read (no warning); a command warns once about ignored .env names."""
+    from simple_evals_mm import cli
+
+    (tmp_path / ".env").write_text("OPENROUTER_API_KEY=x\nSOME_SETTING=1\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    for argv in (["--version"], ["--help"], ["run", "--help"]):
+        with pytest.raises(SystemExit) as e:
+            cli.main(argv)
+        assert e.value.code == 0
+        assert "[env]" not in capsys.readouterr().err
+    assert cli.main(["jobs", "list", "-o", str(tmp_path / "jobs")]) == 0
+    assert capsys.readouterr().err.count("SOME_SETTING") == 1

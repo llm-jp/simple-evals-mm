@@ -29,6 +29,8 @@ import re
 import urllib.error
 import urllib.request
 
+from simple_evals_mm.errors import UserError
+
 FORMAT = "sem-server/1"
 VOLATILE = ("runtime",)
 PROBE_SYSTEM = "You are a helpful assistant."
@@ -39,7 +41,7 @@ TOKENIZE_PATHS = ("/tokenize", "/v1/tokenize")
 SECRET_FLAG = re.compile(r"(?:api[-_]?key|token|secret|password)", re.IGNORECASE)
 
 
-class ManifestError(RuntimeError):
+class ManifestError(UserError, RuntimeError):
     pass
 
 

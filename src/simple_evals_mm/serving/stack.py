@@ -26,6 +26,8 @@ import os
 import re
 import subprocess
 
+from simple_evals_mm.errors import UserError
+
 PATCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "patches")
 # distribution of each engine, and the further distributions whose installed files are RECORD-verified with it
 ENGINE_DIST = {"sglang": "sglang", "vllm": "vllm", "hf": "transformers"}
@@ -36,7 +38,7 @@ STACK_PACKAGES = ("torch", "transformers", "triton", "flashinfer-python", "flash
                   "pillow", "numpy")
 
 
-class StackError(RuntimeError):
+class StackError(UserError, RuntimeError):
     pass
 
 

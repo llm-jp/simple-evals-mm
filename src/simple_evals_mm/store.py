@@ -30,6 +30,7 @@ import threading
 from datetime import datetime
 
 from simple_evals_mm.atif import ImageStore
+from simple_evals_mm.errors import SetupError
 from simple_evals_mm.models import TrialResult, VerifierResult
 
 FORMAT = "sem-job/1"
@@ -141,7 +142,7 @@ class JobStore:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                raise RuntimeError(f"{self.dir} is in use by another sem process (run / resume / regrade)") from None
+                raise SetupError(f"{self.dir} is in use by another sem process (run / resume / regrade)") from None
             try:
                 yield
             finally:
@@ -190,6 +191,14 @@ class JobStore:
 
     def read_trials(self, ds: str, k: int) -> list[TrialResult]:
         return list(iter_trials(self.dir, ds, k))
+
+    def count_trials(self, ds: str, k: int) -> int:
+        """Complete trial lines of attempt k (a torn last line is not counted), without parsing them."""
+        p = self.trials_path(ds, k)
+        if not os.path.exists(p):
+            return 0
+        with open(p, "rb") as f:  # one trial per line, never blank: count the newlines
+            return sum(chunk.count(b"\n") for chunk in iter(lambda: f.read(1 << 20), b""))
 
     def append_trial(self, ds: str, trial: TrialResult) -> None:
         write_trial(self.dir, ds, trial)

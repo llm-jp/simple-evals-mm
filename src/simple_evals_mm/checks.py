@@ -26,6 +26,8 @@ import subprocess
 import sys
 import tomllib
 
+from simple_evals_mm.errors import UserError
+
 PACKAGE = "simple_evals_mm"
 PROJECT = "simple-evals-mm"
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -55,7 +57,7 @@ LOADERS = ("simple_evals_mm.tasks.ifbench:_verifiers",)
 ENV_STATE: dict = {}
 
 
-class CheckError(RuntimeError):
+class CheckError(UserError, RuntimeError):
     pass
 
 
@@ -188,6 +190,15 @@ def record_verify(names=RECORD_VERIFIED, distribution=md.distribution) -> dict:
             if base64.urlsafe_b64encode(digest).rstrip(b"=").decode() != f.hash.value:
                 mismatches.append(f"{name}: {f} differs from its RECORD")
     return {"checked": checked, "mismatches": mismatches, "missing": missing}
+
+
+def entry_point() -> dict:
+    """How this process was started (lock.json sessions): sys.argv[0] and the __main__ module (`python -m
+    simple_evals_mm.cli` -> simple_evals_mm.cli; the `sem` console script has none)."""
+    import __main__
+
+    spec = getattr(__main__, "__spec__", None)
+    return {"argv0": sys.argv[0] if sys.argv else None, "main_module": getattr(spec, "name", None)}
 
 
 def python_info() -> dict:
