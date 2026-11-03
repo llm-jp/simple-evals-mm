@@ -108,7 +108,9 @@ def iter_trials(job_dir: str, dataset: str, attempt: int):
             with open(path, "r+b") as f:
                 f.truncate(keep)
             data = data[:keep]
-    for line in data.decode("utf-8").splitlines():
+    # split on "\n" only: str.splitlines() also breaks on U+2028 / U+2029 / \x85 / \x0c ..., which json.dumps
+    # (ensure_ascii=False) leaves raw inside strings, so a model answer containing one would cut its trial line in two
+    for line in data.decode("utf-8").split("\n"):
         if line.strip():
             yield TrialResult.from_dict(json.loads(line))
 
