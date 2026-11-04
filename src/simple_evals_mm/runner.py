@@ -1,8 +1,9 @@
 """Job runner: start checks, config / lock, trials over one thread pool, verification and the summary.
 
     start_job(cfg)      checks, datasets, samplers; writes config.json + lock.json, or verifies that an existing job
-                        can be resumed (same config except job_name / jobs_dir / runtime-only options, same commit,
-                        lock check and dataset digests)
+                        can be resumed (same config except job_name / jobs_dir / runtime-only options, same lock check,
+                        endpoint, settings, server manifest and dataset digests; the same commit, or a later one that
+                        cannot affect the stored trials: code_change + resume_backstop)
     run_trials(job)     every (dataset, attempt, task) not yet in trials_a<k>.jsonl, -n concurrent, transient
                         failures retried -r times; an attempt's meta is written once all its tasks are in the file;
                         a circuit breaker stops the job when the endpoint keeps failing (retry.abort_after_consecutive)
@@ -22,11 +23,11 @@ import random
 import sys
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 
-from simple_evals_mm import checks, datalock, derive, errors
+from simple_evals_mm import checks, datalock, derive, errors, provenance
 from simple_evals_mm import dataset as dataset_mod
 from simple_evals_mm import store as store_mod
+from simple_evals_mm import trial as trial_mod
 from simple_evals_mm.agent import get_agent
 from simple_evals_mm.models import TrialResult, task_checksum
 from simple_evals_mm.samplers import registry
@@ -40,6 +41,8 @@ from simple_evals_mm.serving import manifest as server_mf
 RUNTIME_ONLY = ("job_name", "jobs_dir", "n_concurrent", "retry", "generate_only", "judge_model", "allow_dirty",
                 "skip_preflight", "server", "from_job", "allow_data_mismatch", "request_timeout_s")
 RESUME_REFUSED = "job directory already exists and cannot be resumed with a different config"
+FROM_HINT = ("continue in a new job directory with `sem run --from JOB` (it reuses / regrades / reruns the stored trials "
+             "per trial)")
 # runtime-only options recorded per session in lock.json `sessions`
 SESSION_OPTIONS = ("n_concurrent", "retry", "judge_model", "generate_only", "skip_preflight", "allow_dirty", "server",
                    "from_job", "allow_data_mismatch", "request_timeout_s")
@@ -101,15 +104,6 @@ def resolve_attempts(n_attempts, datasets: dict) -> dict[str, int]:
         if unknown:
             raise JobError(f"n_attempts names datasets the job does not run: {', '.join(unknown)}")
     return {name: attempts_for(n_attempts, name, ds) for name, ds in datasets.items()}
-
-
-def should_retry(cause: str | None, retry: dict) -> bool:
-    if cause is None:
-        return False
-    include = retry.get("include_causes")
-    if include is None:
-        include = [c for c, p in errors.POLICY.items() if p.retry]
-    return cause in include and cause not in (retry.get("exclude_causes") or [])
 
 
 def preflight(sampler, judge=None, datasets=None, verify: bool = True, allow_data_mismatch: bool = False) -> list[str]:
@@ -199,20 +193,102 @@ def _comparable(cfg: dict) -> dict:
     return {k: v for k, v in cfg.items() if k not in RUNTIME_ONLY}
 
 
-def _lock_digest(lock: dict) -> dict:
+def _lock_digest(lock: dict, commit: bool = True) -> dict:
     """What must be equal to resume: code, lock check, dataset digests, the endpoint (OpenRouter pinned row / served
     server identity) and the resolved settings values (OpenRouter default_parameters, generation_config.json,
-    endpoint maximum)."""
+    endpoint maximum). commit False: without the commit / dirty / diff fields (a resume across commits compares them
+    in code_change)."""
     code = lock.get("code", {})
     sconf = (lock.get("sampler") or {}).get("config") or {}
-    return {"commit": code.get("commit"), "dirty": code.get("dirty"), "diff_sha256": code.get("diff_sha256"),
-            "python": code.get("python"), "endpoint": endpoint_lock(sconf.get("endpoint")),
-            "base_url": lock_config(sconf).get("base_url") if sconf else None,
-            "settings": {k: (v or {}).get("value") for k, v in (sconf.get("settings") or {}).items()},
-            "lock_check": {k: code.get("lock_check", {}).get(k) for k in ("ok", "lock_sha256", "mismatches")},
-            "server": (lock.get("server") or {}).get("digest"),
-            "datasets": {n: {k: d.get(k) for k in ("revision", "ref", "task_ids_sha256", "tasks_sha256", "n_tasks")}
-                         for n, d in lock.get("datasets", {}).items()}}
+    out = {"commit": code.get("commit"), "dirty": code.get("dirty"), "diff_sha256": code.get("diff_sha256"),
+           "python": checks.python_identity(code.get("python")), "endpoint": endpoint_lock(sconf.get("endpoint")),
+           "base_url": lock_config(sconf).get("base_url") if sconf else None,
+           "settings": {k: (v or {}).get("value") for k, v in (sconf.get("settings") or {}).items()},
+           "lock_check": {k: code.get("lock_check", {}).get(k) for k in ("ok", "lock_sha256", "mismatches")},
+           "server": (lock.get("server") or {}).get("digest"),
+           "datasets": {n: {k: d.get(k) for k in ("revision", "ref", "task_ids_sha256", "tasks_sha256", "n_tasks")}
+                        for n, d in lock.get("datasets", {}).items()}}
+    if not commit:
+        for k in ("commit", "dirty", "diff_sha256"):
+            out.pop(k)
+    return out
+
+
+def sampler_modules_of(lock: dict) -> list[str] | None:
+    """provenance.sampler_modules of the job whose lock.json is `lock` (the served engine from the server manifest or
+    the endpoint record)."""
+    s = lock.get("sampler") or {}
+    engine = (((lock.get("server") or {}).get("manifest") or {}).get("engine") or {}).get("name") \
+        or (((s.get("config") or {}).get("endpoint")) or {}).get("engine")
+    return provenance.sampler_modules(s.get("provider"), s.get("api_format"), engine)
+
+
+def code_change(old_lock: dict, code: dict, datasets: list[str], sampler_modules: list[str] | None,
+                allow_dirty: bool = False, extra_files=()) -> tuple[dict, list[str]]:
+    """Can a job written at old_lock's commit resume at `code` (start_checks of this session)? Returns (the session
+    record {commit, prev_commit, describe, decision, provenance, regrade}, problems). Allowed only when both trees are
+    clean (or --allow-dirty: the dirty files count as changed), the stored commit is an ancestor of the new one, and
+    no dataset of the job has a generation-relevant change (provenance.changed_datasets: dataset-own, generation-side
+    of this job's sampler, or unknown files). Verification-side changes are allowed: those datasets are listed under
+    `regrade` (the run's verification re-verifies them with the new code)."""
+    old_code = old_lock.get("code") or {}
+    a, b = old_code.get("commit"), code.get("commit")
+    rec: dict = {"commit": b, "prev_commit": a, "describe": code.get("describe")}
+    if a == b:
+        return {**rec, "decision": "same_commit"}, []
+    problems = []
+    if not a or not b:
+        problems.append(f"  commit: {a!r} -> {b!r} (a job without a recorded commit resumes only at that state)")
+    dirty = [f"{w} ({(c.get('problems') or ['dirty'])[0].splitlines()[0]})"
+             for w, c in (("the stored session", old_code), ("this session", code)) if c.get("dirty")]
+    if dirty and not allow_dirty:
+        problems.append(f"  commit: {str(a)[:12]} -> {str(b)[:12]} with a dirty tree in {', '.join(dirty)} "
+                        "(across commits both trees must be clean, or pass --allow-dirty)")
+    if not problems:
+        try:
+            if not provenance.is_ancestor(a, b):
+                problems.append(f"  commit: {a[:12]} is not an ancestor of {b[:12]} (a resume may only move forward "
+                                "on the job's history)")
+        except Exception as e:  # noqa: BLE001 - an unknown commit: refuse
+            problems.append(f"  commit: {a[:12]} -> {b[:12]} cannot be compared ({type(e).__name__}: {e})")
+    if problems:
+        return {**rec, "decision": "refused"}, problems
+    try:
+        changed = provenance.changed_datasets(a, b, sorted(datasets), sampler_modules=sampler_modules,
+                                              extra_files=extra_files)
+    except Exception as e:  # noqa: BLE001
+        return {**rec, "decision": "refused"}, [f"  commit: {a[:12]} -> {b[:12]}: provenance failed ({type(e).__name__}: {e})"]
+    rec["provenance"] = {n: {k: r[k] for k in ("dataset", "generation", "verification", "unknown") if r.get(k)}
+                         for n, r in changed.items() if r.get("changed")}
+    for name, r in sorted(changed.items()):
+        files = provenance.generation_files(r)
+        if files:
+            problems.append(f"  {name}: generation-relevant files changed {a[:12]}..{b[:12]}: "
+                            f"{', '.join(files[:12])}{' ...' if len(files) > 12 else ''}")
+    rec["regrade"] = sorted(n for n, r in changed.items() if r.get("verification") and not provenance.generation_files(r))
+    rec["decision"] = "refused" if problems else "across_commits"
+    return rec, problems
+
+
+def resume_backstop(st: store_mod.JobStore, ctx: derive.Context) -> tuple[dict, list[str]]:
+    """derive.plan of the job against itself under the new code: every stored non-transient trial must come out REUSE
+    or REGRADE. Returns ({dataset: {reuse, regrade}} of the stored trials, problems: the RERUN reasons)."""
+    p = derive.plan(st, ctx)
+    counts, problems = {}, []
+    for name, v in p.items():
+        c, bad = {derive.REUSE: 0, derive.REGRADE: 0}, {}
+        for k in st.attempts(name):
+            for t in st.read_trials(name, k):
+                d = v["decisions"].get((k, t.task_name))
+                if d is None or derive.is_transient(t.cause):
+                    continue
+                if d.kind == derive.RERUN:
+                    bad[d.reason] = bad.get(d.reason, 0) + 1
+                else:
+                    c[d.kind] += 1
+        counts[name] = c
+        problems += [f"  {name}: {n} stored trial(s) would be rerun under the new code: {r}" for r, n in sorted(bad.items())]
+    return counts, problems
 
 
 def _task_changes(st: store_mod.JobStore, name: str, checksums: dict) -> list[str]:
@@ -329,13 +405,18 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
         rt = manifest.get("runtime") or {}
         session["server"] = {k: rt.get(k) for k in ("manifest_path", "host", "port", "base_url", "pid", "started_at")}
 
+    code["commits"] = [code.get("commit")]
+    cross = False
     if st.exists():
         old_cfg, old_lock = st.read_config(), st.read_lock()
         try:  # a job written with one n_attempts for every dataset compares as that number per dataset
             old_cfg = {**old_cfg, "n_attempts": resolve_attempts(old_cfg.get("n_attempts"), dsets)}
         except JobError:
             pass  # names other datasets: the diff below refuses the resume
-        problems = diff_dicts(_comparable(old_cfg), _comparable(cfg)) + diff_dicts(_lock_digest(old_lock), _lock_digest(lock))
+        old_code = old_lock.get("code") or {}
+        cross = old_code.get("commit") != code.get("commit")
+        problems = diff_dicts(_comparable(old_cfg), _comparable(cfg)) + \
+            diff_dicts(_lock_digest(old_lock, not cross), _lock_digest(lock, not cross))
         for name in dsets:
             old_ds = (old_lock.get("datasets") or {}).get(name) or {}
             if old_ds.get("data_mismatch") and not lock_ds[name].get("data_mismatch"):  # once recorded, kept
@@ -345,19 +426,49 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
                 if changed:
                     problems.append(f"  {name}: task content changed for {len(changed)} generated task(s): "
                                     f"{', '.join(changed[:10])}{' ...' if len(changed) > 10 else ''}")
+        change = {"commit": code.get("commit"), "prev_commit": old_code.get("commit"), "describe": code.get("describe"),
+                  "decision": "same_commit"}
+        if cross:
+            old_diff = os.path.join(st.dir, "dirty.diff")
+            extra = provenance.diff_files(diff)
+            if old_code.get("dirty") and os.path.exists(old_diff):
+                with open(old_diff, encoding="utf-8") as f:
+                    extra |= provenance.diff_files(f.read())
+            change, more = code_change(old_lock, code, list(dsets), sampler_modules_of(lock),
+                                       bool(cfg.get("allow_dirty")), extra)
+            problems += more
         if problems:
-            raise JobError(f"{RESUME_REFUSED} ({st.dir}):\n" + "\n".join(problems))
+            raise JobError(f"{RESUME_REFUSED} ({st.dir}):\n" + "\n".join(problems)
+                           + (f"\nor {FROM_HINT}" if cross else ""))
+        session.update(change)
+        code["commits"] = [*(old_code.get("commits") or [old_code.get("commit")])]
+        if code.get("commit") not in code["commits"]:
+            code["commits"].append(code.get("commit"))
         lock["job_id"] = old_lock["job_id"]
         lock["sessions"] = [*(old_lock.get("sessions") or []), session]
         lock["skip_preflight"] = old_lock.get("skip_preflight")  # the first session's; later ones are in sessions
         if old_lock.get("derived_from"):
             lock["derived_from"] = old_lock["derived_from"]
-        print(f"[job] resuming {cfg['job_name']} ({lock['job_id']}), session {len(lock['sessions'])}")
+        print(f"[job] resuming {cfg['job_name']} ({lock['job_id']}), session {len(lock['sessions'])}"
+              + (f", commit {str(change['prev_commit'])[:12]} -> {str(change['commit'])[:12]}" if cross else ""))
     else:
         lock["job_id"] = str(uuid.uuid4())
         lock["sessions"] = [session]
+        session.update(commit=code.get("commit"), describe=code.get("describe"), decision="new")
     # generation_lock: the endpoint fields that change outputs, not the volatile catalog fields (pricing, uptime)
     job.sampler_config = lock_config(lock["sampler"]["config"])
+    if cross:  # backstop: the stored trials, planned against the new code, are all REUSE or REGRADE
+        counts, problems = resume_backstop(st, derive_context(job, lock))
+        if problems:
+            raise JobError(f"{RESUME_REFUSED} ({st.dir}): the new code would rerun stored trials:\n"
+                           + "\n".join(problems) + f"\n{FROM_HINT}")
+        session["backstop"] = counts
+        regrade = sorted(n for n, c in counts.items() if c[derive.REGRADE])
+        session["regrade"] = sorted(set(session.get("regrade") or []) | set(regrade))
+        if session["regrade"]:
+            print(f"[job] verification-side changes: {', '.join(session['regrade'])} "
+                  + ("are verified again at the end of this run" if not cfg.get("generate_only")
+                     else "need `sem job regrade` (--generate-only)"))
     if cfg.get("from_job"):
         src = store_mod.JobStore.from_path(cfg["from_job"])
         if not src.exists():
@@ -381,6 +492,69 @@ def start_job(cfg: dict, base_url: str | None = None) -> Job:
             print(f"[from] {name}: reuse {c['reuse']}, regrade {c['regrade']}, rerun {c['rerun']} "
                   f"({copied.get(name, 0)} trial(s) copied)")
     return job
+
+
+DRY_RUN_NOTE = ("the endpoint, the resolved settings and the server manifest are not compared here (they need the "
+                "running server); the backstop assumes the stored ones and the real resume compares them")
+
+
+def resume_dry_run(st: store_mod.JobStore, cfg: dict) -> dict:
+    """`sem job resume --dry-run`: the resume decision without generating or writing anything. Runs the start checks,
+    the config comparison, the code-side checks (code_change), the lock check / python / dataset digests and the
+    backstop, offline: the endpoint, the resolved settings and the server manifest need the running server, so the
+    backstop assumes the stored ones (the real resume compares them)."""
+    old_cfg, old_lock = st.read_config(), st.read_lock()
+    out: dict = {"job": st.dir, "notes": [DRY_RUN_NOTE]}
+    code = checks.start_checks(allow_dirty=True, do_import=False)
+    diff = code.pop("diff", None)
+    problems = []
+    if code.get("dirty") and not cfg.get("allow_dirty"):
+        problems.append("  this tree fails the start checks (`sem job resume` refuses without --allow-dirty):\n    "
+                        + "\n    ".join(p.splitlines()[0] for p in code.get("problems") or []))
+    dsets = load_datasets(cfg)
+    cfg = {**cfg, "n_attempts": resolve_attempts(cfg.get("n_attempts"), dsets)}
+    with contextlib.suppress(JobError):
+        old_cfg = {**old_cfg, "n_attempts": resolve_attempts(old_cfg.get("n_attempts"), dsets)}
+    problems += diff_dicts(_comparable(old_cfg), _comparable(cfg))
+    job = Job(cfg=cfg, store=st, lock={}, sampler=None, agent=None)
+    lock_ds = {}
+    for name, ds in dsets.items():
+        loaded, data = load_checked(name, ds, allow=True)
+        if data.get("data_mismatch") and not cfg.get("allow_data_mismatch"):
+            problems.append(f"  {name}: data differs from datasets.lock")
+        tasks = select_tasks(ds.subset(loaded), cfg.get("task_ids"), cfg.get("include"), cfg.get("exclude"),
+                             cfg.get("n_tasks"))
+        job.datasets[name], job.tasks[name] = ds, tasks
+        job.checksums[name] = {t.id: task_checksum(t, ds.file_fields) for t in tasks}
+        lock_ds[name] = {"revision": ds.revision, "ref": ds.ref_info(),
+                         "task_ids_sha256": dataset_mod.task_ids_fingerprint(t.id for t in tasks),
+                         "tasks_sha256": dataset_mod.tasks_sha256(job.checksums[name].items()), "n_tasks": len(tasks),
+                         "verifier_lock": dataset_mod.verifier_lock(ds, None, code.get("commit"))}
+        if (old_lock.get("datasets") or {}).get(name, {}).get("tasks_sha256") != lock_ds[name]["tasks_sha256"]:
+            changed = _task_changes(st, name, job.checksums[name])
+            if changed:
+                problems.append(f"  {name}: task content changed for {len(changed)} generated task(s)")
+    # the stored sampler / server sections stand in for the ones the running server would give
+    lock = {**old_lock, "code": code, "datasets": lock_ds}
+    keep = ("python", "lock_check", "datasets")
+    old_d, new_d = _lock_digest(old_lock, False), _lock_digest(lock, False)
+    problems += diff_dicts({k: old_d[k] for k in keep}, {k: new_d[k] for k in keep})
+    old_code = old_lock.get("code") or {}
+    change, more = code_change(old_lock, code, list(dsets), sampler_modules_of(old_lock), bool(cfg.get("allow_dirty")),
+                               provenance.diff_files(diff))
+    problems += more
+    out["change"] = change
+    if change["decision"] == "across_commits" and not problems:
+        job.sampler_config = lock_config(((old_lock.get("sampler") or {}).get("config")) or {})
+        counts, more = resume_backstop(st, derive_context(job, lock))
+        out["backstop"] = counts
+        problems += more
+    out["decision"] = "refused" if problems else ("allowed" if old_code.get("commit") == code.get("commit")
+                                                 else "allowed across commits")
+    out["problems"] = problems
+    if problems and change.get("commit") != change.get("prev_commit"):
+        out["hint"] = FROM_HINT
+    return out
 
 
 def load_datasets(cfg: dict) -> dict:
@@ -408,46 +582,13 @@ def derive_context(job: Job, lock: dict) -> derive.Context:
                           commit=(lock.get("code") or {}).get("commit"),
                           verifier_locks={n: d["verifier_lock"] for n, d in lock["datasets"].items()},
                           judge_config=job.judge_config, n_attempts=dict(job.cfg["n_attempts"]),
-                          generate_only=bool(job.cfg.get("generate_only")))
+                          generate_only=bool(job.cfg.get("generate_only")), sampler_modules=sampler_modules_of(lock))
 
 
 # ---------------------------------------------------------------- trials
-def _now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
-
-
-def _run_trial(job: Job, name: str, k: int, task) -> TrialResult:
-    ds = job.datasets[name]
-    started = _now()
-    rc = job.cfg["retry"]
-    for retry in range(rc["max_retries"] + 1):
-        traj = job.agent.run(task, ds, job.sampler, job_id=job.lock["job_id"], attempt=k, images=job.store.images)
-        cause = (traj.failure or {}).get("cause")
-        if not should_retry(cause, rc):
-            break
-        if retry < rc["max_retries"]:
-            print(f"[trial] {name}/{task.id} a{k}: {cause} ({(traj.failure or {}).get('error', '')[:120]}), retry {retry + 1}",
-                  flush=True)
-    traj.extra["retries"] = retry
-    traj.extra["n_concurrent"] = job.cfg["n_concurrent"]
-    fm = traj.final_metrics
-    failure = traj.failure
-    trial = TrialResult(
-        task_name=task.id, trial_name=traj.trajectory_id, attempt=k,
-        task_checksum=job.checksums.get(name, {}).get(task.id) or task_checksum(task, ds.file_fields),
-        agent_info={"name": traj.agent.name, "version": traj.agent.version, "model_name": traj.agent.model_name},
-        trajectory=traj,
-        usage={"prompt_tokens": fm.total_prompt_tokens or 0, "completion_tokens": fm.total_completion_tokens or 0,
-               "cached_tokens": fm.total_cached_tokens or 0, "cost_usd": fm.total_cost_usd} if fm else {},
-        exception_info={"exception_type": failure["error"].split(":", 1)[0], "message": failure["error"],
-                        "cause": failure["cause"],
-                        **{k: failure[k] for k in ("connection", "endpoint_changed") if failure.get(k)}} if failure else None,
-        started_at=started, finished_at=_now(),
-        generation_lock=dataset_mod.generation_lock(traj, job.sampler_config,
-                                                    server_manifest_digest=(job.lock.get("server") or {}).get("digest"),
-                                                    commit=job.lock["code"].get("commit")),
-        verifier_lock=job.lock["datasets"][name]["verifier_lock"])
-    return trial
+_now = trial_mod.now
+_run_trial = trial_mod.run_trial
+should_retry = trial_mod.should_retry
 
 
 def _cause(trial: TrialResult) -> str | None:

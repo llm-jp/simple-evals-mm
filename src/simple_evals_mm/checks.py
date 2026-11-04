@@ -265,7 +265,26 @@ def entry_point() -> dict:
 
 
 def python_info() -> dict:
-    return {"version": sys.version, "platform": platform.platform(), "implementation": platform.python_implementation()}
+    """lock.json code.python: the interpreter (sys.version holds the version and the build), the OS family and the
+    machine architecture, plus the full platform string (kernel release, libc) recorded for information only:
+    python_identity() is what a resume compares."""
+    return {"version": sys.version, "platform": platform.platform(), "implementation": platform.python_implementation(),
+            "system": platform.system(), "machine": platform.machine()}
+
+
+_ARCH_RE = re.compile(r"-(x86_64|amd64|aarch64|arm64|armv7l|ppc64le|s390x|riscv64|i686)(?:-|$)")
+
+
+def python_identity(py: dict | None) -> dict:
+    """The part of code.python compared on resume: implementation, sys.version (version + build), OS family and
+    architecture. Not the kernel release, hostname or full platform string (a resumed job may land on another node).
+    Locks written before system / machine were recorded: both are read from the platform string."""
+    py = py or {}
+    plat = py.get("platform") or ""
+    arch = _ARCH_RE.findall(plat.split("-with-")[0])
+    return {"implementation": py.get("implementation"), "version": py.get("version"),
+            "system": py.get("system") or (plat.split("-", 1)[0] or None),
+            "machine": py.get("machine") or (arch[-1] if arch else None)}
 
 
 _IMPORTED: dict | None = None

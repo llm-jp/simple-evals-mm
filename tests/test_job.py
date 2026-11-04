@@ -566,3 +566,153 @@ def test_registered_default_attempts():
     got = {n: dataset_mod.dataset_class(n).default_attempts for n in dataset_mod.DATASETS if n != "arith"}
     assert got["aime26"] == 10 and got["ifbench"] == 5
     assert {n for n, k in got.items() if k != 3} == {"aime26", "ifbench"}
+
+
+# ---------------------------------------------------------------- resume across commits (temporary git repository)
+def _ses(st):
+    return st.read_lock()["sessions"]
+
+
+def test_resume_across_neutral_commit(job_env, git_pkg, capsys):
+    """A commit that changes only NEUTRAL files (store, runner) and files outside the package: the job resumes in
+    the same directory, the sessions record both commits and each trial its generation commit."""
+    s, g = job_env, git_pkg
+    s["commit"] = g.base
+    s["sampler"].fail = {"capital": KeyboardInterrupt()}
+    with pytest.raises(KeyboardInterrupt):
+        s["run"]()
+    st = s["store"]()
+    job_id = st.read_lock()["job_id"]
+    c2 = g.commit({"store.py": "S = 2\n", "runner.py": "R = 2\n", "/README.md": "r\n", "/tests/test_x.py": "t\n"})
+    s["commit"], s["sampler"].fail, s["sampler"].calls = c2, {}, []
+    capsys.readouterr()
+    assert s["sem"]("job", "resume", "--dry-run", st.dir) == 0
+    assert "decision  allowed across commits" in capsys.readouterr().out
+    assert s["sem"]("job", "resume", "-p", st.dir) == 0
+    assert [m[-1].text for m in s["sampler"].calls] == ["capital of France?"]  # the stored trials are kept
+    lock = st.read_lock()
+    assert lock["job_id"] == job_id and lock["code"]["commit"] == c2 and lock["code"]["commits"] == [g.base, c2]
+    ses = lock["sessions"]
+    assert [x["commit"] for x in ses] == [g.base, c2] and [x["decision"] for x in ses] == ["new", "across_commits"]
+    assert ses[1]["prev_commit"] == g.base and ses[1]["backstop"] == {"arith": {"reuse": 0, "regrade": 2}}
+    assert not ses[1]["provenance"]  # no dataset touched
+    trials = st.read_trials("arith", 1)
+    assert {t.task_name: t.generation_commit for t in trials} == {"2+2?": g.base, "3+3?": g.base,
+                                                                  "capital of France?": c2}
+    assert {t.trajectory.session_id for t in trials} == {job_id}  # one job: no ATIF session points elsewhere
+    assert st.is_complete("arith", 1) and st.read_verification_meta("arith")["commit"] == c2
+    capsys.readouterr()
+    assert s["sem"]("job", "show", st.dir) == 0
+    out = capsys.readouterr().out
+    assert f"commit {g.base[:12]}  new" in out and f"commit {c2[:12]} (from {g.base[:12]})  across_commits" in out
+
+
+def test_resume_across_verification_change_regrades(job_env, git_pkg):
+    s, g = job_env, git_pkg
+    s["commit"] = g.base
+    assert s["run"]() == 0
+    st = s["store"]()
+    v1 = st.current_verification_id("arith")
+    c2 = g.commit({"verifiers.py": "V = 2\n"})
+    s["commit"], s["sampler"].calls = c2, []
+    assert s["run"]() == 0
+    assert not s["sampler"].calls
+    ses = _ses(st)[-1]
+    assert ses["decision"] == "across_commits" and ses["regrade"] == ["arith"]
+    assert ses["provenance"]["arith"] == {"verification": [f"{g.PKG}/verifiers.py"]}
+    assert ses["backstop"] == {"arith": {"reuse": 0, "regrade": 3}}
+    v2 = st.current_verification_id("arith")
+    assert v2 != v1 and st.read_verification_meta("arith", v2)["commit"] == c2  # re-verified by the new code
+
+
+@pytest.mark.parametrize("changed", ["tasks/arith.py", "samplers/openai_chat.py", "samplers/base.py", "agent.py",
+                                     "newmod.py"])
+def test_resume_refused_across_generation_change(job_env, git_pkg, capsys, changed):
+    """The dataset's own file, this job's sampler, a generation-side file or an unknown package file: refused with the
+    file list and the pointer to `sem run --from`."""
+    s, g = job_env, git_pkg
+    s["commit"] = g.base
+    assert s["run"]() == 0
+    st = s["store"]()
+    s["commit"] = g.commit({changed: "# changed\n"})
+    capsys.readouterr()
+    assert s["run"]() == 2
+    err = capsys.readouterr().err
+    assert runner.RESUME_REFUSED in err and "arith: generation-relevant files changed" in err
+    assert f"{g.PKG}/{changed}" in err and "sem run --from" in err
+    assert st.read_lock()["code"]["commit"] == g.base and len(_ses(st)) == 1  # nothing written
+
+
+def test_resume_across_other_sampler_change(job_env, git_pkg):
+    """gemini.py does not shape a sglang (chat completions) job's requests."""
+    s, g = job_env, git_pkg
+    s["commit"] = g.base
+    assert s["run"]() == 0
+    s["commit"] = g.commit({"samplers/gemini.py": "from simple_evals_mm.samplers.openai_chat import B\n# g\n"})
+    assert s["run"]() == 0
+    assert _ses(s["store"]())[-1]["decision"] == "across_commits"
+
+
+def test_resume_refused_for_non_ancestor_commit(job_env, git_pkg, capsys):
+    s, g = job_env, git_pkg
+    c2 = g.commit({"store.py": "S = 2\n"})
+    s["commit"] = c2
+    assert s["run"]() == 0
+    g.git("checkout", "-q", "-b", "side", g.base)
+    s["commit"] = g.commit({"store.py": "S = 3\n"})  # a sibling of c2, not a descendant
+    capsys.readouterr()
+    assert s["run"]() == 2
+    assert "is not an ancestor of" in capsys.readouterr().err
+
+
+def test_resume_backstop_refuses_a_trial_the_new_code_would_rerun(job_env, git_pkg, capsys):
+    """The provenance finds nothing, but a stored trial does not reproduce its generation_lock under the new code."""
+    s, g = job_env, git_pkg
+    s["commit"] = g.base
+    assert s["run"]() == 0
+    st = s["store"]()
+    path = st.trials_path("arith", 1)
+    with open(path) as f:
+        rows = [json.loads(line) for line in f]
+    rows[0]["generation_lock"] = "0" * 64
+    with open(path, "w") as f:
+        f.write("".join(json.dumps(r) + "\n" for r in rows))
+    s["commit"] = g.commit({"store.py": "S = 2\n"})
+    capsys.readouterr()
+    assert s["run"]() == 2
+    err = capsys.readouterr().err
+    assert "1 stored trial(s) would be rerun under the new code: generation_lock differs" in err
+    assert "sem run --from" in err
+
+
+# ---------------------------------------------------------------- python identity on resume
+PY = {"version": "3.13.13 (main, May 10 2026, 19:26:54) [Clang 22.1.3 ]", "implementation": "CPython",
+      "platform": "Linux-5.14.0-687.36.1.el9_8.x86_64-x86_64-with-glibc2.34", "system": "Linux", "machine": "x86_64"}
+
+
+def test_resume_on_another_kernel_release(job_env):
+    """Same commit, the platform differs only in the kernel release (another node): resumes; the full platform string
+    stays recorded for information. A lock written before system / machine were recorded compares the same way."""
+    s = job_env
+    s["python"] = {k: v for k, v in PY.items() if k not in ("system", "machine")}  # an older lock
+    assert s["run"]("-k", "1") == 0
+    s["python"] = {**PY, "platform": PY["platform"].replace("687.36.1", "687.39.1")}
+    assert s["run"]() == 0
+    st = s["store"]()
+    assert st.read_lock()["code"]["python"]["platform"].startswith("Linux-5.14.0-687.39.1")
+    assert len(st.read_lock()["sessions"]) == 2
+
+
+@pytest.mark.parametrize("field,value", [("version", "3.14.1 (main, Jan 1 2027, 00:00:00) [Clang 22.1.3 ]"),
+                                         ("machine", "aarch64")])
+def test_resume_refused_on_another_python_or_architecture(job_env, capsys, field, value):
+    s = job_env
+    s["python"] = PY
+    assert s["run"]() == 0
+    s["python"] = {**PY, field: value}
+    if field == "machine":
+        s["python"]["platform"] = PY["platform"].replace("x86_64", "aarch64")
+    capsys.readouterr()
+    assert s["run"]() == 2
+    err = capsys.readouterr().err
+    assert runner.RESUME_REFUSED in err and f"python.{field}:" in err
