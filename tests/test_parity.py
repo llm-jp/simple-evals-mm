@@ -3,6 +3,7 @@ non-binary rewards, n/a and --strict."""
 
 import json
 import math
+import os
 
 import pytest
 import yaml
@@ -167,6 +168,7 @@ def test_committed_references_parse():
             assert isinstance(s["value"], (int, float)) and s.get("status", "open") in ("ok", "open", "explained")
             if s.get("comparable", True) is False:
                 assert s.get("reason"), (key, ds)
+            assert s.get("submetric") in (None, *parity.SUBMETRICS), (key, ds)
 
 
 def test_setting_from_real_dataset_args(tmp_path):
@@ -204,3 +206,37 @@ def test_committed_references_contract():
             known = _known_setting_keys(ds)
             for k in s.get("setting") or {}:
                 assert k in known, (key, ds, k, sorted(known))
+
+
+def test_submetric_from_details(tmp_path, monkeypatch):
+    """A reference with `submetric` compares that metric of the verifier details, not the reward: prompt-level per task,
+    instruction-level micro-averaged; a policy-scored trial (no details) fails all of its instructions (count from
+    another attempt); reward None is excluded."""
+    st = JobStore(str(tmp_path / "jobs"), "j")
+    st.write_config({"model": "sglang/Org/Model-9B", "datasets": ["toy_if"], "n_attempts": 2})
+    st.write_lock({"job_id": "u", "datasets": {"toy_if": {"n_tasks": 3, "revision": "r", "config": {"args": {}}}}})
+
+    def d(ps, pl, inst_s, inst_l):
+        return {"prompt_strict": ps, "prompt_loose": pl, "inst_strict": inst_s, "inst_loose": inst_l}
+
+    a1 = [VerifierResult("t0", 1.0, details=d(False, True, [True, False], [True, True])),
+          VerifierResult("t1", 1.0, details=d(True, True, [True], [True])),
+          VerifierResult("t2", None)]  # provider_failed: excluded
+    a2 = [VerifierResult("t0", 0.0, method="policy", cause="budget_exhausted"),  # 2 instructions, both failed
+          VerifierResult("t1", 1.0, details=d(True, True, [True], [True])),
+          VerifierResult("t2", 0.0, details=d(False, False, [False], [False]))]
+    for k in (1, 2):
+        os.makedirs(os.path.dirname(st.trials_path("toy_if", k)), exist_ok=True)
+        open(st.trials_path("toy_if", k), "w").close()
+    st.write_verification("toy_if", "v1", {1: a1, 2: a2}, {})
+    assert parity.submetric_scores(st, "toy_if", "prompt_strict") == [50.0, 100 / 3]
+    assert parity.submetric_scores(st, "toy_if", "prompt_loose") == [100.0, 100 / 3]
+    assert parity.submetric_scores(st, "toy_if", "inst_strict") == [200 / 3, 25.0]
+    assert parity.submetric_scores(st, "toy_if", "inst_loose") == [100.0, 25.0]
+    with pytest.raises(ValueError, match="unknown submetric"):
+        parity.submetric_scores(st, "toy_if", "f1")
+    refs = {"m": {"hf_id": "Org/Model-9B", "scores": {"toy_if": {"value": 62.5, "submetric": "inst_loose"}}}}
+    _register(monkeypatch, "toy_if")
+    row = parity.compare(st, refs)["rows"][0]
+    assert row["submetric"] == "inst_loose" and row["ours"] == pytest.approx(62.5) and row["result"] == "✓"
+    assert row["std"] == pytest.approx(math.sqrt(2) * 37.5) and row["binary"] is False

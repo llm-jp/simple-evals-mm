@@ -264,9 +264,9 @@ def test_argv_redaction_and_managed_flags():
     with pytest.raises(serve.ServeError, match="not a server-side key"):
         serve.parse_server_args(["temperature=0"])
     argv, env = serve.build_argv("vllm", "/v/bin/python", "m", host="h", port=1, dp=1, tp=2, chat_template="t",
-                                 deterministic=True, server_args={"max_image_tokens": 8192}, extra=[])
+                                 deterministic=True, server_args={"max_soft_tokens": 1120}, extra=[])
     assert argv[:3] == ["/v/bin/vllm", "serve", "m"] and env == {"VLLM_BATCH_INVARIANT": "1"}
-    assert json.loads(argv[argv.index("--mm-processor-kwargs") + 1]) == {"max_image_tokens": 8192}
+    assert json.loads(argv[argv.index("--mm-processor-kwargs") + 1]) == {"max_soft_tokens": 1120}
     argv, _ = serve.build_argv("sglang", "p", "m", host="h", port=1, dp=1, tp=1, chat_template="t", deterministic=True,
                                server_args={}, extra=[])
     assert "--enable-deterministic-inference" in argv
