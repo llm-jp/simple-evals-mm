@@ -80,7 +80,7 @@ def job_env(tmp_path, monkeypatch):
     monkeypatch.setattr(registry, "make_sampler",
                         lambda spec, base_url=None: state["judge"] if "judge" in spec.model else state["sampler"])
     monkeypatch.setattr(checks, "start_checks", lambda allow_dirty=False, **kw: {
-        "version": "0.5.0", "commit": state["commit"], "dirty": False,
+        "version": "0.5.0", "commit": state["commit"], "dirty": False, "python": state.get("python"),
         "lock_check": {"ok": True, "lock_sha256": "l", "mismatches": []}})
     jobs = str(tmp_path / "jobs")
     real_entry = datalock.entry

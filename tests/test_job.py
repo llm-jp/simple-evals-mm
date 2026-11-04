@@ -683,3 +683,36 @@ def test_resume_backstop_refuses_a_trial_the_new_code_would_rerun(job_env, git_p
     err = capsys.readouterr().err
     assert "1 stored trial(s) would be rerun under the new code: generation_lock differs" in err
     assert "sem run --from" in err
+
+
+# ---------------------------------------------------------------- python identity on resume
+PY = {"version": "3.13.13 (main, May 10 2026, 19:26:54) [Clang 22.1.3 ]", "implementation": "CPython",
+      "platform": "Linux-5.14.0-687.36.1.el9_8.x86_64-x86_64-with-glibc2.34", "system": "Linux", "machine": "x86_64"}
+
+
+def test_resume_on_another_kernel_release(job_env):
+    """Same commit, the platform differs only in the kernel release (another node): resumes; the full platform string
+    stays recorded for information. A lock written before system / machine were recorded compares the same way."""
+    s = job_env
+    s["python"] = {k: v for k, v in PY.items() if k not in ("system", "machine")}  # an older lock
+    assert s["run"]("-k", "1") == 0
+    s["python"] = {**PY, "platform": PY["platform"].replace("687.36.1", "687.39.1")}
+    assert s["run"]() == 0
+    st = s["store"]()
+    assert st.read_lock()["code"]["python"]["platform"].startswith("Linux-5.14.0-687.39.1")
+    assert len(st.read_lock()["sessions"]) == 2
+
+
+@pytest.mark.parametrize("field,value", [("version", "3.14.1 (main, Jan 1 2027, 00:00:00) [Clang 22.1.3 ]"),
+                                         ("machine", "aarch64")])
+def test_resume_refused_on_another_python_or_architecture(job_env, capsys, field, value):
+    s = job_env
+    s["python"] = PY
+    assert s["run"]() == 0
+    s["python"] = {**PY, field: value}
+    if field == "machine":
+        s["python"]["platform"] = PY["platform"].replace("x86_64", "aarch64")
+    capsys.readouterr()
+    assert s["run"]() == 2
+    err = capsys.readouterr().err
+    assert runner.RESUME_REFUSED in err and f"python.{field}:" in err
