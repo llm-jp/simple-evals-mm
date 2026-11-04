@@ -16,6 +16,7 @@ from simple_evals_mm.samplers import registry
 from simple_evals_mm.samplers.base import message_images
 from simple_evals_mm.store import JobStore
 
+REAL_MAKE_SAMPLER = registry.make_sampler  # before any fixture patches it (fake_provider restores it)
 VERDICT = "extracted_final_answer: x\nreasoning: t\ncorrect: {}\nconfidence: 100"
 
 
@@ -104,6 +105,17 @@ def job_env(tmp_path, monkeypatch):
     return state
 
 
+@pytest.fixture
+def fake_provider(monkeypatch):
+    """The scripted test-only `fake/` provider (samplers/fake.py) registered for this test, through the real
+    make_sampler (also when job_env patched it)."""
+    from simple_evals_mm.samplers import fake
+
+    fake.enable(monkeypatch.setitem)
+    monkeypatch.setattr(registry, "make_sampler", REAL_MAKE_SAMPLER)
+    return fake
+
+
 def png(path, color="red"):
     """A 4x4 PNG at path; returns the path."""
     PILImage.new("RGB", (4, 4), color).save(path)
@@ -117,8 +129,14 @@ def png_bytes(color="red", size=(4, 4)) -> bytes:
 
 
 @pytest.fixture(autouse=True)
-def data_lock(tmp_path, monkeypatch):
-    """The tests' datasets.lock: a file in tmp_path (absent until a test writes it), never the committed one."""
+def data_lock(tmp_path, monkeypatch, request):
+    """The tests' datasets.lock: a file in tmp_path (absent until a test writes it), never the committed one. Live
+    tests (-m network) load the real data, so they check it against the committed lock (read only)."""
+    if request.node.get_closest_marker("network"):
+        datalock.reset()
+        yield datalock.LOCK_PATH
+        datalock.reset()
+        return
     path = tmp_path / "datasets.lock.json"
     monkeypatch.setattr(datalock, "LOCK_PATH", path)
     datalock.reset()

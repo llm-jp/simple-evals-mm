@@ -1,6 +1,7 @@
 from tests import golden
 from tests.fakes import (  # noqa: F401 - fixtures of the tests
     data_lock,
+    fake_provider,
     image_dir,
     job_env,
 )
