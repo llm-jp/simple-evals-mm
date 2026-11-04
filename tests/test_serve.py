@@ -603,3 +603,18 @@ def test_driver_version_is_info_only():
     assert mf.digest(base) == mf.digest(other_driver)
     for key, val in (("gpus", {"NVIDIA H100": 8}), ("torch", "2.12.0"), ("torch_cuda", "13.1")):
         assert mf.digest(base) != mf.digest({**base, "hardware": {**base["hardware"], key: val}})
+
+
+def test_resume_across_commits_refused_on_server_manifest_change(job_env, served, tmp_path, git_pkg, capsys):
+    """A NEUTRAL-only commit does not excuse another serving stack: the manifest digest is still compared."""
+    s, g = job_env, git_pkg
+    path, _ = _manifest(served, tmp_path)
+    s["commit"] = g.base
+    assert s["run"]("--server", path) == 0
+    s["commit"] = g.commit({"store.py": "S = 2\n"})
+    path2, _ = _manifest(served, tmp_path, "m2.json", chat_template={"sha256": "other"})
+    capsys.readouterr()
+    assert s["run"]("--server", path2) == 2
+    err = capsys.readouterr().err
+    assert runner.RESUME_REFUSED in err and "server:" in err
+    assert s["run"]("--server", path) == 0  # the same stack at the new commit resumes

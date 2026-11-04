@@ -11,9 +11,14 @@ For each (dataset, attempt, task) of the new job's plan, the source job's trial 
   RERUN    everything else (no source trial, a transient source failure, changed task content, other generation
            settings, or the dataset's own / generation files changed between the commits): generated anew
 
-Across commits, provenance.changed_datasets(source commit, new commit) decides instead of requiring equal commits:
-the generation_lock is recomputed with the source commit (everything except the commit must match) and the dataset
-must not have changed dataset-own or generation-side files; verification-side changes only force a REGRADE.
+Across commits, provenance.changed_datasets(generation commit, new commit) decides instead of requiring equal commits:
+the generation_lock is recomputed with the commit that generated the trial (its `generation_commit`: a job resumed
+across commits holds trials of several; everything except the commit must match) and the dataset must not have changed
+dataset-own, generation-side or unknown files since that commit; verification-side changes (since the commit of the
+source verification) only force a REGRADE.
+
+`sem job resume` across commits runs plan() of the job against itself as its backstop: every stored non-transient
+trial must come out REUSE or REGRADE.
 
 Copies are real copies (trial files stay append-only per job, no hard links) and carry
 `reused_from: {job_id, job, trial_id, trial_name, decision, reason, verification_id, verifier_lock}`; the images their
@@ -27,6 +32,7 @@ import re
 import shutil
 from collections import Counter
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from simple_evals_mm import dataset as dataset_mod
 from simple_evals_mm import errors
@@ -42,6 +48,7 @@ class Decision:
     kind: str
     reason: str
     trial: TrialResult | None = None
+    commit: str | None = None  # the source trial's generation commit (REUSE / REGRADE)
 
 
 @dataclass
@@ -58,11 +65,53 @@ class Context:
     judge_config: dict | None
     n_attempts: dict | int  # {dataset: attempts} (an int: the same for every dataset)
     generate_only: bool = False
+    sampler_modules: list | None = None  # provenance.sampler_modules of the new job (None: every sampler counts)
 
 
-def _transient(cause: str | None) -> bool:
+def is_transient(cause: str | None) -> bool:
+    """A failure that a resume regenerates (not a stored outcome): retried, or not counted in the score."""
     pol = errors.POLICY.get(cause or "")
     return bool(cause) and (pol is None or pol.retry or not pol.counts_in_score)
+
+
+_transient = is_transient
+
+
+def first_commit(lock: dict) -> str | None:
+    """The commit of a job's first session (lock.json code.commits[0]; a job written before `commits` was recorded
+    ran under one commit only)."""
+    code = lock.get("code") or {}
+    return (code.get("commits") or [code.get("commit")])[0]
+
+
+def generation_commit(trial, lock: dict, cache: dict | None = None, _depth: int = 0) -> str | None:
+    """The commit that generated `trial` (of the job whose lock.json is `lock`): its generation_commit; for a trial
+    written before that field existed, a copy (`reused_from`) resolves through its source job, else the job's first
+    commit (resuming across commits was refused until generation_commit was recorded, so such a job had one commit).
+    `cache`: {source job dir: (lock, {trial id: (generation_commit, reused_from)})} shared across calls."""
+    if trial.generation_commit:
+        return trial.generation_commit
+    r = trial.reused_from or {}
+    if r.get("job") and _depth < 8:
+        cache = {} if cache is None else cache
+        key = os.path.abspath(r["job"])
+        if key not in cache:
+            src = store_mod.JobStore.from_path(key)
+            try:
+                src_lock = src.read_lock()
+            except (OSError, ValueError):
+                cache[key] = None
+            else:
+                cache[key] = (src_lock, {t.id: (t.generation_commit, t.reused_from)
+                                         for n in src.datasets() for k in src.attempts(n) for t in src.read_trials(n, k)})
+        if cache[key] is not None:
+            src_lock, index = cache[key]
+            hit = index.get(r.get("trial_id"))
+            if hit is None:
+                return first_commit(src_lock)
+            return hit[0] or generation_commit(SimpleNamespace(generation_commit=None, reused_from=hit[1]), src_lock,
+                                               cache, _depth + 1)
+    return first_commit(lock)
 
 
 def _sampler_diff(src_lock: dict, ctx: Context) -> list[str]:
@@ -76,36 +125,46 @@ def _sampler_diff(src_lock: dict, ctx: Context) -> list[str]:
 def plan(src: store_mod.JobStore, ctx: Context, changed_datasets=None) -> dict:
     """{name: {"decisions": {(k, task_id): Decision}, "counts": {...}, "reasons": {reason: n}}}. changed_datasets:
     provenance.changed_datasets (injected by tests)."""
+    from simple_evals_mm import provenance
+
     if changed_datasets is None:
-        from simple_evals_mm.provenance import changed_datasets
+        changed_datasets = provenance.changed_datasets
     src_lock = src.read_lock()
-    src_commit = (src_lock.get("code") or {}).get("commit")
-    same_commit = src_commit == ctx.commit
     src_server = (src_lock.get("server") or {}).get("digest")
-    changed: dict = {}
-    commit_error = None
-    if not same_commit:
-        try:
-            changed = changed_datasets(src_commit, ctx.commit, sorted(ctx.datasets))
-        except Exception as e:  # noqa: BLE001 - an unknown commit: nothing can be compared
-            commit_error = f"cannot compare commits {str(src_commit)[:12]}..{str(ctx.commit)[:12]} ({type(e).__name__})"
+    changes: dict = {}  # commit -> changed_datasets(commit, ctx.commit) or the error text
+
+    def changed(commit: str | None) -> dict | str:
+        if commit == ctx.commit:
+            return {}
+        if commit not in changes:
+            try:
+                changes[commit] = changed_datasets(commit, ctx.commit, sorted(ctx.datasets),
+                                                   sampler_modules=ctx.sampler_modules)
+            except Exception as e:  # noqa: BLE001 - an unknown commit: nothing can be compared
+                changes[commit] = (f"cannot compare commits {str(commit)[:12]}..{str(ctx.commit)[:12]} "
+                                   f"({type(e).__name__})")
+        return changes[commit]
+
     sampler_diff = _sampler_diff(src_lock, ctx)
+    gc_cache: dict = {}
     out = {}
     for name, ds in ctx.datasets.items():
         decisions: dict = {}
-        ch = changed.get(name) or {}
-        gen_changed = sorted(set(ch.get("dataset", [])) | set(ch.get("generation", [])))
-        ver_changed = ch.get("verification", [])
         vid = src.current_verification_id(name)
         vmeta = src.read_verification_meta(name, vid) if vid else None
         _, vresults = src.read_verification(name, vid) if vid else (None, {})
         verified = {k: {r.task_id for r in rs} for k, rs in vresults.items()}
         # the verifier lock this job would use, computed at the source verification's commit when the commits differ
         vcommit = (vmeta or {}).get("commit")
+        vch = changed(vcommit) if vmeta is not None else {}
+        ver_changed = [] if isinstance(vch, str) else sorted(set((vch.get(name) or {}).get("verification", [])) |
+                                                             set((vch.get(name) or {}).get("dataset", [])))
         if vmeta is None:
             ver_reason = "the source job has no verification of this dataset"
         elif ctx.generate_only and ds.needs_judge:
             ver_reason = "this job verifies later (--generate-only): its judge is not resolved yet"
+        elif isinstance(vch, str):
+            ver_reason = vch
         elif ver_changed:
             ver_reason = f"verification files changed between the commits: {', '.join(ver_changed[:5])}"
         else:
@@ -118,18 +177,22 @@ def plan(src: store_mod.JobStore, ctx: Context, changed_datasets=None) -> dict:
         for k in range(1, n + 1):
             for task in ctx.tasks[name]:
                 t = src_trials.get(k, {}).get(task.id)
-                if commit_error:
-                    d = Decision(RERUN, commit_error)
-                elif t is None:
+                gc = generation_commit(t, src_lock, gc_cache) if t is not None else None
+                ch = changed(gc) if t is not None else {}
+                gen_changed = [] if isinstance(ch, str) else provenance.generation_files(ch.get(name) or {})
+                if t is None:
                     d = Decision(RERUN, "no trial in the source job")
                 elif _transient(t.cause):
                     d = Decision(RERUN, f"the source trial failed ({t.cause})")
                 elif t.task_checksum != ctx.checksums[name].get(task.id):
                     d = Decision(RERUN, "task content changed (task_checksum)")
+                elif isinstance(ch, str):
+                    d = Decision(RERUN, ch)
                 elif gen_changed:
-                    d = Decision(RERUN, f"dataset / generation files changed between the commits: {', '.join(gen_changed[:5])}")
+                    d = Decision(RERUN, f"dataset / generation files changed between the commits: {', '.join(gen_changed[:5])}"
+                                 + (" ..." if len(gen_changed) > 5 else ""))
                 elif dataset_mod.generation_lock(t.trajectory, ctx.sampler_config, ctx.server_digest,
-                                                 commit=ctx.commit if same_commit else src_commit) != t.generation_lock:
+                                                 commit=gc) != t.generation_lock:
                     why = []
                     if sampler_diff:
                         why.append("sampler " + ", ".join(sampler_diff[:6]))
@@ -137,9 +200,9 @@ def plan(src: store_mod.JobStore, ctx: Context, changed_datasets=None) -> dict:
                         why.append("server manifest")
                     d = Decision(RERUN, "generation_lock differs (" + ("; ".join(why) or "rendered request") + ")")
                 elif ver_reason is None and task.id in verified.get(k, set()):
-                    d = Decision(REUSE, "identical generation and verifier", t)
+                    d = Decision(REUSE, "identical generation and verifier", t, gc)
                 else:
-                    d = Decision(REGRADE, ver_reason or "the source trial was not verified", t)
+                    d = Decision(REGRADE, ver_reason or "the source trial was not verified", t, gc)
                 decisions[(k, task.id)] = d
         counts = Counter(d.kind for d in decisions.values())
         out[name] = {"decisions": decisions,
@@ -181,6 +244,7 @@ def copy_trials(src: store_mod.JobStore, dst: store_mod.JobStore, p: dict, src_j
                                  "verification_id": v["source_verification"] if d.kind == REUSE else None,
                                  "verifier_lock": verifier_locks.get(name)}
                 c.verifier_lock = verifier_locks.get(name) or c.verifier_lock
+                c.generation_commit = d.commit or c.generation_commit
                 _copy_images(src.dir, dst.dir, t)
                 dst.append_trial(name, c)
                 n += 1
