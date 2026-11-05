@@ -8,6 +8,7 @@ import http.server
 import json
 import os
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -618,3 +619,20 @@ def test_resume_across_commits_refused_on_server_manifest_change(job_env, served
     err = capsys.readouterr().err
     assert runner.RESUME_REFUSED in err and "server:" in err
     assert s["run"]("--server", path) == 0  # the same stack at the new commit resumes
+
+
+def test_hf_engine_in_another_venv_imports_this_checkout(engine_venv, hf_cache, monkeypatch):
+    """hf_server is our module: an engine venv other than this one (a newer transformers) gets this checkout's src/ on
+    its PYTHONPATH, recorded as a placeholder; the repo's own venv needs nothing."""
+    import sys
+
+    monkeypatch.setattr(stack, "hf_cache_dir", lambda: hf_cache)
+    m, ctx = serve.build_manifest(_args("hf", "google/gemma-4-12B-it"), venv=engine_venv, run_hardware=_no_gpu)
+    assert ctx["repo_src"] and m["launch"]["env_set"]["PYTHONPATH"] == "<repo-src>"
+    out = subprocess.run([stack.venv_python(engine_venv), "-c", "import simple_evals_mm.serving.hf_server"],
+                         env={"PYTHONPATH": ctx["repo_src"], "PATH": os.environ["PATH"]}, capture_output=True, text=True,
+                         check=False)
+    assert "No module named 'simple_evals_mm'" not in out.stderr
+    monkeypatch.setattr(sys, "prefix", engine_venv)  # the engine venv is this venv: nothing added
+    m2, ctx2 = serve.build_manifest(_args("hf", "google/gemma-4-12B-it"), venv=engine_venv, run_hardware=_no_gpu)
+    assert ctx2["repo_src"] is None and "PYTHONPATH" not in m2["launch"]["env_set"]

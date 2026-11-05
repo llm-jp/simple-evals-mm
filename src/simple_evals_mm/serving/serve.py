@@ -176,6 +176,9 @@ def build_manifest(args, *, venv: str, run_hardware=subprocess.run, cache: str |
         ident["transformers"] = ident["version"]
         ident["version"] = _hf_version()
         ident["commit"] = _commit()
+    # hf_server is our own module: an engine venv other than this one (a newer transformers, e.g. Gemma 4) imports it
+    # from this checkout's source tree (pinned by the commit above), put on its PYTHONPATH
+    repo_src = _repo_src() if engine == "hf" and os.path.realpath(venv) != os.path.realpath(sys.prefix) else None
     model = stack.model_identity(args.model, cache=cache)
     if not model.get("found"):
         problems.append(f"model {args.model}: {model.get('note')}")
@@ -208,7 +211,9 @@ def build_manifest(args, *, venv: str, run_hardware=subprocess.run, cache: str |
                    "dp": args.dp, "tp": args.tp, "deterministic": {"on": bool(args.deterministic),
                                                                      "how": DETERMINISTIC[engine] if args.deterministic else None},
                    "batch": args.batch if engine == "hf" else None, "server_args": server_args,
-                   "env_set": dict(env, PATH=PATH_RECORDED, **({"PYTHONPATH": "<overlay>"} if loaded else {})),
+                   "env_set": dict(env, PATH=PATH_RECORDED, **({"PYTHONPATH": os.pathsep.join(
+                       ([("<overlay>")] if loaded else []) + (["<repo-src>"] if repo_src else []))}
+                       if loaded or repo_src else {})),
                    "env_recorded": recorded_env(dict(os.environ)),
                    "inherited_pythonpath_dropped": bool(os.environ.get("PYTHONPATH"))},
         "chat_template": tpl,
@@ -222,7 +227,7 @@ def build_manifest(args, *, venv: str, run_hardware=subprocess.run, cache: str |
     }
     env = dict(env, PATH=engine_path(venv_bin))
     ctx = {"argv": argv, "env": env, "python": python, "chat_template_text": tpl_text, "patches": loaded,
-           "problems": problems, "snapshot": model.get("path")}
+           "problems": problems, "snapshot": model.get("path"), "repo_src": repo_src}
     return manifest, ctx
 
 
@@ -231,6 +236,13 @@ def engine_path(venv_bin: str, inherited: str | None = None) -> str:
     console scripts), then the inherited PATH."""
     inherited = os.environ.get("PATH", "") if inherited is None else inherited
     return venv_bin + (os.pathsep + inherited if inherited else "")
+
+
+def _repo_src() -> str:
+    """The directory that holds the simple_evals_mm package of this checkout (src/)."""
+    import simple_evals_mm
+
+    return os.path.dirname(os.path.dirname(os.path.abspath(simple_evals_mm.__file__)))
 
 
 def _hf_version() -> str:
@@ -388,8 +400,9 @@ def supervise(manifest: dict, ctx: dict, path: str, *, health_timeout: float = 3
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)  # nothing unrecorded on the engine's import path
     env.update(ctx["env"])
-    if ctx.get("overlay"):
-        env["PYTHONPATH"] = ctx["overlay"]
+    pythonpath = [p for p in (ctx.get("overlay"), ctx.get("repo_src")) if p]
+    if pythonpath:
+        env["PYTHONPATH"] = os.pathsep.join(pythonpath)
     state: dict = {"proc": None, "stop": False}
 
     def on_signal(signum, _frame):
