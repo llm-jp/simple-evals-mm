@@ -183,7 +183,7 @@ def test_unknown_or_invalid_fields_are_refused(bad):
 
 
 def test_penalties_and_seed():
-    import torch
+    torch = pytest.importorskip("torch", reason="the hf-server extra is not installed (uv sync --extra hf-server)")
 
     proc = hf_backends.make_penalty_processor(0.5, 0.25, prompt_len=1)
     ids = torch.tensor([[9, 2, 2, 3]])  # prompt token 9, generated 2, 2, 3

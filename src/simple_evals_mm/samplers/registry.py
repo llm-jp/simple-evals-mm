@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 from dataclasses import asdict, dataclass, field
 
+from simple_evals_mm.errors import ConfigError, SetupError
 from simple_evals_mm.samplers.presets import (
     DEFAULT_JUDGE,  # noqa: F401 - part of the registry API (registry.DEFAULT_JUDGE)
     FAMILIES,
@@ -59,6 +60,15 @@ PROVIDERS: dict[str, dict] = {
 }
 
 
+# Per-request timeout of the HTTP client (SamplerSpec.request_timeout_s, `--request-timeout-s`). Served engines: long
+# enough for the longest generation (a 128k-token reasoning trace at a slow decode rate under full batch load); a dead
+# server is detected by `sem serve`'s watchdog, whose restart drops the connections (connection errors reach the
+# circuit breaker), not by this timeout. APIs: the value used since v0.4. Gemini / Vertex: the SDK's (no client
+# timeout) unless given.
+SERVED_REQUEST_TIMEOUT_S = 6 * 3600.0
+API_REQUEST_TIMEOUT_S = 3600.0
+
+
 # providers whose <PROVIDER>_BASE_URL variable is refused (only --base-url may redirect them)
 PUBLIC_APIS = ("openrouter", "openai", "gemini")
 # google-genai reads these from the environment and would switch the backend / endpoint behind our back
@@ -68,7 +78,7 @@ GOOGLE_ENV = ("GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_GENAI_USE_ENTERPRISE", "GOOGL
 def check_google_env() -> None:
     bad = [v for v in GOOGLE_ENV if os.environ.get(v) is not None]
     if bad:
-        raise ValueError(f"{', '.join(bad)} set: google-genai would switch the backend / endpoint from the environment. "
+        raise ConfigError(f"{', '.join(bad)} set: google-genai would switch the backend / endpoint from the environment. "
                          f"Unset them (`unset {' '.join(bad)}`, and remove them from .env); choose the backend with the "
                          "slug (gemini/ or vertex/) and the endpoint with --base-url")
 
@@ -119,6 +129,9 @@ class SamplerSpec:
     max_request_mb: float | None = None
     max_tries: int = 60
     max_rate_limit_tries: int = 600
+    # per-request HTTP timeout (s; None = the SDK's): recorded in the sampler config, runtime-only for the locks
+    # (samplers.base.RUNTIME_FIELDS), like n_concurrent
+    request_timeout_s: float | None = None
     alias: bool = False  # undated / alias model id (presets._alias): lock.json sampler.model_identity "alias"
     seed: str = "on"  # "off": the per-trial seed is not sent (--model-arg seed=off)
     vertex_project: str | None = None  # Vertex AI project / location (--model-arg, else GEMINI_PROJECT_ID / _LOCATION)
@@ -150,7 +163,7 @@ class SamplerSpec:
     def api_key(self) -> str | None:
         v = os.environ.get(self.api_key_name or "")
         if not v and self.api_key_required:
-            raise RuntimeError(f"{self.api_key_name} is not set (needed for provider {self.provider})")
+            raise SetupError(f"{self.api_key_name} is not set (needed for provider {self.provider})")
         return v or "EMPTY"
 
     def resolution(self) -> dict:
@@ -170,9 +183,9 @@ class SamplerSpec:
 def parse_slug(slug: str) -> tuple[str, str]:
     provider, sep, model = slug.partition("/")
     if not sep or not model:
-        raise ValueError(f"model must be PROVIDER/MODEL, got {slug!r} (providers: {', '.join(PROVIDERS)})")
+        raise ConfigError(f"model must be PROVIDER/MODEL, got {slug!r} (providers: {', '.join(PROVIDERS)})")
     if provider not in PROVIDERS:
-        raise ValueError(f"unknown provider {provider!r} in {slug!r} (providers: {', '.join(PROVIDERS)})")
+        raise ConfigError(f"unknown provider {provider!r} in {slug!r} (providers: {', '.join(PROVIDERS)})")
     return provider, model
 
 
@@ -187,12 +200,12 @@ def find_preset(provider: str, model: str, preset: str | None = None) -> tuple[s
         return "none", {}
     if preset is not None:
         if preset not in FAMILIES:
-            raise ValueError(f"unknown --preset {preset!r} (families: {', '.join(FAMILIES)}; or 'none')")
+            raise ConfigError(f"unknown --preset {preset!r} (families: {', '.join(FAMILIES)}; or 'none')")
         return preset, {**FAMILIES[preset], "family": preset}
     key = f"{provider}/{model}"
     if key in PRESETS:
         return key, dict(PRESETS[key])
-    raise ValueError(
+    raise ConfigError(
         f"no preset for {key!r}: presets are exact slugs (`sem models list`). Add an entry to samplers/presets.py "
         f"(PRESETS, or SERVED_MODELS for a served HF id), apply a family with --preset FAMILY ({', '.join(FAMILIES)}), "
         "or run with --preset none (no model-specific settings: only the CLI options, max_output_tokens = the endpoint "
@@ -215,9 +228,9 @@ def _cast(name: str, decl, v):
         else:
             out = decl.type(v)
     except (TypeError, ValueError) as e:
-        raise ValueError(f"--model-arg {name}: expected {decl.type.__name__}, got {v!r} ({e})") from e
+        raise ConfigError(f"--model-arg {name}: expected {decl.type.__name__}, got {v!r} ({e})") from e
     if decl.choices and out not in decl.choices:
-        raise ValueError(f"--model-arg {name} must be one of {decl.choices}, got {out!r}")
+        raise ConfigError(f"--model-arg {name} must be one of {decl.choices}, got {out!r}")
     return out
 
 
@@ -227,7 +240,7 @@ def apply_model_args(spec: SamplerSpec, preset: dict, model_args: dict) -> None:
     allowed = allowed_model_args(spec, preset)
     unknown = sorted(set(model_args) - set(allowed))
     if unknown:
-        raise ValueError(f"{spec.provider}/{spec.model}: unknown --model-arg {', '.join(unknown)} "
+        raise ConfigError(f"{spec.provider}/{spec.model}: unknown --model-arg {', '.join(unknown)} "
                          f"(accepted: {', '.join(allowed) or 'none'})")
     vals = {k: _cast(k, MODEL_ARGS[k], v) for k, v in model_args.items()}
     for k, v in sorted(vals.items(), key=lambda kv: MODEL_ARGS[kv[0]].target != "special"):
@@ -257,7 +270,8 @@ def apply_model_args(spec: SamplerSpec, preset: dict, model_args: dict) -> None:
 def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, max_output_tokens: int | None = None,
             temperature: float | None = None, top_p: float | None = None, top_k: int | None = None,
             provider_pin: str | None = None, quantization: str | None = None, model_args: dict | None = None,
-            base_url: str | None = None, api_key_name: str | None = None, api_format: str | None = None) -> SamplerSpec:
+            base_url: str | None = None, api_key_name: str | None = None, api_format: str | None = None,
+            request_timeout_s: float | None = None) -> SamplerSpec:
     """The full sampler spec of a slug: preset < --model-arg < CLI options; key / base-url variable names resolved.
     Provider / model defaults (OpenRouter default_parameters, generation_config.json, Gemini models.get) and the
     endpoint maximum of max_output_tokens are resolved later, at Sampler.prepare()."""
@@ -266,7 +280,7 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
     if provider in ("gemini", "vertex"):
         check_google_env()
     if api_format and api_format not in pinfo["formats"]:
-        raise ValueError(f"--api-format {api_format!r} is not available for provider {provider} "
+        raise ConfigError(f"--api-format {api_format!r} is not available for provider {provider} "
                          f"(supported: {', '.join(pinfo['formats'])}; all formats: {', '.join(API_FORMATS)})")
     preset_name, preset = find_preset(provider, model, preset)
     spec = SamplerSpec(provider=provider, model=model, preset=preset_name, max_tries=pinfo["max_tries"], image_detail=pinfo.get("image_detail"),
@@ -299,29 +313,37 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
         spec.max_output_tokens = int(max_output_tokens)
     if effort is not None:
         if spec.efforts == ():
-            raise ValueError(f"{slug}: the model has no reasoning effort control")
+            raise ConfigError(f"{slug}: the model has no reasoning effort control")
         if spec.efforts is not None and effort not in spec.efforts:
-            raise ValueError(f"{slug}: --effort must be one of {spec.efforts}, got {effort!r}")
+            raise ConfigError(f"{slug}: --effort must be one of {spec.efforts}, got {effort!r}")
         spec.effort = effort
         spec.effort_source = "cli"
     if provider_pin:
         if provider != "openrouter":
-            raise ValueError("--provider pins an OpenRouter provider; it needs an openrouter/... model")
+            raise ConfigError("--provider pins an OpenRouter provider; it needs an openrouter/... model")
         spec.provider_pin = provider_pin.split(",")
     if quantization:
         spec.quant = quantization.split(",")
+    if request_timeout_s is not None:
+        if float(request_timeout_s) <= 0:
+            raise ConfigError(f"--request-timeout-s must be positive, got {request_timeout_s}")
+        spec.request_timeout_s = float(request_timeout_s)
+    elif pinfo.get("served"):
+        spec.request_timeout_s = SERVED_REQUEST_TIMEOUT_S
+    elif spec.api_format != GOOGLE:
+        spec.request_timeout_s = API_REQUEST_TIMEOUT_S
     default_key = pinfo.get("key_var", f"{provider.upper()}_API_KEY")
     spec.api_key_name = api_key_name or key_var or default_key or None
     env_url = url_var or pinfo.get("base_url_var") or f"{provider.upper()}_BASE_URL"
     if base_url:
         spec.base_url_source = "--base-url"
     elif os.environ.get(env_url) and provider in PUBLIC_APIS:
-        raise ValueError(f"{env_url} is set: a {provider} base URL is taken from --base-url only (pass --base-url "
+        raise ConfigError(f"{env_url} is set: a {provider} base URL is taken from --base-url only (pass --base-url "
                          f"explicitly, or unset {env_url} and remove it from .env)")
     elif os.environ.get(env_url):
         spec.base_url_source = env_url
     elif pinfo["base_url"] is None:
-        raise ValueError(f"provider {provider!r} has no default base URL: pass --base-url or set {env_url}")
+        raise ConfigError(f"provider {provider!r} has no default base URL: pass --base-url or set {env_url}")
     else:
         spec.base_url_source = "default"
     if provider == "vertex":  # explicit, recorded; never the SDK's ADC project / global location
@@ -332,6 +354,10 @@ def resolve(slug: str, *, preset: str | None = None, effort: str | None = None, 
 
 def make_sampler(spec: SamplerSpec, base_url: str | None = None):
     """The sampler class of the resolved API format."""
+    if spec.provider == "fake":  # test-only scripted provider (samplers/fake.py; registered only by SEM_FAKE_PROVIDER=1)
+        from simple_evals_mm.samplers.fake import ScriptedSampler
+
+        return ScriptedSampler(spec, base_url=base_url)
     if spec.api_format == CHAT:
         from simple_evals_mm.samplers.openai_chat import OpenAIChatSampler
 
@@ -344,7 +370,7 @@ def make_sampler(spec: SamplerSpec, base_url: str | None = None):
         from simple_evals_mm.samplers.gemini import GeminiSampler
 
         return GeminiSampler(spec, base_url=base_url)
-    raise ValueError(f"api format {spec.api_format!r} is not implemented")
+    raise NotImplementedError(f"api format {spec.api_format!r} is not implemented")
 
 
 def preset_rows() -> list[dict]:
@@ -370,3 +396,9 @@ def _row(slug: str, prov: str, model: str, p: dict) -> dict:
             "effort": p.get("effort"), "output_limit": p.get("output_limit"), "sampling": dict(p.get("sampling") or {}),
             "pin": p.get("provider_pin"), "quant": p.get("quant"), "alias": bool(p.get("alias")),
             "args": allowed_model_args(SamplerSpec(provider=prov, model=model, api_format=fmt), p)}
+
+
+if os.environ.get("SEM_FAKE_PROVIDER") == "1":  # test-only `fake/` provider (release checks); see samplers/fake.py
+    from simple_evals_mm.samplers import fake as _fake
+
+    _fake.enable()

@@ -24,7 +24,8 @@ A job is a name under jobs_dir, or a path (with a "/"; relative to the spec file
 build checks the job (`sem job check` plus the rules below) and refuses the dataset with the reason when one fails;
 refused datasets are not shown (the page lists them in the row's details) and the build reports them.
 
-Refusal rules (docs/design/v0.5.md "Reproducibility", leaderboard):
+Refusal rules (docs/design/v0.5.md "Reproducibility", leaderboard; plus the publish gate: a dataset with an excluded
+trial, i.e. a transient failure such as provider_failed / judge_failed, is refused until it is retried):
   - job: not found; `sem job check` problems (trial / verifier file hashes); dirty (lock.json code.dirty or a dirty
     session); its commit not on origin (`git branch -r --contains COMMIT` in --repo; a commit git does not know:
     "commit not verified"); uv.lock check or wheel RECORD check failed or not recorded; a served model
@@ -227,7 +228,10 @@ def dataset_reasons(view: JobView, name: str, allow_ref: str | None = None) -> l
         out.append("no datasets.lock status recorded")
     ks = st.attempts(name)
     complete = [k for k in ks if st.is_complete(name, k)]
-    want = int(cfg.get("n_attempts") or 1)
+    try:  # config.json records {dataset: attempts} (per-dataset defaults: aime26 10, ifbench 5, others 3)
+        want = runner.attempts_for(cfg.get("n_attempts"), name)
+    except Exception:  # noqa: BLE001 - an unresolvable plan is reported, not raised
+        want = len(ks) or 1
     if not ks:
         out.append("no trials")
     elif len(complete) < len(ks) or sorted(complete) != list(range(1, want + 1)):
@@ -252,6 +256,17 @@ def dataset_reasons(view: JobView, name: str, allow_ref: str | None = None) -> l
         r = view.git(meta.get("commit"))
         if r:
             out.append(f"verification {vid}: {r}")
+    # publish gate: no excluded trial (transient failures: provider_failed, endpoint_unavailable, judge_failed, ...);
+    # a published mean is over every task, so retry them first (sem job resume -f CAUSE / sem job regrade)
+    _, results = st.read_verification(name)
+    excluded: dict[str, int] = {}
+    for rs in results.values():
+        for r in rs:
+            if r.reward is None:
+                excluded[r.cause or "unscored"] = excluded.get(r.cause or "unscored", 0) + 1
+    if excluded:
+        out.append("excluded trials (retry before publishing): "
+                   + ", ".join(f"{c}={n}" for c, n in sorted(excluded.items())))
     return list(dict.fromkeys(out))
 
 
@@ -390,8 +405,18 @@ def reproduce_command(cfg: dict) -> str:
     opts = (("preset", "--preset"), ("effort", "--effort"), ("max_output_tokens", "--max-output-tokens"),
             ("temperature", "--temperature"), ("top_p", "--top-p"), ("top_k", "--top-k"), ("provider", "--provider"),
             ("quantization", "--quantization"), ("judge_model", "--judge-model"))
-    if (cfg.get("n_attempts") or 1) != 1:
-        parts += ["-k", str(cfg["n_attempts"])]
+    k = cfg.get("n_attempts")
+    if isinstance(k, dict):  # -k only when the plan differs from every dataset's default attempts
+        try:
+            defaults = {d: runner.attempts_for(None, d) for d in k}
+        except Exception:  # noqa: BLE001
+            defaults = {}
+        if k != defaults and len(set(k.values())) == 1:
+            parts += ["-k", str(next(iter(k.values())))]
+        elif k != defaults:
+            parts += ["-c", "JOB.yaml  # n_attempts: " + json.dumps(k, sort_keys=True)]
+    elif k is not None and k != 1:
+        parts += ["-k", str(k)]
     for k, flag in opts:
         if cfg.get(k) is not None:
             parts += [flag, str(cfg[k])]

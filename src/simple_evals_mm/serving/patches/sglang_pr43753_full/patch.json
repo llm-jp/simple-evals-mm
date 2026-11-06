@@ -1,8 +1,12 @@
 {
   "name": "sglang_pr43753_full",
   "upstream_ref": "https://github.com/sgl-project/sglang/pull/43753",
-  "description": "Gemma 4 vision pooler, the full sglang PR #43753 against sglang 0.5.23: mask_pad_before_pool on, pooling in float32, the scaled pooler output kept in float32 until the encoder's standardization. This is the gemma4_vision.py applied in place in sglang0523_venv (2026-11-01; .orig kept next to it).",
+  "description": "Gemma 4 vision pooler, the full sglang PR #43753 against sglang 0.5.23: mask_pad_before_pool on, pooling in float32, the scaled pooler output kept in float32 until the encoder's standardization. Applies to Gemma 4 models with a vision tower (Gemma4ForConditionalGeneration, e.g. 31B); gemma-4-12B-it (gemma4_unified) has none.",
   "engine": "sglang",
-  "engine_versions": ["0.5.23"],
-  "files": ["sglang/srt/models/gemma4_vision.py"]
+  "engine_versions": [
+    "0.5.23"
+  ],
+  "files": [
+    "sglang/srt/models/gemma4_vision.py"
+  ]
 }

@@ -8,6 +8,7 @@ import pytest
 from simple_evals_mm import errors
 from simple_evals_mm.models import Image, user
 from simple_evals_mm.samplers import registry
+from simple_evals_mm.samplers.base import OPENROUTER_EFFORT_NOTE
 from tests import golden
 
 
@@ -39,7 +40,7 @@ def test_presets_and_errors(monkeypatch, endpoints):
     judge = registry.make_sampler(registry.resolve(registry.DEFAULT_JUDGE))
     judge.prepare()
     jb = judge.request_body()
-    assert jb["reasoning"] == {"effort": "none"} and jb["max_tokens"] == 128000  # the endpoint maximum, no small cap
+    assert jb["reasoning"] == {"effort": "medium"} and jb["max_tokens"] == 128000  # the endpoint maximum, no small cap
     # the matched endpoint's tag; no quantization filter when OpenRouter lists "unknown" (closed models)
     assert jb["provider"] == {"order": ["openai"], "allow_fallbacks": False}
     for bad, kw in (("noprovider", {}), ("bogus/x", {}), ("openrouter/qwen/qwen3.8-27b", {"effort": "max"}),
@@ -369,7 +370,8 @@ def test_model_args(clean_env):
     assert g.public()["model_args"] == {"max_soft_tokens": "1120", "repetition_penalty": 1.05}  # recorded as given
     h = registry.resolve("hf/llm-jp/llm-jp-4-vl-9b-beta", model_args={"date": "none", "identity": "You are X.", "decode": "qwen"})
     hb = registry.make_sampler(h).request_body()
-    assert hb["chat_template_kwargs"] == {"conversation_start_date": "", "model_identity": "You are X."}
+    # Harmony's default effort (medium) is sent explicitly
+    assert hb["chat_template_kwargs"] == {"conversation_start_date": "", "model_identity": "You are X.", "reasoning_effort": "medium"}
     assert {k: hb[k] for k in ("temperature", "top_p", "top_k", "repetition_penalty")} == {"temperature": 1.0, "top_p": 1.0, "top_k": 40, "repetition_penalty": 1.3}
     assert registry.resolve("sglang/llm-jp/llm-jp-4.1-8b-thinking").template_kwargs == {"conversation_start_date": "2026-10-01"}
     o = registry.resolve("openrouter/qwen/qwen3.8-27b", temperature=0.6, model_args={"sampling": "default", "max_image_px": 2048})
@@ -509,7 +511,9 @@ def test_settings_precedence_cli_preset_provider(clean_env, endpoints):
     assert (st["temperature"]["source"], st["top_p"]["source"], st["frequency_penalty"]["source"]) == (
         "cli", preset, "openrouter:default_parameters")
     assert "repetition_penalty" not in body and st["repetition_penalty"] == {"value": None, "source": "provider default (not reported)"}
-    assert st["effort"] == {"value": None, "source": "provider default (not reported)"}
+    # the preset's default effort is sent explicitly; OpenRouter maps it to the provider's parameter (noted)
+    assert st["effort"] == {"value": "xhigh", "source": preset, "note": OPENROUTER_EFFORT_NOTE}
+    assert body["reasoning"] == {"effort": "xhigh"}
     assert s.config()["endpoint"]["canonical_slug"] == "qwen/qwen3.8-27b-2026"
 
     luna = registry.make_sampler(registry.resolve("openrouter/openai/gpt-6-luna"))  # no preset sampling
@@ -517,7 +521,8 @@ def test_settings_precedence_cli_preset_provider(clean_env, endpoints):
     luna.prepare()
     assert luna.request_body()["temperature"] == 1 and "top_p" not in luna.request_body()
     assert luna.config()["settings"]["temperature"] == {"value": 1, "source": "openrouter:default_parameters"}
-    assert luna.config()["settings"]["effort"] == {"value": "medium", "source": "preset:openrouter/openai/gpt-6-luna"}
+    assert luna.config()["settings"]["effort"] == {"value": "medium", "source": "preset:openrouter/openai/gpt-6-luna",
+                                                   "note": OPENROUTER_EFFORT_NOTE}
 
 
 def test_settings_generation_config_under_preset_none(clean_env, endpoints, monkeypatch, tmp_path):
@@ -600,6 +605,7 @@ def test_endpoint_unavailable_classification(clean_env, endpoints, monkeypatch, 
 
     served = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B"))
     served.spec.max_tries = 2
+    served.connection_budget_s = 0  # connection failures: their own wall-clock budget (test_connection_budget...)
     served._client = raising(openai.APIConnectionError(request=req))
     with pytest.raises(errors.SamplerError) as e:
         served([user("q")])
@@ -608,6 +614,161 @@ def test_endpoint_unavailable_classification(clean_env, endpoints, monkeypatch, 
     with pytest.raises(errors.SamplerError) as e:
         served([user("q")])
     assert e.value.cause == errors.PROVIDER_FAILED
+
+
+def _dropping_server(mode: str):
+    """A TCP server that reads each request and then closes the connection without an answer ("drop") or with a
+    TCP reset ("reset"): a served engine being killed by the `sem serve` watchdog. Returns (port, accepted list, stop)."""
+    import socket
+    import struct
+    import threading
+
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(16)
+    srv.settimeout(0.2)
+    accepted, stop = [], threading.Event()
+
+    def loop():
+        while not stop.is_set():
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                continue
+            accepted.append(1)
+            c.settimeout(2)
+            try:
+                c.recv(65536)
+            except OSError:
+                pass
+            if mode == "reset":
+                c.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            c.close()
+        srv.close()
+
+    threading.Thread(target=loop, daemon=True).start()
+    return srv.getsockname()[1], accepted, stop
+
+
+def _fake_clock(sampler, budget):
+    """The sampler's clock advances only by its own sleeps."""
+    t = [0.0]
+    sampler.slept = []
+    sampler.connection_budget_s = budget
+    sampler.clock = lambda: t[0]
+
+    def sleep(x):
+        sampler.slept.append(x)
+        t[0] += x
+
+    sampler.sleep = sleep
+
+
+def _refused_url():
+    import socket
+
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        return f"http://127.0.0.1:{so.getsockname()[1]}/v1"
+
+
+def test_connection_budget_is_separate_from_max_tries(clean_env, endpoints):
+    """Connection failures do not use max_tries (here 1): they retry until the wall-clock budget is spent (fake
+    clock), then end as endpoint_unavailable with the connection flag."""
+    url = _refused_url()
+    s = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", base_url=url), base_url=url)
+    s.spec.max_tries = 1
+    _fake_clock(s, budget=1200)
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert (e.value.cause, e.value.connection, e.value.exc_type) == (errors.ENDPOINT_UNAVAILABLE, True,
+                                                                     "ConnectionBudgetExhausted")
+    assert sum(s.slept[:-1]) < 1200 <= sum(s.slept) and max(s.slept) == 60 and len(s.slept) > 2
+    assert "budget 1200 s" in e.value.message
+
+
+def test_stopped_server_manifest_ends_at_once(clean_env, endpoints, tmp_path):
+    """`sem run --server MANIFEST`: on a connection failure the manifest is re-read; "stopped: ..." (sem serve gave up)
+    ends the request at once, no retry; a serving manifest keeps retrying within the budget."""
+    url = _refused_url()
+    man = tmp_path / "server.json"
+    man.write_text(json.dumps({"format": "sem-server/1", "runtime": {"status": "stopped: 3 failed starts"}}))
+    s = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", base_url=url), base_url=url)
+    s.server_manifest_path = str(man)
+    _fake_clock(s, budget=1200)
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert (e.value.cause, e.value.connection, e.value.exc_type) == (errors.ENDPOINT_UNAVAILABLE, True, "ServerStopped")
+    assert "stopped: 3 failed starts" in e.value.message and s.slept == []
+    man.write_text(json.dumps({"format": "sem-server/1", "runtime": {"status": "serving"}}))
+    _fake_clock(s, budget=30)
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.exc_type == "ConnectionBudgetExhausted" and s.slept
+
+
+@pytest.mark.parametrize("mode", ["drop", "reset", "refused"])
+def test_served_connection_loss_reaches_the_breaker(clean_env, endpoints, monkeypatch, mode):
+    """A restarting served engine (connection dropped / reset mid-request, then refused): the real OpenAI client raises
+    APIConnectionError, our loop retries it (the SDK does not: one connection per attempt), and the final error is a
+    connection failure (endpoint_unavailable, connection=True) that the runner's circuit breaker counts. Connection
+    failures are retried against their own wall-clock budget (fake clock: 10 s -> attempts at t = 0, 2, 6, 14)."""
+    import socket
+
+    from simple_evals_mm import runner
+    from simple_evals_mm.samplers import openai_chat
+
+    monkeypatch.setattr(openai_chat.time, "sleep", lambda s: None)
+    if mode == "refused":
+        with socket.socket() as so:
+            so.bind(("127.0.0.1", 0))
+            port = so.getsockname()[1]
+        accepted, stop = None, None
+    else:
+        port, accepted, stop = _dropping_server(mode)
+    try:
+        url = f"http://127.0.0.1:{port}/v1"
+        s = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", base_url=url), base_url=url)
+        assert s.base_url() == url
+        s.spec.max_tries = 2
+        _fake_clock(s, budget=10)
+        with pytest.raises(errors.SamplerError) as e:
+            s([user("q")])
+    finally:
+        if stop is not None:
+            stop.set()
+    assert (e.value.cause, e.value.connection) == (errors.ENDPOINT_UNAVAILABLE, True)
+    assert "APIConnectionError" in e.value.message and e.value.exc_type == "ConnectionBudgetExhausted"
+    assert s.slept == [2, 4, 8]
+    if accepted is not None:
+        assert len(accepted) == 4  # one connection per attempt: the SDK's own retries are off
+    trial = NS(exception_info={"cause": e.value.cause, "connection": e.value.connection})
+    assert runner._breaker(trial)
+    # and as provider_failed with the connection flag (an API provider): still counted
+    trial.exception_info = {"cause": errors.PROVIDER_FAILED, "connection": True}
+    assert runner._breaker(trial)
+
+
+def test_request_timeout_is_explicit(clean_env, endpoints):
+    """served engines 6 h, APIs 3600 s, Gemini the SDK's; passed to the client with max_retries=0; recorded in the
+    sampler config but not in the locks (runtime-only, like n_concurrent)."""
+    from simple_evals_mm.samplers.base import lock_config
+
+    served = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B"))
+    assert served.spec.request_timeout_s == registry.SERVED_REQUEST_TIMEOUT_S == 21600
+    c = served.client
+    assert (c.timeout, c.max_retries, c._client.timeout.read) == (21600, 0, 21600)
+    clean_env.setenv("OPENROUTER_API_KEY", "k")
+    api = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    assert api.spec.request_timeout_s == 3600 and (api.client.timeout, api.client.max_retries) == (3600, 0)
+    assert registry.resolve("gemini/gemini-3.1-pro-preview").request_timeout_s is None
+    short = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.5-9B", request_timeout_s=120))
+    assert short.client.timeout == 120
+    cfg, cfg_short = served.config(), short.config()
+    assert cfg["request_timeout_s"] == 21600 and cfg_short["request_timeout_s"] == 120
+    assert "request_timeout_s" not in lock_config(cfg) and lock_config(cfg) == lock_config(cfg_short)
+    with pytest.raises(ValueError, match="positive"):
+        registry.resolve("sglang/Qwen/Qwen3.5-9B", request_timeout_s=0)
 
 
 # ---------------------------------------------------------------- what was really sent (audit #108)
@@ -767,3 +928,38 @@ def test_gpt4o_sends_no_system_message():
     for slug in ("openai/gpt-4o-2024-11-20", "azure/gpt-4o-2024-11-20", "openrouter/openai/gpt-4o-2024-11-20"):
         assert not presets.PRESETS[slug].get("system_message"), slug
     assert not any(p.get("system_message") for p in presets.PRESETS.values())
+
+
+# ---------------------------------------------------------------- default effort of reasoning presets
+def test_every_preset_with_effort_levels_has_a_default():
+    """A preset (or family) that lists effort levels names its default level, which is one of them: it is sent
+    explicitly and recorded with source preset:<name>, so a job never runs on the provider's unrecorded default."""
+    from simple_evals_mm.samplers.presets import FAMILIES, PRESETS
+
+    for name, p in [*PRESETS.items(), *((f"--preset {k}", v) for k, v in FAMILIES.items())]:
+        if p.get("efforts"):
+            assert p.get("effort") in p["efforts"], f"{name}: default effort {p.get('effort')!r} not in {p['efforts']}"
+    spec = registry.resolve("sglang/Qwen/Qwen3.8-27B")
+    assert (spec.effort, spec.effort_source) == ("xhigh", "preset:qwen3.8")
+    assert registry.resolve("sglang/Qwen/Qwen3.8-27B", effort="low").effort_source == "cli"
+    # gemma-4: thinking off by default, sent as enable_thinking=false
+    g = registry.make_sampler(registry.resolve("sglang/google/gemma-4-12B-it", max_output_tokens=10))
+    assert g.request_body()["chat_template_kwargs"] == {"enable_thinking": False}
+    assert registry.make_sampler(registry.resolve("openrouter/google/gemma-4-31b-it")).request_body()["reasoning"] == {"enabled": False}
+
+
+def test_openrouter_refuses_effort_the_endpoint_cannot_take(clean_env, endpoints):
+    """An effort (requested or the preset's default) on an endpoint whose supported_parameters lack reasoning /
+    reasoning_effort is refused at prepare() (OpenRouter would drop it silently); an endpoint with them passes."""
+    endpoints["row"]["supported_parameters"] = ["max_tokens", "temperature"]
+    s = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    with pytest.raises(errors.SetupError, match="preset's default effort .* --preset none"):
+        s.prepare()
+    with pytest.raises(errors.SetupError, match="drop --effort"):
+        registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b", effort="low")).prepare()
+    # no effort control in the preset: nothing to refuse
+    registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-flash")).prepare()
+    endpoints["row"]["supported_parameters"] = ["max_tokens", "reasoning"]
+    ok = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    ok.prepare()
+    assert ok.request_body()["reasoning"] == {"effort": "xhigh"}
