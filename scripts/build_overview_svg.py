@@ -10,7 +10,7 @@ import urllib.request
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site", "assets")
 ICON_DIR = os.path.join(ROOT, "icons")
-ICON_NAMES = {"sampler": "server", "task": "images", "run": "chart-column"}
+ICON_NAMES = {"sampler": "server", "task": "images", "job": "chart-column"}
 
 
 def lucide(name):
@@ -54,13 +54,13 @@ def main():
     x1 = 12
     x2 = x1 + cw + gap
     x3 = x2 + cw + gap
-    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="simple-evals-mm: a Sampler (any model behind one interface) times a Task (40+ Japanese and English vision and text benchmarks) gives a Run: reproducible results with the frozen config, answers, score, cost and output tokens">',
+    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="simple-evals-mm: a Sampler (any model behind one interface) times a Task (40+ Japanese and English vision and text benchmarks) gives a Job: reproducible results with the locked config, trajectories, rewards, cost and output tokens">',
            '  <!-- Icons: Lucide (https://lucide.dev), ISC License, Copyright (c) Lucide Icons and Contributors. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies. THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->',
            '  <style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif; } .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }</style>',
            f'  <rect width="{W}" height="{H}" fill="#ffffff"/>',
            card(x1, y, cw, h, "#eef4ff", "#cfdcf5", "#2a5db0", "sampler", "SAMPLER", "Any model", "API and local models behind one interface", ["API", "OpenRouter", "SGLang", "Hugging Face"]),
            card(x2, y, cw, h, "#f3eeff", "#ded1f7", "#6a46c2", "task", "TASK", "40+ tasks · JA / EN", "Vision and text benchmarks", ["VQA", "Document", "Chart", "OCR", "STEM", "Text-only"]),
-           card(x3, y, W - x3 - 12, h, "#fff7ee", "#f3d8b8", "#b35a12", "run", "RUN", "Reproducible results", "One run = one frozen configuration", ["config", "answers", "score", "cost", "output tokens"])]
+           card(x3, y, W - x3 - 12, h, "#fff7ee", "#f3d8b8", "#b35a12", "job", "JOB", "Reproducible results", "One job = one locked configuration", ["config + lock", "trajectories", "rewards", "cost", "output tokens"])]
     cy = y + h / 2
     svg.append(f'  <text x="{x1 + cw + gap / 2:.0f}" y="{cy + 9:.0f}" text-anchor="middle" font-size="26" fill="#b3b2ad">×</text>')
     ax = x2 + cw + 6

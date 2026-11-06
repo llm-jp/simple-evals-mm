@@ -46,9 +46,10 @@
   const tag = c => `<span class="cl-tag" data-cat="${esc(c)}">${esc(c)}</span>`;
   document.getElementById("cl-legend").innerHTML = CATS.map(tag).join("");
   const fmt = d => new Date(d + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  document.getElementById("cl-list").innerHTML = CHANGELOG.map(e => `
+  const drafts = /(^#|&)drafts\b/.test(location.hash);  // drafts (not published yet) only with #drafts
+  document.getElementById("cl-list").innerHTML = CHANGELOG.filter(e => drafts || !e.draft).map(e => `
     <li class="cl-entry" id="${esc(e.date)}">
-      <div class="cl-when"><time datetime="${esc(e.date)}">${fmt(e.date)}</time>${e.version
+      <div class="cl-when"><time datetime="${esc(e.date)}">${fmt(e.date)}</time>${e.draft ? ' <span class="cl-tag">Draft</span>' : ""}${e.version
         ? ` <a class="cl-version" href="https://github.com/llm-jp/simple-evals-mm/releases/tag/v${esc(e.version)}" target="_blank" rel="noopener">v${esc(e.version)}</a>` : ""}</div>
       <ul class="cl-items">${e.items.map(i => `<li>${tag(i.category)}<span>${esc(i.text)}</span></li>`).join("")}</ul>
     </li>`).join("");
