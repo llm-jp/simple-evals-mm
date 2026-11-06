@@ -94,7 +94,10 @@ OPENROUTER_MODELS: dict[str, dict] = {
     "openai/gpt-5.1": {"provider": ["openai"], "efforts": ("none", "low", "medium", "high"), "effort": "none", "open_weight": False},
     "openai/gpt-6-sol": {"provider": ["openai"], "efforts": None, "open_weight": False},
     "anthropic/claude-sonnet-5.5": {"provider": ["anthropic"], "efforts": None, "open_weight": False},
-    "anthropic/claude-opus-5.5": {"provider": ["anthropic"], "efforts": None, "open_weight": False},
+    # Opus 5.5: adaptive thinking always on (no "none"); default medium (Anthropic docs; OpenRouter lists high), so
+    # parity / leaderboard runs pass --effort explicitly
+    "anthropic/claude-opus-5.5": {"provider": ["anthropic"], "efforts": ("low", "medium", "high", "xhigh", "max"),
+                                  "effort": "medium", "open_weight": False},
     "google/gemini-3.1-pro-preview": {"provider": ["google-ai-studio"], "efforts": None, "open_weight": False},
 }
 
