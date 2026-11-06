@@ -51,16 +51,20 @@ def test_answers_are_deterministic(fake_provider):
     s = registry.make_sampler(registry.resolve("fake/scripted"))
     assert isinstance(s, fake.ScriptedSampler)
     msgs = [Message("user", [Text("Which?\nA. x\nB. y\nC. z\nAnswer: $LETTER")])]
-    seeds = [s0 for s0 in range(200) if (s0 + 1) % 23 > 3]  # normal answers
+    def seed_for(mode):  # a one-turn request: mode = (seed + MODE_OFFSET + 1) % 23
+        return (mode - 1 - fake.MODE_OFFSET) % 23
+
+    seeds = [s0 for s0 in range(200) if (s0 + fake.MODE_OFFSET + 1) % 23 > 3]  # normal answers
     outs = [s(msgs, seed=k).text for k in seeds[:5]]
     assert outs == [s(msgs, seed=k).text for k in seeds[:5]]
     assert all(o.splitlines()[-1] in ("Answer: A", "Answer: B", "Answer: C") for o in outs)
-    assert s(msgs, seed=22).finish_reason == "length" and s(msgs, seed=0).finish_reason == "content_filter"
-    assert " " in s(msgs, seed=1).text
+    assert s(msgs, seed=seed_for(0)).finish_reason == "length"
+    assert s(msgs, seed=seed_for(1)).finish_reason == "content_filter"
+    assert " " in s(msgs, seed=seed_for(2)).text
     with pytest.raises(errors.SamplerError) as e:
-        s(msgs, seed=2)
+        s(msgs, seed=seed_for(3))
     assert e.value.cause == errors.PROVIDER_FAILED
-    assert s(msgs, seed=2).finish_reason == "stop"  # the retry succeeds
+    assert s(msgs, seed=seed_for(3)).finish_reason == "stop"  # the retry succeeds
     boxed = s([Message("user", [Text("Put the answer in \\boxed{}.")])], seed=5)
     assert "\\boxed{" in boxed.text
 
