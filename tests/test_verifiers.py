@@ -158,3 +158,9 @@ def test_judge_reply_stored_in_full():
     assert len(long) > 20000 and res.judge["response"] == long and res.reward == 1.0
     raw, rec = verifiers.judge_call(FakeSampler(long), "q")
     assert raw == rec["response"] == long
+
+
+def test_trial_seed_fits_int32():
+    """Google's generation_config.seed is an int32: every per-trial seed is in [0, 2**31)."""
+    seeds = [verifiers.trial_seed(f"t{i}__a{k}") for i in range(2000) for k in (1, 2, 3)]
+    assert all(0 <= s < 2**31 for s in seeds) and len(set(seeds)) > 5900

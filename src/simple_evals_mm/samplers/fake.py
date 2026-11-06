@@ -41,6 +41,12 @@ MAX_OUTPUT_TOKENS = 4096
 TRICKY = "    \x85 \x0c \x00 \ud800 \U0001f600 שלום é ﻿"
 
 
+# Scripted outcomes come from the per-trial seed: (seed + offset + turns) % 23 picks length / content_filter / tricky /
+# transient-failure for modes 0-3. The offset is chosen so that the 46-task fake datasets of the tests hit every
+# scripted outcome at attempts 1 and 2 (with 31-bit trial seeds, verifiers.trial_seed).
+MODE_OFFSET = 4
+
+
 def _h(text: str) -> int:
     return int(hashlib.sha256(text.encode("utf-8", errors="surrogatepass")).hexdigest()[:12], 16)
 
@@ -129,7 +135,7 @@ class ScriptedSampler(Sampler):
             out = judge_answer(last)
             return Response(text=out, output_tokens=max(1, len(out) // 4), finish_reason="stop", **base)
         time.sleep(float(os.environ.get("SEM_FAKE_DELAY_S") or 0))  # release_check.sh: room to kill a run partway
-        mode = (s + len(messages)) % 23
+        mode = (s + MODE_OFFSET + len(messages)) % 23
         if mode == 3:  # one transient failure per trial request: the runner's retry gets the answer
             with self._lock:
                 key = s * 1000 + len(messages)
