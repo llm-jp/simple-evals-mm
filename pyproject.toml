@@ -35,6 +35,11 @@ hf-server = [
     "sentencepiece>=0.2.1",
     "torchvision>=0.23.0",
 ]
+# pq_attestation.py (optional post quantum attestation of finished result files).
+# Install with `uv sync --frozen --extra pq`.
+pq = [
+    "dilithium-py>=1.0.1",
+]
 
 [project.scripts]
 simple-evals-mm = "simple_evals_mm.cli:main"
