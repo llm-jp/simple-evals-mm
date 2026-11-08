@@ -256,6 +256,7 @@ def test_jobs_parity_markdown_table(tmp_path, monkeypatch, capsys):
         md = f.read()
     assert "| dataset | model-9b (default) |" in md and "| toy_a | 50.0/50.0 ✓ |" in md and "| toy_na | 80.0/90.0 n/a |" in md
     assert "toy_extra" not in md and "job `j`" in md  # rows: datasets with a card value (--all: every dataset)
+    assert "| toy_split | –/50.0 |" in md and "toy_unknown" in md  # card values the job did not run
     out = tmp_path / "p.md"
     assert cli.main(["jobs", "parity", "-o", jobs, "--references", str(refs), "--md", str(out), "--all"]) == 0
     assert "| toy_extra | 30.0/— |" in out.read_text(encoding="utf-8")

@@ -187,6 +187,9 @@ def compare(st: store_mod.JobStore, refs: dict) -> dict:
         return out
     out |= {"source": entry.get("source"), "retrieved": str(entry.get("retrieved")), "revision": entry.get("revision"),
             "model_name": entry.get("name")}
+    # card values the job did not run (comparable ones): shown as "–/card" rows by `sem jobs parity`
+    out["card_only"] = {n: float(r["value"]) for n, r in (entry.get("scores") or {}).items()
+                        if n not in summary and r.get("comparable", True) is not False}
     for name in runner.dataset_entries(cfg):
         ref = (entry.get("scores") or {}).get(name)
         if ref is None or name not in summary:
@@ -320,6 +323,10 @@ def markdown_table(reps: list[dict], labels: list[str], all_datasets: bool = Fal
         for r in rep["rows"]:
             if r["dataset"] not in names:
                 names.append(r["dataset"])
+    for _, rep in cols:  # card values not run yet
+        for n in rep.get("card_only") or {}:
+            if n not in names:
+                names.append(n)
     if all_datasets and datasets:
         for lab in labels:
             for n in datasets.get(lab, []):
@@ -338,13 +345,15 @@ def markdown_table(reps: list[dict], labels: list[str], all_datasets: bool = Fal
                 cells.append(_cell(r, mixed))
             elif n in (rep.get("ours_all") or {}):  # the job ran it, the card has no value
                 cells.append(f"{_f(rep['ours_all'][n])}/—")
+            elif n in (rep.get("card_only") or {}):  # the card has a value, the job did not run it
+                cells.append(f"–/{rep['card_only'][n]:.1f}")
             else:
                 cells.append("")
         out.append(f"| {row_name} | " + " | ".join(cells) + " |")
     head = ["# Parity with model cards", "",
             ("Cells: ours/card in points (ours = mean over attempts). ✓ within tolerance, ⚠ outside "
              "(tol = min(5, max(2, 2 x SE_card))); n/a not comparable (tools, pass@k, another dataset); ~ the card's "
-             "split / variant differs; (name) the sub-metric compared instead of the reward; ours/— the card has no value; empty: not run."), ""]
+             "split / variant differs; (name) the sub-metric compared instead of the reward; ours/— the card has no value; –/card not run yet; empty: neither."), ""]
     if references:
         head.append(f"References: `{references}`.")
     jobs = [f"- **{lab}**: job `{os.path.basename(str(rep.get('job', '')).rstrip(os.sep))}`, model `{rep.get('model')}`"
