@@ -518,9 +518,7 @@ def _jobs_parity(args, d: str) -> int:
         reps = [rep for rep in reps if rep["rows"] or rep.get("card_only")] or reps
     for rep in reps:
         lab = parity.column_label(rep, os.path.basename(str(rep["job"]).rstrip(os.sep)))
-        if lab in labels:  # two jobs of one model and effort: the job name tells them apart
-            lab = os.path.basename(str(rep["job"]).rstrip(os.sep))
-        labels.append(lab)
+        labels.append(lab)  # jobs of one model and effort share the column
         have[lab] = list(rep.get("ours_all") or {})
     md = parity.markdown_table(reps, labels, all_datasets=args.all, datasets=have,
                                references=args.references or parity.DEFAULT_REFERENCES)
