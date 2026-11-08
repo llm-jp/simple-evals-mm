@@ -8,7 +8,7 @@
                                                                               (-d name@ref: another dataset revision)
     sem job show JOB [--json] | check JOB | regrade JOB [-d ...] [--judge-model M] | resume -p JOB [-f CAUSE ...]
             [--server MANIFEST] [--dry-run [--json]] | parity JOB [--references FILE] [--json] [--strict]
-    sem jobs list [-o JOBS_DIR] | parity [JOB ...] [-o JOBS_DIR] [--references FILE] [--md FILE] [--all]
+    sem jobs list [-o JOBS_DIR] | parity [JOB ...] [-o JOBS_DIR] [--references FILE] [--md FILE] [--all] [--all-efforts]
     sem --version
 
 Expected failures (a refused start, a bad option, a key or endpoint that is not ready: errors.UserError) print one
@@ -508,13 +508,20 @@ def _jobs_parity(args, d: str) -> int:
         rep = parity.compare(st, refs)
         if args.with_card_only and rep.get("model_key") is None:
             continue
-        lab = os.path.basename(st.dir.rstrip(os.sep))
-        labels.append(lab)
         reps.append(rep)
-        have[lab] = list(rep.get("ours_all") or {})
     if not reps:
         print(f"error: no jobs found in {d}", file=sys.stderr)
         return 2
+    if not args.all_efforts:
+        reps = [reps[i] for i in parity.top_effort(reps)]
+    if not args.all:  # a column with no compared dataset only adds width
+        reps = [rep for rep in reps if rep["rows"]] or reps
+    for rep in reps:
+        lab = parity.column_label(rep, os.path.basename(str(rep["job"]).rstrip(os.sep)))
+        if lab in labels:  # two jobs of one model and effort: the job name tells them apart
+            lab = os.path.basename(str(rep["job"]).rstrip(os.sep))
+        labels.append(lab)
+        have[lab] = list(rep.get("ours_all") or {})
     md = parity.markdown_table(reps, labels, all_datasets=args.all, datasets=have,
                                references=args.references or parity.DEFAULT_REFERENCES)
     out = args.md or os.path.join(d, "parity.md")
@@ -646,6 +653,8 @@ def make_parser() -> argparse.ArgumentParser:
     jp.add_argument("--md", help="markdown file to write (default <jobs dir>/parity.md)")
     jp.add_argument("--all", action="store_true", help="also the datasets without a card value (ours / —)")
     jp.add_argument("--with-card-only", action="store_true", help="only the jobs whose model has a model card")
+    jp.add_argument("--all-efforts", action="store_true",
+                    help="every job (default: per model, only the job(s) with the highest effort)")
     models = sub.add_parser("models", help="model presets").add_subparsers(dest="models_cmd", required=True)
     models.add_parser("list", help="presets: slug, API format, efforts, default sampling, --model-arg keys").add_argument(
         "--json", action="store_true")
