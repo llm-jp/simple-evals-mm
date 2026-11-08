@@ -515,7 +515,7 @@ def _jobs_parity(args, d: str) -> int:
     if not args.all_efforts:
         reps = [reps[i] for i in parity.top_effort(reps)]
     if not args.all:  # a column with no compared dataset only adds width
-        reps = [rep for rep in reps if rep["rows"]] or reps
+        reps = [rep for rep in reps if rep["rows"] or rep.get("card_only")] or reps
     for rep in reps:
         lab = parity.column_label(rep, os.path.basename(str(rep["job"]).rstrip(os.sep)))
         if lab in labels:  # two jobs of one model and effort: the job name tells them apart
