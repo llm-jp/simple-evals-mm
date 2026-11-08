@@ -70,7 +70,10 @@ OPENROUTER_MODELS: dict[str, dict] = {
     # muse-wonder: "none" rejected (reasoning mandatory); minimal/low/medium/high accepted (smoke 2026-10-21)
     "meta/muse-wonder": {"provider": ["meta"], "efforts": ("minimal", "low", "medium", "high", "xhigh", "max"), "effort": "medium", "open_weight": False},  # OpenRouter supported_efforts / Cursor docs (2026-10-24)
     # Alibaba's endpoint exposes no effort control for Qwen3.8 Flash (thinking on, default budget).
-    "qwen/qwen3.8-flash": {"provider": ["alibaba"], "sampling": QWEN38, "efforts": (), "open_weight": False},
+    # Qwen3.8 Flash: thinking on / off only (OpenRouter reasoning optional, default on; no effort levels): sent
+    # explicitly as reasoning.enabled so a changed provider default cannot switch it (2026-11-09)
+    "qwen/qwen3.8-flash": {"provider": ["alibaba"], "sampling": QWEN38, "efforts": ("none", "high"), "effort": "high",
+                           "toggle": True, "open_weight": False},
     # ---- open-weight models: first-party endpoint where it exists --------------------------
     "moonshotai/kimi-k3": {"provider": ["moonshotai"], "efforts": ("none", "low", "high", "max"), "effort": "max", "open_weight": True},  # OpenRouter supported_efforts; others are mapped (2026-10-24)
     # Kimi K3.1 Pro: only Moonshot's endpoints (mxfp4 = the released weight format); no sampling params accepted (2026-10-24).
@@ -188,8 +191,10 @@ FAMILIES: dict[str, dict] = {
                 "template_kwargs": {"enable_thinking": True, "preserve_thinking": False},
                 # effort default xhigh: Qwen3.8-27B's default (OpenRouter catalog default_effort, 2026-11-03)
                 "efforts": ("low", "medium", "xhigh"), "effort": "xhigh", "expects_reasoning": True, "reasoning_parser": "qwen3"},
+    # Qwen3.5: thinking on / off through the template's enable_thinking (the template's default is on); sent explicitly
     "qwen3.5": {"sampling": {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 1.5, "top_k": 20, "min_p": 0.0, "repetition_penalty": 1.0},
-                "efforts": (), "expects_reasoning": True, "reasoning_parser": "qwen3"},
+                "efforts": ("none", "high"), "effort": "high", "effort_field": "template_toggle", "effort_key": "enable_thinking",
+                "expects_reasoning": True, "reasoning_parser": "qwen3"},
     "qwen3-vl": {"sampling": {"temperature": 0.0}, "efforts": ()},  # greedy
     "glm-5": {"sampling": {"temperature": 1.0, "top_p": 0.95}, "template_kwargs": {"clear_thinking": True},
               "efforts": ("low", "high", "max"), "effort": "max",  # GLM-5.3's default (catalog default_effort)
