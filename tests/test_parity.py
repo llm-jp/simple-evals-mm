@@ -252,7 +252,8 @@ def test_jobs_parity_markdown_table(tmp_path, monkeypatch, capsys):
     refs = tmp_path / "refs.yaml"
     refs.write_text(yaml.safe_dump({"models": REFS}))
     assert cli.main(["jobs", "parity", "-o", jobs, "--references", str(refs)]) == 0
-    md = open(os.path.join(jobs, "parity.md"), encoding="utf-8").read()
+    with open(os.path.join(jobs, "parity.md"), encoding="utf-8") as f:
+        md = f.read()
     assert "| dataset | j |" in md and "| toy_a | 50.0 / 50.0 ✓ |" in md and "| toy_na | 80.0 / 90.0 (n/a) |" in md
     assert "toy_extra" not in md and "-> card `model-9b`" in md
     out = tmp_path / "p.md"
