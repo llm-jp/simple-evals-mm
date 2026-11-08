@@ -240,3 +240,21 @@ def test_submetric_from_details(tmp_path, monkeypatch):
     row = parity.compare(st, refs)["rows"][0]
     assert row["submetric"] == "inst_loose" and row["ours"] == pytest.approx(62.5) and row["result"] == "✓"
     assert row["std"] == pytest.approx(math.sqrt(2) * 37.5) and row["binary"] is False
+
+
+def test_jobs_parity_markdown_table(tmp_path, monkeypatch, capsys):
+    """`sem jobs parity`: one row per dataset, one column per job, "ours / card" cells with the result; written to
+    <jobs dir>/parity.md; --all adds the datasets without a card value."""
+    _register(monkeypatch, "toy_a", "toy_na", "toy_extra")
+    make_job(tmp_path / "x", {"toy_a": [_rewards(0.5, 1600)] * 2, "toy_na": [_rewards(0.8, 10)] * 2,
+                               "toy_extra": [_rewards(0.3, 10)] * 2})
+    jobs = str(tmp_path / "x" / "jobs")
+    refs = tmp_path / "refs.yaml"
+    refs.write_text(yaml.safe_dump({"models": REFS}))
+    assert cli.main(["jobs", "parity", "-o", jobs, "--references", str(refs)]) == 0
+    md = open(os.path.join(jobs, "parity.md"), encoding="utf-8").read()
+    assert "| dataset | j |" in md and "| toy_a | 50.0 / 50.0 ✓ |" in md and "| toy_na | 80.0 / 90.0 (n/a) |" in md
+    assert "toy_extra" not in md and "-> card `model-9b`" in md
+    out = tmp_path / "p.md"
+    assert cli.main(["jobs", "parity", "-o", jobs, "--references", str(refs), "--md", str(out), "--all"]) == 0
+    assert "| toy_extra | 30.0 / — |" in out.read_text(encoding="utf-8")

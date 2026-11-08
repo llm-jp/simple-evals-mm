@@ -8,6 +8,7 @@
                                                                               (-d name@ref: another dataset revision)
     sem job show JOB [--json] | check JOB | regrade JOB [-d ...] [--judge-model M] | resume -p JOB [-f CAUSE ...]
             [--server MANIFEST] [--dry-run [--json]] | parity JOB [--references FILE] [--json] [--strict]
+    sem jobs list [-o JOBS_DIR] | parity [JOB ...] [-o JOBS_DIR] [--references FILE] [--md FILE] [--all]
     sem --version
 
 Expected failures (a refused start, a bad option, a key or endpoint that is not ready: errors.UserError) print one
@@ -481,11 +482,46 @@ def cmd_job(args) -> int:
 
 def cmd_jobs(args) -> int:
     d = args.jobs_dir or store_mod.DEFAULT_JOBS_DIR
+    if args.jobs_cmd == "parity":
+        return _jobs_parity(args, d)
     for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
         st = store_mod.JobStore(d, name)
         if st.exists():
             c = st.read_config()
             print(f"{name}\t{c.get('model')}\t{','.join(c.get('datasets', []))}")
+    return 0
+
+
+def _jobs_parity(args, d: str) -> int:
+    from simple_evals_mm import parity
+
+    refs = parity.load_references(args.references)
+    if args.job:
+        names = list(args.job)
+    else:
+        names = [n for n in sorted(os.listdir(d)) if not n.startswith("_")] if os.path.isdir(d) else []
+    labels, reps, have = [], [], {}
+    for n in names:
+        st = store_mod.JobStore.from_path(n) if os.sep in n else store_mod.JobStore(d, n)
+        if not st.exists():
+            continue
+        rep = parity.compare(st, refs)
+        if args.with_card_only and rep.get("model_key") is None:
+            continue
+        lab = os.path.basename(st.dir.rstrip(os.sep))
+        labels.append(lab)
+        reps.append(rep)
+        have[lab] = list(rep.get("ours_all") or {})
+    if not reps:
+        print(f"error: no jobs found in {d}", file=sys.stderr)
+        return 2
+    md = parity.markdown_table(reps, labels, all_datasets=args.all, datasets=have,
+                               references=args.references or parity.DEFAULT_REFERENCES)
+    out = args.md or os.path.join(d, "parity.md")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(md)
+    print(md)
+    print(f"[parity] {len(reps)} job(s) -> {out}")
     return 0
 
 
@@ -600,8 +636,16 @@ def make_parser() -> argparse.ArgumentParser:
             p.add_argument("--server", help="`sem serve` manifest of this session's server (overrides the one in "
                                             "config.json; runtime-only, recorded per session; the server must have the "
                                             "same locked identity)")
-    jobs = sub.add_parser("jobs", help="list jobs").add_subparsers(dest="jobs_cmd", required=True)
+    jobs = sub.add_parser("jobs", help="list jobs / parity table").add_subparsers(dest="jobs_cmd", required=True)
     jobs.add_parser("list").add_argument("-o", "--jobs-dir")
+    jp = jobs.add_parser("parity", help="parity of several jobs as one markdown table (rows: datasets, columns: jobs; "
+                                        "cells: ours / model card), written to a file on every call")
+    jp.add_argument("job", nargs="*", help="job names or directories (default: every job of the jobs dir)")
+    jp.add_argument("-o", "--jobs-dir")
+    jp.add_argument("--references", help="model card references YAML (default references/model_cards.yaml)")
+    jp.add_argument("--md", help="markdown file to write (default <jobs dir>/parity.md)")
+    jp.add_argument("--all", action="store_true", help="also the datasets without a card value (ours / —)")
+    jp.add_argument("--with-card-only", action="store_true", help="only the jobs whose model has a model card")
     models = sub.add_parser("models", help="model presets").add_subparsers(dest="models_cmd", required=True)
     models.add_parser("list", help="presets: slug, API format, efforts, default sampling, --model-arg keys").add_argument(
         "--json", action="store_true")
