@@ -245,7 +245,7 @@ def test_submetric_from_details(tmp_path, monkeypatch):
 def test_jobs_parity_markdown_table(tmp_path, monkeypatch, capsys):
     """`sem jobs parity`: one row per dataset, one column per job, "ours / card" cells with the result; written to
     <jobs dir>/parity.md; --all adds the datasets without a card value."""
-    _register(monkeypatch, "toy_a", "toy_na", "toy_extra")
+    _register(monkeypatch, "toy_a", "toy_na", "toy_extra", "toy_split")  # toy_split: a selectable split, card on test
     make_job(tmp_path / "x", {"toy_a": [_rewards(0.5, 1600)] * 2, "toy_na": [_rewards(0.8, 10)] * 2,
                                "toy_extra": [_rewards(0.3, 10)] * 2})
     jobs = str(tmp_path / "x" / "jobs")
@@ -280,3 +280,15 @@ def test_variant_names_the_selection():
     assert parity._variant({"split": "testmini"}) == "testmini"
     assert parity._variant({"start": "2025-02-01", "end": "2025-05-01"}) == "2025-02-01..2025-05-01"
     assert parity._variant({"revision": "91fe284bbfacfa687959"}) == "rev 91fe284" and parity._variant({}) == ""
+
+
+def test_jobs_sharing_a_column_keep_the_compared_row():
+    """Two jobs of one model and effort share a column: the job that ran a dataset wins over the other job's card-only
+    cell; a card split the dataset cannot select (charxiv-like) is no selection."""
+    reps = [{"model": "m", "effort": "high", "job": "a", "rows": [], "ours_all": {}, "variants": {},
+             "card_only": {"ifeval": (97.0, "")}},
+            {"model": "m", "effort": "high", "job": "b", "variants": {"ifeval": ""}, "ours_all": {"ifeval": 94.0},
+             "card_only": {}, "rows": [{"dataset": "ifeval", "variant": "", "submetric": None, "ours": 94.0,
+                                        "card": 97.0, "result": "⚠"}]}]
+    md = parity.markdown_table(reps, ["M (high)", "M (high)"])
+    assert "| ifeval | 94.0/97.0 ⚠ |" in md.replace("IFEval", "ifeval")
