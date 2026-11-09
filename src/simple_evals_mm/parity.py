@@ -193,15 +193,20 @@ def _variant(values: dict) -> str:
     return ", ".join(parts)
 
 
-def job_variant(name: str, cfg: dict, lock_ds: dict) -> str:
-    """The job's selection of `name`: its dataset args plus a selectable default (mathvision split = testmini)."""
+def variant_keys(name: str) -> list[str]:
+    """The selection keys `name` accepts as dataset args (a split that is not selectable is not a selection)."""
     try:
         from simple_evals_mm import dataset as dataset_mod
 
         cls = dataset_mod.dataset_class(name)
-        keys = [k for k in VARIANT_KEYS if k in (getattr(cls, "accepted_args", None) or {})]
+        return [k for k in VARIANT_KEYS if k in (getattr(cls, "accepted_args", None) or {})]
     except Exception:  # noqa: BLE001 - an unknown dataset: no selection shown
-        keys = []
+        return []
+
+
+def job_variant(name: str, cfg: dict, lock_ds: dict) -> str:
+    """The job's selection of `name`: its dataset args plus a selectable default (mathvision split = testmini)."""
+    keys = variant_keys(name)
     vals = {k: job_setting(name, k, cfg, lock_ds) for k in keys}
     if name == "livecodebench" and not vals.get("end"):
         vals["end"] = None
@@ -237,7 +242,7 @@ def compare(st: store_mod.JobStore, refs: dict) -> dict:
             "model_name": entry.get("name")}
     # card values the job did not run (comparable ones): shown as "–/card" rows by `sem jobs parity`
     out["card_only"] = {n: (float(r["value"]), _variant({k: v for k, v in (r.get("setting") or {}).items()
-                                                          if str(v) != UNKNOWN}))
+                                                          if str(v) != UNKNOWN and k in variant_keys(n)}))
                         for n, r in (entry.get("scores") or {}).items()
                         if n not in summary and r.get("comparable", True) is not False}
     for name in runner.dataset_entries(cfg):
@@ -409,7 +414,11 @@ def markdown_table(reps: list[dict], labels: list[str], all_datasets: bool = Fal
     def put(lab, key, text, sub=None):
         if key not in keys:
             keys.append(key)
-        cells.setdefault((lab, key), text)  # the first job of a column wins
+        old = cells.get((lab, key))
+        rank = 2 if isinstance(text, dict) else 1 if not str(text).startswith("–/") else 0
+        old_rank = -1 if old is None else 2 if isinstance(old, dict) else 1 if not str(old).startswith("–/") else 0
+        if rank > old_rank:  # jobs sharing a column: a compared row > our score only > the card value only
+            cells[(lab, key)] = text
         subs.setdefault(key, set()).add(sub)
 
     pairs = list(zip(labels, reps))
