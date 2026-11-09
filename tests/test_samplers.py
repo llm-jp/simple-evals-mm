@@ -963,3 +963,38 @@ def test_openrouter_refuses_effort_the_endpoint_cannot_take(clean_env, endpoints
     ok = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
     ok.prepare()
     assert ok.request_body()["reasoning"] == {"effort": "xhigh"}
+
+
+def test_served_sampling_is_per_model():
+    """Every served model of a sampling (non-greedy) family has its own recommended sampling with a source, and the
+    engine presets carry exactly it (sizes of a family may differ: Qwen3.5-397B vs 4B / 9B)."""
+    from simple_evals_mm.samplers import presets as pr
+
+    for mid, fam in pr.SERVED_MODELS.items():
+        if fam in pr.GREEDY_FAMILIES:
+            continue
+        assert mid in pr.SERVED_SAMPLING, mid
+        sampling, source = pr.SERVED_SAMPLING[mid]
+        assert source and all(k in pr.SAMPLING_KEYS for k in sampling), mid
+        for eng in pr.SERVED_ENGINES:
+            assert pr.PRESETS[f"{eng}/{mid}"]["sampling"] == sampling, (eng, mid)
+    assert pr.PRESETS["sglang/Qwen/Qwen3.5-397B-A17B"]["sampling"]["temperature"] == 0.6
+    assert pr.PRESETS["sglang/Qwen/Qwen3.5-9B"]["sampling"]["presence_penalty"] == 1.5
+
+
+def test_check_generation_configs_flags_conflicts(tmp_path):
+    from simple_evals_mm.samplers import presets as pr
+
+    def snap(mid, cfg):
+        d = tmp_path / ("models--" + mid.replace("/", "--")) / "snapshots" / "abc123"
+        d.mkdir(parents=True)
+        (d / "generation_config.json").write_text(json.dumps(cfg))
+
+    snap("google/gemma-4-12B-it", {"temperature": 1.0, "top_p": 0.95, "top_k": 64})
+    snap("Qwen/Qwen3.8-27B", {"temperature": 0.7, "top_p": 0.95})  # conflict on temperature
+    rows = pr.check_generation_configs(str(tmp_path))
+    bad = [r for r in rows if r["field"]]
+    assert [(r["model"], r["field"], r["preset"], r["generation_config"]) for r in bad] == [
+        ("Qwen/Qwen3.8-27B", "temperature", 1.0, 0.7)]
+    assert {r["model"] for r in rows if r["field"] is None} == set(pr.SERVED_SAMPLING) - {"google/gemma-4-12B-it",
+                                                                                          "Qwen/Qwen3.8-27B"}
