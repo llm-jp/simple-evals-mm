@@ -208,6 +208,19 @@ def job_variant(name: str, cfg: dict, lock_ds: dict) -> str:
     return _variant(vals)
 
 
+def judge_label(st: store_mod.JobStore, names: list[str]) -> str | None:
+    """The judge of the job's verifications as "model (effort)", from the first verification meta that has one."""
+    for n in names:
+        try:
+            meta = st.read_verification_meta(n) or {}
+        except OSError:
+            continue
+        j = meta.get("judge")
+        if isinstance(j, dict) and j.get("model"):
+            return f"{j['model']} ({j['effort']})" if j.get("effort") else str(j["model"])
+    return None
+
+
 def compare(st: store_mod.JobStore, refs: dict) -> dict:
     cfg, lock = st.read_config(), st.read_lock()
     key, entry = find_model(refs, cfg.get("model") or "")
@@ -217,7 +230,7 @@ def compare(st: store_mod.JobStore, refs: dict) -> dict:
     out["ours_all"] = {n: (None if s["reward"] is None else 100.0 * s["reward"]) for n, s in summary.items()}
     out["variants"] = {n: job_variant(n, cfg, (lock.get("datasets") or {}).get(n) or {}) for n in summary}
     out["attempts"] = {n: s.get("n_attempts") or len(s["attempts"]) for n, s in summary.items()}  # the job's plan
-    out["judge_model"] = cfg.get("judge_model")
+    out["judge_model"] = judge_label(st, list(summary))  # None until a verification exists
     if entry is None:
         return out
     out |= {"source": entry.get("source"), "retrieved": str(entry.get("retrieved")), "revision": entry.get("revision"),
