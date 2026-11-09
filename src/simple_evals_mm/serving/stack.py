@@ -117,8 +117,12 @@ def available_patches() -> list[str]:
 
 
 def load_patch(name: str, patch_dir: str = PATCH_DIR) -> dict:
-    """patch.json {name, upstream_ref, description, engine, engine_versions, files: [site-packages paths]} and the
-    sha256 of each file under files/ (plus one sha256 over the whole patch)."""
+    """patch.json {name, upstream_ref, description, engine, engine_versions, files: [site-packages paths], plugin?} and
+    the sha256 of each file under files/ (plus one sha256 over the whole patch).
+    `files` replace installed modules. `plugin` adds code the engine does not have: {root: a directory under the patch
+    (put on sys.path), files: [paths under root], startup: a module imported when each engine process starts (it
+    registers the plugin, e.g. through post-import hooks), env: {VAR: value} set as defaults}; its files are hashed
+    into the patch's sha256 too."""
     d = os.path.join(patch_dir, name)
     meta_path = os.path.join(d, "patch.json")
     if not os.path.isfile(meta_path):
@@ -138,10 +142,29 @@ def load_patch(name: str, patch_dir: str = PATCH_DIR) -> dict:
         if not rel.endswith(".py") or rel.endswith("__init__.py"):
             raise StackError(f"patch {name}: {rel}: only module files (not packages) can be overlaid")
         files[rel] = {"sha256": sha256_file(src), "path": src}
-    blob = json.dumps({"meta": meta, "files": {k: v["sha256"] for k, v in sorted(files.items())}}, sort_keys=True)
+    plugin = None
+    if meta.get("plugin"):
+        pl = meta["plugin"]
+        for k in ("root", "files", "startup"):
+            if k not in pl:
+                raise StackError(f"{meta_path}: plugin is missing {k!r}")
+        root = os.path.join(d, pl["root"])
+        pfiles = {}
+        for rel in pl["files"]:
+            src = os.path.join(root, rel)
+            if not os.path.isfile(src):
+                raise StackError(f"patch {name}: plugin file {pl['root']}/{rel} is missing")
+            pfiles[rel] = sha256_file(src)
+        unlisted = sorted(os.path.relpath(os.path.join(dp, f), root) for dp, _, fs in os.walk(root) for f in fs
+                          if f.endswith(".py") and os.path.relpath(os.path.join(dp, f), root) not in pfiles)
+        if unlisted:
+            raise StackError(f"patch {name}: plugin files not listed in patch.json: {', '.join(unlisted)}")
+        plugin = {"root": root, "files": pfiles, "startup": pl["startup"], "env": dict(pl.get("env") or {})}
+    blob = json.dumps({"meta": meta, "files": {k: v["sha256"] for k, v in sorted(files.items())},
+                       "plugin_files": dict(sorted((plugin or {}).get("files", {}).items()))}, sort_keys=True)
     return {"name": name, "upstream_ref": meta["upstream_ref"], "description": meta["description"],
             "engine": meta["engine"], "engine_versions": list(meta.get("engine_versions") or []),
-            "files": files, "sha256": hashlib.sha256(blob.encode()).hexdigest()}
+            "files": files, "plugin": plugin, "sha256": hashlib.sha256(blob.encode()).hexdigest()}
 
 
 def load_patches(names, engine: str, version: str | None, patch_dir: str = PATCH_DIR) -> list[dict]:
@@ -167,6 +190,7 @@ def module_name(rel: str) -> str:
 OVERLAY_SITECUSTOMIZE = '''\
 # Written by `sem serve`: load the registered patch files instead of the installed modules (PYTHONPATH overlay,
 # inherited by the engine's worker processes). The server manifest records each patch's name, sha256 and upstream ref.
+import importlib
 import importlib.abc
 import importlib.util
 import sys
@@ -184,6 +208,17 @@ class _SemPatchFinder(importlib.abc.MetaPathFinder):
 
 
 sys.meta_path.insert(0, _SemPatchFinder())
+
+# plugins: code the engine does not have (its own package on sys.path, env defaults, a startup module that registers it)
+import os  # noqa: E402
+
+for _root, _env, _startup in {plugins!r}:
+    for _k, _v in _env.items():
+        os.environ.setdefault(_k, _v)
+    if _root not in sys.path:
+        sys.path.append(_root)
+    print(f"[sem-patch] plugin {{_startup}} from {{_root}}", file=sys.stderr, flush=True)
+    importlib.import_module(_startup)
 '''
 
 
@@ -193,9 +228,10 @@ def write_overlay(overlay_dir: str, patches: list[dict]) -> str | None:
     if not patches:
         return None
     files = {module_name(rel): f["path"] for p in patches for rel, f in sorted(p["files"].items())}
+    plugins = [(p["plugin"]["root"], p["plugin"]["env"], p["plugin"]["startup"]) for p in patches if p.get("plugin")]
     os.makedirs(overlay_dir, exist_ok=True)
     with open(os.path.join(overlay_dir, "sitecustomize.py"), "w", encoding="utf-8") as f:
-        f.write(OVERLAY_SITECUSTOMIZE.format(files=files))
+        f.write(OVERLAY_SITECUSTOMIZE.format(files=files, plugins=plugins))
     return overlay_dir
 
 
@@ -241,7 +277,9 @@ def engine_identity(engine: str, venv: str, patches: list[str] | None = None, pa
         "packages": package_versions(site),
         "venv_sitecustomize": sha256_file(sitecustomize) if os.path.exists(sitecustomize) else None,
         "patches": [{"name": p["name"], "sha256": p["sha256"], "upstream_ref": p["upstream_ref"],
-                     "description": p["description"], "files": {k: v["sha256"] for k, v in p["files"].items()}}
+                     "description": p["description"], "files": {k: v["sha256"] for k, v in p["files"].items()},
+                     **({"plugin": {"files": p["plugin"]["files"], "startup": p["plugin"]["startup"],
+                                    "env": p["plugin"]["env"]}} if p.get("plugin") else {})}
                     for p in loaded],
         "_loaded_patches": loaded,  # dropped before the manifest is written
     }
