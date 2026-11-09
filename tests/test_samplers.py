@@ -958,7 +958,7 @@ def test_openrouter_refuses_effort_the_endpoint_cannot_take(clean_env, endpoints
     with pytest.raises(errors.SetupError, match="drop --effort"):
         registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b", effort="low")).prepare()
     # no effort control in the preset: nothing to refuse
-    registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-flash")).prepare()
+    registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.5-9b")).prepare()
     endpoints["row"]["supported_parameters"] = ["max_tokens", "reasoning"]
     ok = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
     ok.prepare()
