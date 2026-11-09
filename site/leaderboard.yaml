@@ -219,7 +219,7 @@ models:
     type: proprietary
     model: openrouter/qwen/qwen3.8-flash
     settings:
-      - {label: default, job: qwen38-flash__default}
+      - {label: "on", effort: "high", job: qwen38-flash__high}  # thinking on, sent explicitly (v0.5.1; preset effort "high")
   - key: kimi-k31-pro
     name: "Kimi K3.1 Pro"
     dev: "Moonshot AI"
