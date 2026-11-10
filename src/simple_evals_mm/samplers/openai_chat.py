@@ -661,7 +661,9 @@ class OpenAIChatSampler(Sampler):
         reasoning = _reasoning_of(msg)
         if s.response_parser == "harmony":
             text, reasoning = split_harmony(text, reasoning)
-        if s.provider in ("sglang", "vllm", "hf") and "</think>" in text and not reasoning:
+        # a <think> model served without --reasoning-parser; Harmony models split their channels here (a literal
+        # "</think>" in their final answer is the model's text, not a leaked trace)
+        if s.provider in ("sglang", "vllm", "hf") and s.response_parser != "harmony" and "</think>" in text and not reasoning:
             raise ThinkLeakError("thinking trace in content (</think>) and no reasoning_content: serve with --reasoning-parser")
         usage = resp.usage
         details = getattr(usage, "completion_tokens_details", None) if usage else None
