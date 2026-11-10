@@ -64,6 +64,25 @@ def test_pinned_provider_mismatch_is_a_failure():
     assert e.value.cause == errors.PROVIDER_FAILED
 
 
+def test_think_leak_check_skips_harmony_models():
+    """A <think> model served without --reasoning-parser is refused (its trace would be graded); a Harmony model
+    splits its channels client-side, so a literal "</think>" in its final answer is its own text."""
+    from types import SimpleNamespace as NS
+
+    from simple_evals_mm.samplers.openai_chat import ThinkLeakError
+
+    def resp(text):
+        return NS(choices=[NS(message=NS(content=text, tool_calls=None, model_extra={}), finish_reason="stop")],
+                  usage=None, model="m", system_fingerprint=None, model_extra={})
+
+    qwen = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.8-27B"), base_url="http://x/v1")
+    with pytest.raises(ThinkLeakError):
+        qwen._parse(resp("thinking...</think>Answer: A"))
+    harmony = registry.make_sampler(registry.resolve("hf/llm-jp/llm-jp-4-vl-9b"), base_url="http://x/v1")
+    final = "<|channel|>final<|message|>The tag </think> closes a block.<|return|>"
+    assert harmony._parse(resp(final)).text == "The tag </think> closes a block."
+
+
 # ---------------------------------------------------------------- request bodies (golden snapshots)
 # The same prompt (one image + text) through the sampler of each slug; the captured request (the chat body with
 # extra_body merged, the Responses kwargs, the Gemini contents / config) is compared with tests/golden/samplers.json
