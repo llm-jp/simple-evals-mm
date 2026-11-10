@@ -12,7 +12,8 @@ env) and imports this module in every engine process (the overlay sitecustomize)
   * sglang.srt.managers.multimodal_processor: register
     llmjpvl_sglang.processors (image tiling + <|image_pad|> expansion);
   * sglang.srt.entrypoints.openai.serving_chat: undo the spaces the llm-jp tokenizer's decode inserts after special
-    tokens in multimodal prompts (llmjpvl_sglang.prompt_fix).
+    tokens in multimodal prompts (llmjpvl_sglang.prompt_fix), and keep the images of a "string"-format chat template
+    (the released model's): sglang 0.5.23 drops them, the HF path puts "<image>" per image before the text.
 
 Ported from llm-jp/llmjpvl sglang_plugin (sitecustomize.py, commit 012710d, BSD-3-Clause).
 """
@@ -38,11 +39,37 @@ def _on_multimodal_processor(module):
         print(f"[llmjpvl_sglang] processor registration failed: {e}", file=sys.stderr)
 
 
+def _string_format_with_images(orig):
+    """sglang 0.5.23 drops every image part when the chat template's content format is "string" (the released
+    llm-jp-4-vl template renders plain-string content). For a message with images: collect them as the "openai" format
+    does, and give the template the content the HF LLMjpVLProcessor path uses: "<image>" per image first, then the text
+    parts (joined with " " as sglang's string format does). Messages without images are unchanged."""
+
+    def wrapped(msg_dict, content_format, image_data, *args, **kwargs):
+        content = msg_dict.get("content")
+        if content_format != "string" or not isinstance(content, list) or not any(
+            isinstance(c, dict) and c.get("type") in ("image_url", "input_image") for c in content
+        ):
+            return orig(msg_dict, content_format, image_data, *args, **kwargs)
+        parts = orig(msg_dict, "openai", image_data, *args, **kwargs)["content"]
+        n_img = sum(1 for c in parts if c.get("type") == "image")
+        texts = [c["text"] for c in parts if c.get("type") == "text"]
+        new = {k: v for k, v in msg_dict.items() if v is not None}
+        new["content"] = "<image>" * n_img + " ".join(texts)
+        return new
+
+    wrapped._llmjpvl_wrapped = True
+    return wrapped
+
+
 def _on_serving_chat(module):
     """Wrap OpenAIServingChat._apply_jinja_template: for multimodal models sglang decodes the
     encoded prompt back to text, and the llm-jp tokenizer's decode inserts a space after each
     special token (text-only requests included). Undo it so the re-encoded prompt equals the
     rendered one (llmjpvl_sglang.prompt_fix, 2026-10-20)."""
+    pc = getattr(module, "process_content_for_template_format", None)
+    if pc is not None and not getattr(pc, "_llmjpvl_wrapped", False):
+        module.process_content_for_template_format = _string_format_with_images(pc)
     cls = getattr(module, "OpenAIServingChat", None)
     orig = getattr(cls, "_apply_jinja_template", None)
     if cls is None or orig is None or getattr(orig, "_llmjpvl_wrapped", False):
