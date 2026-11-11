@@ -6,7 +6,7 @@
 
 </div>
 
-simple-evals-mm evaluates LLMs and VLMs on 50+ English and Japanese text and image benchmarks, with results that can be reproduced, audited and checked against model cards.
+simple-evals-mm evaluates LLMs and VLMs, API or self-served (SGLang, vLLM, Hugging Face), on 50+ English and Japanese text and image benchmarks with one CLI.
 
 <div align="center">
 <img src="./site/assets/overview.svg" alt="simple-evals-mm overview" width="90%" />
@@ -14,14 +14,9 @@ simple-evals-mm evaluates LLMs and VLMs on 50+ English and Japanese text and ima
 
 ## Why simple-evals-mm
 
-- **Reproducible by construction.** A job starts only when it can be replayed. It needs a clean, committed tree and installed packages equal to `uv.lock` (wheel RECORDs verified), and the leaderboard publishes only jobs at pushed commits. Every dataset is pinned by revision and task digest (`datasets.lock`). The exact endpoint is locked: the OpenRouter provider row, or a self-served model's server manifest (engine code, patches, chat template, a rendered-prompt probe). Every sampling value is recorded with its source, and every trial has its own seed. A resume after a code change is allowed only when the change cannot affect the stored trials. [How it works](#reproducibility)
-- **Each model at its recommended settings.** Sampling (temperature, top-p, ...) follows each model card, the output budget defaults to the endpoint's maximum, and every reasoning effort is a separate setting. One fixed temperature for every model handicaps the models tuned for another. Here, each model is compared as its authors intend it to run. Every value and its source (model card, `generation_config.json`, provider default) is recorded in the job, and `sem models check` re-checks the presets against their sources.
-- **Checked against model cards.** `sem jobs parity` compares each score with the number the model's authors report. It uses the same split and sub-metric, and flags a difference larger than the card's standard error allows. Parity exposes inference bugs that silently lower scores. For example, a gap on Gemma 4 image tasks was traced to an SGLang attention-kernel bug (CountBenchQA 70 → 97 after the fix, [sglang#47809](https://github.com/sgl-project/sglang/pull/47809)). [Parity results](docs/parity.md)
-- **Every trial is a [Harbor](https://github.com/harbor-framework/harbor) / [ATIF](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory.** It holds the prompt, answer, reasoning, prompt / output / reasoning / cached tokens, billed USD cost, finish reason, serving provider, latency and seed. Judge replies are stored next to the trials. Scores are always recomputed from these rows and never stored.
-- **Failures are classified, not hidden.** Answers cut off by the token limit (`budget_exhausted`), refusals and context overflows count as 0 and are reported per cause. When a reasoning model loses points to overthinking, you see it directly. Transient failures (rate limits, 5xx, judge errors) are excluded from the mean and retried with `sem job resume -f CAUSE`.
-- **Cost and tokens are first-class.** In the reasoning era, a score means little without what it cost. Every job reports cost and output tokens per question, and the [leaderboard](https://llm-jp.github.io/simple-evals-mm/) plots score against both.
-- **One CLI for any model.** API models (OpenRouter with pinned providers, OpenAI, Azure, Gemini) and self-served models (`sem serve sglang | vllm | hf`) use the same `provider/model` slug.
-- **Regrade without regenerating.** `sem job regrade --judge-model ...` re-scores stored trials with another judge. `sem run --from JOB` reuses the trials that are still valid after a code change.
+- **Reproducible by construction.** A job runs only if it can be replayed: the commit, packages, data and exact endpoint are pinned, and every setting is recorded with its source. ([How](#reproducibility))
+- **Fair, verified scores.** Each model runs at its model card's recommended settings rather than one setting for all, and `sem jobs parity` checks the scores against the cards. This also catches inference bugs: an SGLang kernel bug cost Gemma 4 27 points on CountBenchQA ([fix](https://github.com/sgl-project/sglang/pull/47809)). ([Parity results](docs/parity.md))
+- **Analysis-ready outputs.** Every trial is a [Harbor](https://github.com/harbor-framework/harbor) / [ATIF](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory with its reasoning, tokens and cost, and every failure is classified (e.g. cut off at the token limit). Overthinking and cost per point are directly visible.
 
 Terms follow Harbor: a **dataset** (benchmark) has **tasks**; a **job** (`jobs/<job-name>/`: one model, settings and commit) runs each task as one or more **trials**; a **verifier** gives each trial its **reward**.
 
@@ -111,7 +106,7 @@ A cut-off answer, a refused request and an input longer than the context score 0
 ### Reproducibility
 
 - **Code** is pinned by the commit: `sem run` starts only from a clean, committed tree (`--allow-dirty` stores the diff and marks the job dirty), with installed libraries equal to `uv.lock`.
-- **Settings**: everything that changes outputs is a CLI option or config value, recorded in `config.json`; every sampling field, the effort and the token budget get a value and a source in `lock.json`. `.env` provides only secrets.
+- **Settings**: everything that changes outputs is a CLI option or config value, recorded in `config.json`; every sampling field, the effort and the token budget get a value and a source in `lock.json`. `.env` provides only secrets. Presets hold each model card's recommended sampling (`sem models check` compares them with their sources); the output budget defaults to the endpoint's maximum.
 - **Data**: `datasets.lock` (committed) pins every dataset's task digest and the sha256 of every file from an unversioned source, the vendored nltk data and the OmniDocBench evaluator image; a job whose data differs is refused unless `--allow-data-mismatch` (recorded). `sem datasets lock --check` compares, the weekly check compares upstream.
 - **Endpoints**: the pinned OpenRouter endpoint row or the `sem serve` server manifest (engine code, patches, model files, chat template) are locked; a resume with any of them changed is refused.
 - **Verifiers**: rule checkers are deterministic (seeded langdetect and per-task random values); code runs in a sandbox with CPU-time limits, one serial retry after a time-limit kill and `PYTHONHASHSEED=0`; the sandbox and evaluator environment is in the verifier lock.
