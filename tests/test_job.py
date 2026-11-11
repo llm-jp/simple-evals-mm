@@ -452,7 +452,7 @@ def test_unexpected_error_shows_a_traceback(job_env, monkeypatch, capsys):
     assert s["run"]() == 1
     err = capsys.readouterr().err
     assert "Traceback (most recent call last)" in err and "bug inside run_trials" in err and "in boom" in err
-    assert s["run"]("--effort", "high", "-m", "sglang/Qwen/Qwen3.5-9B", name="x") == 2  # no effort control: one line
+    assert s["run"]("--effort", "high", "-m", "sglang/Qwen/Qwen3-VL-8B-Instruct", name="x") == 2  # no effort control: one line
     err = capsys.readouterr().err
     assert "Traceback" not in err and err.startswith("error: ") and "no reasoning effort control" in err
 

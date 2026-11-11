@@ -223,6 +223,9 @@ def test_registered_patches_load():
     assert {"sglang_pr43753", "sglang_pr43753_full", "sglang_pr47809"} <= set(names)
     for n in names:
         p = stack.load_patch(n)
+        if p.get("plugin"):  # a plugin (code sglang does not have): its upstream is the plugin's source
+            assert p["upstream_ref"].startswith("https://github.com/") and p["plugin"]["files"]
+            continue
         pr = n.removeprefix("sglang_pr").removesuffix("_full")
         assert p["upstream_ref"] == f"https://github.com/sgl-project/sglang/pull/{pr}" and p["files"]
 
@@ -636,3 +639,33 @@ def test_hf_engine_in_another_venv_imports_this_checkout(engine_venv, hf_cache, 
     monkeypatch.setattr(sys, "prefix", engine_venv)  # the engine venv is this venv: nothing added
     m2, ctx2 = serve.build_manifest(_args("hf", "google/gemma-4-12B-it"), venv=engine_venv, run_hardware=_no_gpu)
     assert ctx2["repo_src"] is None and "PYTHONPATH" not in m2["launch"]["env_set"]
+
+
+def test_plugin_patch_registers_in_the_engine_process(tmp_path, engine_venv):
+    """A plugin patch (code the engine does not have): load_patch hashes its files (an unlisted file is refused), the
+    overlay puts its root on sys.path, sets its env defaults and imports its startup module in the engine's process."""
+    d = tmp_path / "patches" / "toy_plugin"
+    (d / "plugin" / "toyplug").mkdir(parents=True)
+    (d / "plugin" / "toyplug" / "__init__.py").write_text("")
+    (d / "plugin" / "toyplug" / "register.py").write_text("import os\nos.environ['TOYPLUG_REGISTERED'] = '1'\n")
+    meta = {"name": "toy_plugin", "upstream_ref": "x", "description": "toy", "engine": "sglang",
+            "engine_versions": ["0.5.23"], "files": [],
+            "plugin": {"root": "plugin", "files": ["toyplug/__init__.py", "toyplug/register.py"],
+                       "startup": "toyplug.register", "env": {"TOYPLUG_PKG": "toyplug.models"}}}
+    (d / "patch.json").write_text(json.dumps(meta))
+    p = stack.load_patch("toy_plugin", str(tmp_path / "patches"))
+    assert set(p["plugin"]["files"]) == {"toyplug/__init__.py", "toyplug/register.py"} and p["sha256"]
+    overlay = stack.write_overlay(str(tmp_path / "overlay"), [p])
+    code = "import os, sys; print(os.environ.get('TOYPLUG_PKG'), os.environ.get('TOYPLUG_REGISTERED'), 'toyplug.register' in sys.modules)"
+    out = subprocess.run([stack.venv_python(engine_venv), "-c", code], env={"PYTHONPATH": overlay, "PATH": os.environ["PATH"]},
+                         capture_output=True, text=True, check=True)
+    assert out.stdout.split() == ["toyplug.models", "1", "True"]
+    (d / "plugin" / "toyplug" / "extra.py").write_text("")  # a plugin file patch.json does not list
+    with pytest.raises(stack.StackError, match="not listed"):
+        stack.load_patch("toy_plugin", str(tmp_path / "patches"))
+
+
+def test_llmjpvl_sglang_patch_loads():
+    p = stack.load_patch("llmjpvl_sglang")
+    assert p["plugin"]["startup"] == "llmjpvl_sglang.register" and "llmjpvl_sglang/models/llmjpvl.py" in p["plugin"]["files"]
+    assert p["plugin"]["env"] == {"SGLANG_EXTERNAL_MODEL_PACKAGE": "llmjpvl_sglang.models"} and p["files"] == {}

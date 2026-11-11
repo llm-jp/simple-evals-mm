@@ -57,6 +57,7 @@
  },
  "chat: Qwen3.5 sglang": {
   "body": {
+   "chat_template_kwargs": {"enable_thinking": true},
    "max_tokens": 16384,
    "messages": [
     {

@@ -70,7 +70,10 @@ OPENROUTER_MODELS: dict[str, dict] = {
     # muse-wonder: "none" rejected (reasoning mandatory); minimal/low/medium/high accepted (smoke 2026-10-21)
     "meta/muse-wonder": {"provider": ["meta"], "efforts": ("minimal", "low", "medium", "high", "xhigh", "max"), "effort": "medium", "open_weight": False},  # OpenRouter supported_efforts / Cursor docs (2026-10-24)
     # Alibaba's endpoint exposes no effort control for Qwen3.8 Flash (thinking on, default budget).
-    "qwen/qwen3.8-flash": {"provider": ["alibaba"], "sampling": QWEN38, "efforts": (), "open_weight": False},
+    # Qwen3.8 Flash: thinking on / off only (OpenRouter reasoning optional, default on; no effort levels): sent
+    # explicitly as reasoning.enabled so a changed provider default cannot switch it (2026-11-09)
+    "qwen/qwen3.8-flash": {"provider": ["alibaba"], "sampling": QWEN38, "efforts": ("none", "high"), "effort": "high",
+                           "toggle": True, "open_weight": False},
     # ---- open-weight models: first-party endpoint where it exists --------------------------
     "moonshotai/kimi-k3": {"provider": ["moonshotai"], "efforts": ("none", "low", "high", "max"), "effort": "max", "open_weight": True},  # OpenRouter supported_efforts; others are mapped (2026-10-24)
     # Kimi K3.1 Pro: only Moonshot's endpoints (mxfp4 = the released weight format); no sampling params accepted (2026-10-24).
@@ -188,8 +191,10 @@ FAMILIES: dict[str, dict] = {
                 "template_kwargs": {"enable_thinking": True, "preserve_thinking": False},
                 # effort default xhigh: Qwen3.8-27B's default (OpenRouter catalog default_effort, 2026-11-03)
                 "efforts": ("low", "medium", "xhigh"), "effort": "xhigh", "expects_reasoning": True, "reasoning_parser": "qwen3"},
+    # Qwen3.5: thinking on / off through the template's enable_thinking (the template's default is on); sent explicitly
     "qwen3.5": {"sampling": {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 1.5, "top_k": 20, "min_p": 0.0, "repetition_penalty": 1.0},
-                "efforts": (), "expects_reasoning": True, "reasoning_parser": "qwen3"},
+                "efforts": ("none", "high"), "effort": "high", "effort_field": "template_toggle", "effort_key": "enable_thinking",
+                "expects_reasoning": True, "reasoning_parser": "qwen3"},
     "qwen3-vl": {"sampling": {"temperature": 0.0}, "efforts": ()},  # greedy
     "glm-5": {"sampling": {"temperature": 1.0, "top_p": 0.95}, "template_kwargs": {"clear_thinking": True},
               "efforts": ("low", "high", "max"), "effort": "max",  # GLM-5.3's default (catalog default_effort)
@@ -237,6 +242,42 @@ SERVED_MODELS: dict[str, str] = {
     "llm-jp/llm-jp-4-8b-thinking": "llm-jp-4-text", "llm-jp/llm-jp-4.1-8b-thinking": "llm-jp-4-text",
 }
 
+# Recommended sampling per served model, not per family: sizes of one family can differ (Qwen3.5-397B thinks at
+# temperature 0.6 / presence_penalty 0, the 4B / 9B at 1.0 / 1.5). Each entry: (sampling, source). The source is the
+# model card's line (revision-independent wording) or the snapshot's generation_config.json. `sem models check` compares
+# every entry with the generation_config.json of the local Hugging Face cache. Families whose sampling is greedy by
+# design (qwen3-vl, internvl3, sarashina, llm-jp: fixed for comparability) have no entry.
+_QWEN35_THINK_GENERAL = {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5,
+                         "repetition_penalty": 1.0}
+_QWEN38_THINK = {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0,
+                 "repetition_penalty": 1.0}
+_GEMMA4 = {"temperature": 1.0, "top_p": 0.95, "top_k": 64}
+SERVED_SAMPLING: dict[str, tuple[dict, str]] = {
+    "Qwen/Qwen3.5-4B": (_QWEN35_THINK_GENERAL, "card: Thinking mode for general tasks"),
+    "Qwen/Qwen3.5-9B": (_QWEN35_THINK_GENERAL, "card: Thinking mode for general tasks (no generation_config.json)"),
+    "Qwen/Qwen3.5-397B-A17B": ({"temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0,
+                                "repetition_penalty": 1.0}, "card: Thinking mode; generation_config.json 0.6 / 0.95 / 20"),
+    "Qwen/Qwen3.8-27B": (_QWEN38_THINK, "card: thinking sampling; generation_config.json 1.0 / 0.95 / 20"),
+    "Qwen/Qwen3.8-Flash-Next": (_QWEN38_THINK, "card: thinking sampling; generation_config.json 1.0 / 0.95 / 20"),
+    "Qwen/Qwen3.8-Flash-Next-FP8": (_QWEN38_THINK, "card: thinking sampling; generation_config.json 1.0 / 0.95 / 20"),
+    "zai-org/GLM-5.3-Flash": ({"temperature": 1.0, "top_p": 0.95}, "generation_config.json"),
+    "deepseek-ai/DeepSeek-V4.1-Flash": ({"temperature": 1.0, "top_p": 0.95}, "card: temperature=1.0, top_p=0.95"),
+    "google/gemma-4-E4B-it": (_GEMMA4, "generation_config.json"),
+    "google/gemma-4-12B-it": (_GEMMA4, "generation_config.json"),
+    "google/gemma-4-31B-it": (_GEMMA4, "generation_config.json"),
+    "meta-models/Muse-Glimmer-30B": (_GEMMA4, "generation_config.json"),
+}
+GREEDY_FAMILIES = ("qwen3-vl", "internvl3", "sarashina", "llm-jp-vl", "llm-jp-4-text")
+
+
+def _served(model_id: str, family: str) -> dict:
+    """A served model's preset: its family, with the model's own recommended sampling (SERVED_SAMPLING)."""
+    p = _family(family)
+    if model_id in SERVED_SAMPLING:
+        p["sampling"] = dict(SERVED_SAMPLING[model_id][0])
+    return p
+
+
 _AZURE_GPT5 = {"api_key_var": "AZURE_OPENAI_KEY_GPT5", "base_url_var": "AZURE_OPENAI_ENDPOINT_GPT5",
                "api_version": "2025-04-01-preview"}
 
@@ -283,10 +324,38 @@ PRESETS: dict[str, dict] = {
     "gemini/gemini-3.1-pro-preview": _family("gemini-3", alias=True),
     "vertex/gemini-3.1-pro-preview": _family("gemini-3", alias=True),
     # ---- served models: one exact entry per engine and HF id
-    **{f"{eng}/{mid}": _family(fam) for mid, fam in SERVED_MODELS.items() for eng in SERVED_ENGINES},
+    **{f"{eng}/{mid}": _served(mid, fam) for mid, fam in SERVED_MODELS.items() for eng in SERVED_ENGINES},
 }
 
 # Default judge (2026-11-02): GPT-6 Luna, effort medium. On the 100 human-labelled HakushoBench verdicts it agrees
 # with the humans as often as gpt-5.1 (0.94 vs 0.95, kappa 0.88 vs 0.90) at about 1/20 of the cost of gpt-5.1 medium
 # ($0.009 vs $0.185 per 100 verdicts). gpt-5.1 stays available with --judge-model openrouter/openai/gpt-5.1.
 DEFAULT_JUDGE = "openrouter/openai/gpt-6-luna"
+
+
+SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "repetition_penalty")
+
+
+def check_generation_configs(hf_cache: str) -> list[dict]:
+    """Per served model of SERVED_SAMPLING with a snapshot in `hf_cache`: the sampling fields where our preset and the
+    snapshot's generation_config.json both set a value and differ (a field only one of them sets is not a conflict:
+    cards add presence_penalty / min_p, generation_config.json often has none). Returns rows {model, snapshot, field,
+    preset, generation_config, source}; models without a snapshot are listed with field None."""
+    import glob
+    import json
+    import os
+
+    out = []
+    for mid, (sampling, source) in sorted(SERVED_SAMPLING.items()):
+        snaps = sorted(glob.glob(os.path.join(hf_cache, "models--" + mid.replace("/", "--"), "snapshots", "*")))
+        cfgs = [os.path.join(p, "generation_config.json") for p in snaps if os.path.exists(os.path.join(p, "generation_config.json"))]
+        if not cfgs:
+            out.append({"model": mid, "snapshot": None, "field": None, "source": source})
+            continue
+        with open(cfgs[-1], encoding="utf-8") as f:
+            g = json.load(f)
+        for k in SAMPLING_KEYS:
+            if k in g and k in sampling and float(g[k]) != float(sampling[k]):
+                out.append({"model": mid, "snapshot": os.path.basename(os.path.dirname(cfgs[-1])), "field": k,
+                            "preset": sampling[k], "generation_config": g[k], "source": source})
+    return out

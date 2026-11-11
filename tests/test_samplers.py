@@ -64,6 +64,25 @@ def test_pinned_provider_mismatch_is_a_failure():
     assert e.value.cause == errors.PROVIDER_FAILED
 
 
+def test_think_leak_check_skips_harmony_models():
+    """A <think> model served without --reasoning-parser is refused (its trace would be graded); a Harmony model
+    splits its channels client-side, so a literal "</think>" in its final answer is its own text."""
+    from types import SimpleNamespace as NS
+
+    from simple_evals_mm.samplers.openai_chat import ThinkLeakError
+
+    def resp(text):
+        return NS(choices=[NS(message=NS(content=text, tool_calls=None, model_extra={}), finish_reason="stop")],
+                  usage=None, model="m", system_fingerprint=None, model_extra={})
+
+    qwen = registry.make_sampler(registry.resolve("sglang/Qwen/Qwen3.8-27B"), base_url="http://x/v1")
+    with pytest.raises(ThinkLeakError):
+        qwen._parse(resp("thinking...</think>Answer: A"))
+    harmony = registry.make_sampler(registry.resolve("hf/llm-jp/llm-jp-4-vl-9b"), base_url="http://x/v1")
+    final = "<|channel|>final<|message|>The tag </think> closes a block.<|return|>"
+    assert harmony._parse(resp(final)).text == "The tag </think> closes a block."
+
+
 # ---------------------------------------------------------------- request bodies (golden snapshots)
 # The same prompt (one image + text) through the sampler of each slug; the captured request (the chat body with
 # extra_body merged, the Responses kwargs, the Gemini contents / config) is compared with tests/golden/samplers.json
@@ -958,8 +977,43 @@ def test_openrouter_refuses_effort_the_endpoint_cannot_take(clean_env, endpoints
     with pytest.raises(errors.SetupError, match="drop --effort"):
         registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b", effort="low")).prepare()
     # no effort control in the preset: nothing to refuse
-    registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-flash")).prepare()
+    registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.5-9b")).prepare()
     endpoints["row"]["supported_parameters"] = ["max_tokens", "reasoning"]
     ok = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
     ok.prepare()
     assert ok.request_body()["reasoning"] == {"effort": "xhigh"}
+
+
+def test_served_sampling_is_per_model():
+    """Every served model of a sampling (non-greedy) family has its own recommended sampling with a source, and the
+    engine presets carry exactly it (sizes of a family may differ: Qwen3.5-397B vs 4B / 9B)."""
+    from simple_evals_mm.samplers import presets as pr
+
+    for mid, fam in pr.SERVED_MODELS.items():
+        if fam in pr.GREEDY_FAMILIES:
+            continue
+        assert mid in pr.SERVED_SAMPLING, mid
+        sampling, source = pr.SERVED_SAMPLING[mid]
+        assert source and all(k in pr.SAMPLING_KEYS for k in sampling), mid
+        for eng in pr.SERVED_ENGINES:
+            assert pr.PRESETS[f"{eng}/{mid}"]["sampling"] == sampling, (eng, mid)
+    assert pr.PRESETS["sglang/Qwen/Qwen3.5-397B-A17B"]["sampling"]["temperature"] == 0.6
+    assert pr.PRESETS["sglang/Qwen/Qwen3.5-9B"]["sampling"]["presence_penalty"] == 1.5
+
+
+def test_check_generation_configs_flags_conflicts(tmp_path):
+    from simple_evals_mm.samplers import presets as pr
+
+    def snap(mid, cfg):
+        d = tmp_path / ("models--" + mid.replace("/", "--")) / "snapshots" / "abc123"
+        d.mkdir(parents=True)
+        (d / "generation_config.json").write_text(json.dumps(cfg))
+
+    snap("google/gemma-4-12B-it", {"temperature": 1.0, "top_p": 0.95, "top_k": 64})
+    snap("Qwen/Qwen3.8-27B", {"temperature": 0.7, "top_p": 0.95})  # conflict on temperature
+    rows = pr.check_generation_configs(str(tmp_path))
+    bad = [r for r in rows if r["field"]]
+    assert [(r["model"], r["field"], r["preset"], r["generation_config"]) for r in bad] == [
+        ("Qwen/Qwen3.8-27B", "temperature", 1.0, 0.7)]
+    assert {r["model"] for r in rows if r["field"] is None} == set(pr.SERVED_SAMPLING) - {"google/gemma-4-12B-it",
+                                                                                          "Qwen/Qwen3.8-27B"}

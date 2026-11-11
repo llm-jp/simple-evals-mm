@@ -1,0 +1,16 @@
+{
+  "name": "llmjpvl_sglang",
+  "upstream_ref": "https://github.com/llm-jp/llmjpvl/tree/012710d/sglang_plugin",
+  "description": "SGLang support for LLMjpVLModel (llm-jp-4-vl): a plugin, no sglang file changed. Model = sglang SiglipVisionModel -> pixel shuffle -> mlp1 -> LlamaForCausalLM with the HF weight names mapped; processor = the HF LLMjpVLProcessor tiling and <|image_pad|> expansion; serving_chat hook undoing the spaces the llm-jp tokenizer's decode inserts after special tokens (the re-encoded prompt equals the rendered one). Ported from llm-jp/llmjpvl sglang_plugin (BSD-3-Clause), tested there on sglang 0.5.13.post1 against the HF implementation.",
+  "engine": "sglang",
+  "engine_versions": ["0.5.23"],
+  "files": [],
+  "plugin": {
+    "root": "plugin",
+    "files": ["llmjpvl_sglang/__init__.py", "llmjpvl_sglang/prompt_fix.py", "llmjpvl_sglang/register.py",
+              "llmjpvl_sglang/models/__init__.py", "llmjpvl_sglang/models/llmjpvl.py",
+              "llmjpvl_sglang/processors/__init__.py", "llmjpvl_sglang/processors/llmjpvl.py"],
+    "startup": "llmjpvl_sglang.register",
+    "env": {"SGLANG_EXTERNAL_MODEL_PACKAGE": "llmjpvl_sglang.models"}
+  }
+}
