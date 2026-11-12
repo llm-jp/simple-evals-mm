@@ -23,7 +23,7 @@
     </div>
     <nav class="links" aria-label="Site">
       <a href="../#leaderboard">Leaderboard</a>
-      <a href="../run/">Run</a>
+      <a href="../explore/">Explore</a>
       <a aria-current="page" href="./">Data</a>
       <a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">Code</a>
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Theme: system" title="Theme: system">
@@ -69,7 +69,7 @@
         <div class="card-top"><span class="tag cat">${esc(t.category || "")}</span><span class="tag">${esc(t.lang || "ja")}</span><span class="n">${t.n != null ? t.n.toLocaleString() + " questions" : ""}</span></div>
         <h3>${esc(t.label)}</h3>
         <p class="desc">${desc(t)}</p>
-        <div class="facts">${link("Dataset", t.dataset)}${link("Paper", t.paper)}${link("Browse results", `../run/?view=heatmap&d=${encodeURIComponent(t.key)}`, false)}
+        <div class="facts">${link("Dataset", t.dataset)}${link("Paper", t.paper)}${link("Browse results", `../explore/?view=heatmap&d=${encodeURIComponent(t.key)}`, false)}
           <span class="grading">Grading: <b>${esc(t.grading || "")}</b></span></div>
       </article>`).join("");
   }
