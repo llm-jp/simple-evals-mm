@@ -193,6 +193,9 @@ function go(params, push = true) { const u = "?" + new URLSearchParams(Object.en
 window.onpopstate = route;
 const setName = i => { const s = IDX.settings[i]; return s ? `${s.model} (${s.label})` : "?"; };
 const setIdx = k => IDX.settings.findIndex(s => s.key === k);
+// display order of settings: models in leaderboard order, the higher effort first (the spec lists the lower one first)
+const ORDER = () => { const out = [], by = {}; IDX.settings.forEach((s, i) => (by[s.model] = by[s.model] || []).push(i)); for (const m of [...new Set(IDX.settings.map(s => s.model))]) out.push(...by[m].slice().reverse()); return out; };
+const rank = i => ORDER().indexOf(i);
 const allDs = () => IDX.order.filter(d => IDX.settings.some(s => s.datasets.includes(d)));
 const tname = (d, t) => `${d}_${t}`;
 const ttitle = (d, t) => `${IDX.datasets[d].label} (id=${t})`;
@@ -264,7 +267,7 @@ async function heatmap(p) {
   const d = p.d || "all", sort = p.sort || "hard", flt = p.flt || "all", page = +(p.page || 0);
   const dss = d === "all" ? allDs() : [d];
   const mats = await Promise.all(dss.map(x => getJSON(DATA + `matrix/${x}.json`)));
-  const cols = IDX.settings.map((s, i) => i).filter(i => mats.some(m => m && m.settings.includes(IDX.settings[i].key)));
+  const cols = ORDER().filter(i => mats.some(m => m && m.settings.includes(IDX.settings[i].key)));
   let data = [];
   mats.forEach((m, j) => { if (!m) return; const ci = cols.map(i => m.settings.indexOf(IDX.settings[i].key));
     m.tasks.forEach((t, ti) => { const cells = ci.map(c => c < 0 ? null : m.cells[ti][c]); const v = cells.filter(x => x && x[0] != null).map(x => x[0]);
@@ -337,7 +340,7 @@ async function task(p) {
   rows.forEach(x => (by[x.S] = by[x.S] || []).push(x));
   const counted = rows.filter(x => x.r != null);
   const avg = (xs, f) => { const v = xs.map(f).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const lines = Object.keys(by).map(Number).sort((a, b) => a - b).map(si => {
+  const lines = Object.keys(by).map(Number).sort((a, b) => rank(a) - rank(b)).map(si => {
     const xs = by[si].sort((a, b) => a.k - b.k), c = xs.filter(x => x.r != null), k = c.filter(ok).length;
     const att = xs.map(x => `<a href="#" class="${x.r == null ? "ax" : cut(x) ? "ac" : x.r >= 0.5 ? "a1" : "a0"}" title="attempt ${x.k}: ${x.r == null ? "excluded" : x.r.toFixed(2)}${x.c ? " · " + x.c : ""}" ${goAttr({view: "trial", d, t, s: IDX.settings[si].key, k: x.k, from: "heatmap"})}>${x.k}</a>`).join("");
     return `<tr><td class="l">${esc(setName(si))}</td><td>${c.length ? Math.round(100 * k / c.length) + "%" : "–"} <span class="note">(${k}/${c.length})</span></td><td class="l"><span class="att">${att}</span></td><td>${tok(Math.round(avg(xs, x => x.i) ?? 0) || null)}</td><td>${tok(Math.round(avg(xs, x => x.o) ?? 0) || null)}</td><td>${secs(avg(xs, x => x.s))}</td><td>${usd(avg(xs, x => x.$))}</td></tr>`;
