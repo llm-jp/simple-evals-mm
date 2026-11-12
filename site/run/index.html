@@ -153,8 +153,10 @@ const setName = i => { const s = IDX.settings[i]; return s ? `${s.model} (${s.la
 const setIdx = k => IDX.settings.findIndex(s => s.key === k);
 const allDs = () => IDX.order.filter(d => IDX.settings.some(s => s.datasets.includes(d)));
 const tname = (d, t) => `${d}_${t}`;
+const ttitle = (d, t) => `${IDX.datasets[d].label} (id=${t})`;
 const trialsOf = async d => ((await getJSON(DATA + `trials/${d}.json`)) || {rows: []}).rows;
-const prompts = async d => ((await getJSON(DATA + `prompts/${d}.json`)) || {}).prompts || {};
+const prompts_cache = {};
+const prompts = async d => (prompts_cache[d] = ((await getJSON(DATA + `prompts/${d}.json`)) || {}).prompts || {});
 const back = () => `<p class="back"><a href="#" class="backlink" id="back">&larr; Back</a></p>`;
 function wireBack(fallback) { $("back").onclick = e => { e.preventDefault(); history.length > 1 ? history.back() : go(fallback); }; }
 function badge(x) { return !x ? `<span class="badge bx">–</span>` : x.r == null ? `<span class="badge bx">excluded</span>` : `<span class="badge ${x.r >= 0.5 ? "b1" : "b0"}">${(+x.r).toFixed(2)}</span>`; }
@@ -245,7 +247,7 @@ async function task(p) {
     const att = xs.map(x => `<a href="#" class="${x.r == null ? "ax" : cut(x) ? "ac" : x.r >= 0.5 ? "a1" : "a0"}" title="attempt ${x.k}: ${x.r == null ? "excluded" : x.r.toFixed(2)}${x.c ? " · " + x.c : ""}" ${goAttr({view: "trial", d, t, s: IDX.settings[si].key, k: x.k, from: "heatmap"})}>${x.k}</a>`).join("");
     return `<tr><td class="l">${esc(setName(si))}</td><td>${c.length ? Math.round(100 * k / c.length) + "%" : "–"} <span class="note">(${k}/${c.length})</span></td><td class="l"><span class="att">${att}</span></td><td>${tok(Math.round(avg(xs, x => x.i) ?? 0) || null)}</td><td>${tok(Math.round(avg(xs, x => x.o) ?? 0) || null)}</td><td>${secs(avg(xs, x => x.s))}</td><td>${usd(avg(xs, x => x.$))}</td></tr>`;
   }).join("");
-  $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(tname(d, t))}</h2><span class="note">${esc(IDX.datasets[d].label)} · pass rate ${counted.length ? Math.round(100 * counted.filter(ok).length / counted.length) : "–"}% over ${rows.length} trials</span></div>
+  $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(ttitle(d, t))}</h2><span class="note">pass rate ${counted.length ? Math.round(100 * counted.filter(ok).length / counted.length) : "–"}% over ${rows.length} trials</span></div>
     ${await questionPanel(d, t)}<div class="rpanel"><h3>Settings</h3><div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Setting</th><th>Pass rate</th><th class="l">Attempts (click to open)</th><th>Avg input tok</th><th>Avg output tok</th><th>Avg time</th><th>Avg cost</th></tr></thead><tbody>${lines}</tbody></table></div></div>`;
   wireBack({view: "heatmap", d});
   navLinks();
@@ -294,7 +296,7 @@ async function trial(p) {
   const i = all.findIndex(x => x.S === si && x.k === k), x = all[i];
   const [ans, reas, judge] = (((await getJSON(DATA + `text/${encodeURIComponent(p.s)}/${d}.json`)) || {}).text || {})[`${t}|${k}`] || [];
   const nav = j => j >= 0 && j < all.length ? `<a href="#" ${goAttr({...p, s: IDX.settings[all[j].S].key, k: all[j].k})}>${j < i ? "← Previous" : "Next →"}</a>` : `<span>${j < i ? "← Previous" : "Next →"}</span>`;
-  const TABS = [["trajectory", "Trajectory"], ["question", "Question"], ["verifier", "Verifier"], ["setting", "Setting"]];
+  const TABS = [["trajectory", "Trajectory"], ["verifier", "Verifier"], ["setting", "Setting"]];
   let body = "";
   if (tab === "trajectory") {
     const pr = (await prompts(d))[t];
@@ -304,26 +306,45 @@ async function trial(p) {
       (reas ? `<div class="reason"><details><summary class="sec" style="display:list-item">Reasoning <span style="text-transform:none;font-weight:400">(start)</span></summary><pre>${esc(reas)}</pre></details></div>` : "") +
       `<div class="${reas ? "final" : ""}"><div class="sec">Final answer</div>${esc(ans || "(no answer)")}</div></div></div>`;
   }
-  else if (tab === "question") body = await questionPanel(d, t);
-  else if (tab === "verifier") body = `<div class="rpanel"><h3>Verification</h3><dl class="rkv"><dt>Grading</dt><dd>${esc(IDX.datasets[d].grading || "")}</dd><dt>Reward</dt><dd>${badge(x)} ${x && x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</dd><dt>Extracted answer</dt><dd>${esc((x && x.x) ?? "–")}</dd></dl></div>` + (judge ? `<div class="rpanel"><h3>Judge reply</h3><pre>${esc(judge)}</pre></div>` : "");
+  else if (tab === "verifier") body = `<div class="rpanel"><h3>Verification</h3><dl class="rkv"><dt>Grading</dt><dd>${esc(IDX.datasets[d].grading || "")}</dd><dt>Reference answer</dt><dd id="refans">${IDX.datasets[d].mode ? "<span class=note>loading from the dataset…</span>" : `<span class=note>not shown (${esc(IDX.datasets[d].note || "no public viewer")})</span>`}</dd><dt>Extracted answer</dt><dd>${esc((x && x.x) ?? "–")}</dd><dt>Reward</dt><dd>${badge(x)} ${x && x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</dd></dl></div>` + (judge ? `<div class="rpanel"><h3>Judge reply</h3><pre>${esc(judge)}</pre></div>` : "");
   else body = `<div class="rpanel"><h3>Evaluation setting</h3>${configHTML(st)}</div>`;
-  $("app").innerHTML = back() + `<div class="trial-head"><h2><a href="?view=task&d=${d}&t=${encodeURIComponent(t)}" ${goAttr({view: "task", d, t})} style="color:inherit">${esc(tname(d, t))}</a></h2><div class="nav2">${nav(i - 1)}<span>${i + 1} / ${all.length}</span>${nav(i + 1)}</div></div>
-    <div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k}</b>attempt</span><span><b>${tok(x && x.i)} / ${tok(x && x.o)}</b>input / output tokens</span><span><b>${secs(x && x.s)}</b>duration</span><span><b>${usd(x && x.$)}</b>cost</span><span><b>${esc((x && x.f) || "–")}</b>finish</span><span><b>${esc(IDX.datasets[d].label)}</b>dataset</span><span><b style="font-size:17px">${badge(x)}</b>reward${x && x.c ? ` · <span class="cause">${esc(x.c)}</span>` : ""}</span></div>
+  const nAtt = all.filter(y => y.S === si).length;
+  $("app").innerHTML = back() + `<div class="trial-head"><h2><a href="?view=task&d=${d}&t=${encodeURIComponent(t)}" ${goAttr({view: "task", d, t})} style="color:inherit">${esc(ttitle(d, t))}</a></h2><div class="nav2">${nav(i - 1)}<span>${i + 1} / ${all.length}</span>${nav(i + 1)}</div></div>
+    <div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k} of ${nAtt}</b>attempt</span><span><b>${tok(x && x.i)}</b>input tokens</span><span><b>${tok(x && x.o)}</b>output tokens</span><span><b>${secs(x && x.s)}</b>duration</span><span><b>${usd(x && x.$)}</b>cost</span><span><b>${esc((x && x.f) || "–")}</b>finish reason</span><span><b style="font-size:17px">${badge(x)}</b>reward${x && x.c ? ` · <span class="cause">${esc(x.c)}</span>` : ""}</span></div>
     <nav class="ttabs">${TABS.map(([v, l]) => `<a ${goAttr({...p, tab: v})} class="${v === tab ? "on" : ""}">${l}</a>`).join("")}</nav>${body}`;
   wireBack({view: "task", d, t});
   navLinks();
   $("app").querySelectorAll(".ttabs a").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go), false); });  // tabs replace, so Back leaves the trial
-  if (tab === "question") loadQuestion(d, t);
-  if (tab === "trajectory") fetchRow(d, t).then(r => {  // the images the model saw, from the Hub row
-    const box = $("uimg");
-    if (!box || !r || !r.j.rows || !r.j.rows.length) return;
-    const ims = Object.values(r.j.rows[0].row).flatMap(imgs);
-    box.innerHTML = ims.map(src => `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;note&quot;>(image not served by the dataset viewer)</div>'">`).join("");
+  if (tab === "verifier") fetchRow(d, t).then(r => {
+    const el = $("refans");
+    if (!el || !IDX.datasets[d].mode) return;
+    const row = r && r.j.rows && r.j.rows.length ? r.j.rows[0].row : null;
+    const ref = row ? Object.entries(row).filter(([k, v]) => /^(answer|answers|label|ground_truth|gt|solution)$|_a$|_answer$/i.test(k) && v != null && typeof v !== "object").map(([, v]) => String(v)) : [];
+    el.innerHTML = ref.length ? esc(ref.join(" / ")) : `<span class="note">not available from the dataset viewer${r && r.link ? ` (<a href="${esc(r.link)}" target="_blank" rel="noopener">open on Hugging Face</a>)` : ""}</span>`;
   });
+  if (tab === "trajectory") {  // the images the model saw, from the Hub row; say so when they cannot be shown
+    const box = $("uimg"), pr = (prompts_cache[d] || {})[t] || "", m = pr.match(/\[(\d+) image\(s\)\]$/), n = m ? +m[1] : null;
+    const why = IDX.datasets[d].mode ? null : (IDX.datasets[d].note || "no public viewer");
+    const miss = reason => `<div class="note" style="border:1px dashed var(--border);border-radius:8px;padding:10px;margin-bottom:10px">${n ? n + " image(s)" : "Image(s)"} not shown: ${esc(reason)}.</div>`;
+    if (why) { if (box && n) box.innerHTML = miss(why); }
+    else fetchRow(d, t).then(r => {
+      if (!box) return;
+      let ims = r && r.j.rows && r.j.rows.length ? rowImages(r.j.rows[0].row) : [];
+      if (n) ims = ims.slice(0, n);
+      if (!ims.length) { if (n) box.innerHTML = miss(r && r.j.error ? "the Hugging Face dataset viewer returned an error" : "the dataset viewer has no image for this row"); return; }
+      box.innerHTML = ims.map(src => `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;note&quot;>(an image could not be loaded from the dataset viewer)</div>'">`).join("");
+    });
+  }
 }
 
 // ---- the question, from the Hub dataset viewer ----
 const IMG_URL = /^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg|bmp)(\?\S*)?$/i;
+// the images of a dataset row: image fields (viewer assets, data URIs); plain image URLs only when the row has no image
+// field (e.g. HakushoBench's image_url), since other URL fields are attribution links (CVQA's "Image Source")
+function rowImages(row) {
+  const real = Object.values(row).flatMap(v => imgs(v).filter(s => !IMG_URL.test(s) || (typeof v === "object")));
+  return real.length ? real : Object.values(row).flatMap(imgs);
+}
 function imgs(v) {
   if (!v) return [];
   if (typeof v === "string") return v.startsWith("data:image") || IMG_URL.test(v.trim()) ? [v.trim()] : [];
