@@ -92,9 +92,6 @@ table.hm td.frac { padding-left: 10px; color: var(--text-secondary); white-space
 .rkv dt { color: var(--text-secondary); } .rkv dd { margin: 0; }
 .trial-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .trial-head h2 { margin: 0; }
-.nav2 { display: flex; gap: 8px; margin-left: auto; }
-.nav2 a, .nav2 span { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 13px; text-decoration: none; color: var(--text-primary); }
-.nav2 span { color: var(--text-secondary); }
 .rgrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } @media (max-width: 1000px) { .rgrid2 { grid-template-columns: 1fr; } }
 .ans { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 10px 0; background: var(--bg); }
 .ans .hd { display: flex; gap: 12px; align-items: center; font-size: 13px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -405,7 +402,6 @@ async function trial(p) {
   const all = (await trialsOf(d)).filter(x => x.t === t).sort((a, b) => a.S - b.S || a.k - b.k);
   const i = all.findIndex(x => x.S === si && x.k === k), x = all[i];
   const [ans, reas, judge] = (((await getJSON(DATA + `text/${encodeURIComponent(p.s)}/${d}.json`)) || {}).text || {})[`${t}|${k}`] || [];
-  const nav = j => j >= 0 && j < all.length ? `<a href="#" ${goAttr({...p, s: IDX.settings[all[j].S].key, k: all[j].k})}>${j < i ? "← Previous" : "Next →"}</a>` : `<span>${j < i ? "← Previous" : "Next →"}</span>`;
   const TABS = [["trajectory", "Trajectory"], ["verifier", "Verifier"], ["setting", "Setting"]];
   let body = "";
   if (tab === "trajectory") {
@@ -420,13 +416,13 @@ async function trial(p) {
   else if (tab === "verifier") body = `<div class="rpanel"><h3>Verification</h3><dl class="rkv"><dt>Grading</dt><dd>${esc(IDX.datasets[d].grading || "")}${/judge/i.test(IDX.datasets[d].grading || "") && (st.config || {}).judge ? ` · judge <code>${esc(st.config.judge)}</code>` : ""}</dd><dt>Reference answer</dt><dd id="refans"><span class="note">loading…</span></dd><dt>Extracted answer</dt><dd>${esc((x && x.x) ?? "–")}</dd><dt>Reward</dt><dd>${badge(x)} ${x && x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</dd></dl></div>` + (judge ? `<div class="rpanel"><h3>Judge reply</h3><pre>${esc(judge)}</pre></div>` : "");
   else body = `<div class="rpanel"><h3>Evaluation setting</h3>${configHTML(st)}</div>`;
   const nAtt = all.filter(y => y.S === si).length;
-  $("app").innerHTML = back() + `<div class="trial-head"><h2><a href="?view=task&d=${d}&t=${encodeURIComponent(t)}" ${goAttr({view: "task", d, t})} style="color:inherit">${esc(ttitle(d, t))}</a></h2><div class="nav2">${nav(i - 1)}<span>${i + 1} / ${all.length}</span>${nav(i + 1)}</div></div>
+  $("app").innerHTML = back() + `<div class="trial-head"><h2><a href="?view=task&d=${d}&t=${encodeURIComponent(t)}" ${goAttr({view: "task", d, t})} style="color:inherit">${esc(ttitle(d, t))}</a></h2></div>
     <div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k} of ${nAtt}</b>attempt</span><span><b>${tok(x && x.i)}</b>input tokens</span><span><b>${tok(x && x.o)}</b>output tokens</span><span><b>${secs(x && x.s)}</b>duration</span><span><b>${usd(x && x.$)}</b>cost</span><span><b>${esc((x && x.f) || "–")}</b>finish reason</span><span><b style="font-size:17px">${badge(x)}</b>reward${x && x.c ? ` · <span class="cause">${esc(x.c)}</span>` : ""}</span></div>
     <nav class="ttabs">${TABS.map(([v, l]) => `<a ${goAttr({...p, tab: v})} class="${v === tab ? "on" : ""}">${l}</a>`).join("")}</nav>${body}`;
   wireBack({view: "task", d, t});
   navLinks();
-  // tabs and Previous / Next replace the history entry, so one Back leaves the trial page
-  $("app").querySelectorAll(".ttabs a, .nav2 a").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go), false); });
+  // tabs replace the history entry, so one Back leaves the trial page
+  $("app").querySelectorAll(".ttabs a").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go), false); });
   if (tab === "verifier") answersOf(d).then(A => { const el = $("refans"); if (el) el.innerHTML = A[t] != null ? esc(A[t]) : `<span class="note">not shown${IDX.datasets[d].note ? " (" + esc(IDX.datasets[d].note) + ")" : ""}</span>`; });
   if (tab === "trajectory") {  // the images the model saw, from the Hub row; say so when they cannot be shown
     const box = $("uimg"), pr = (prompts_cache[d] || {})[t] || "", m = pr.match(/\[(\d+) image\(s\)\]$/), n = m ? +m[1] : null;
