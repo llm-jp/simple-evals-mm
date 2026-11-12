@@ -144,14 +144,13 @@ a.backlink { font-size: 14px; }
 .pw.open .pillbtn .chev { transform: rotate(180deg); }
 .pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
 .pw.open .pop { display: block; }
-/* heatmap: its own scroll area (the window's height), column names and the Dataset / Task ID columns stay in view */
-.hmwrap { overflow: auto; max-height: calc(100vh - 120px); }
-table.hm thead th { position: sticky; top: 0; z-index: 2; background: var(--bg); }
-table.hm .c0, table.hm .c1 { position: sticky; z-index: 1; background: var(--bg); }
-table.hm .c0 { left: 0; min-width: 110px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
-table.hm .c1 { left: 0; min-width: 120px; white-space: nowrap; box-shadow: 4px 0 0 var(--bg); }
-table.hm .c0 { box-shadow: 4px 0 0 var(--bg); }
-table.hm thead th.c0, table.hm thead th.c1 { z-index: 3; }
+/* heatmap: the page scrolls; the column names stay under the site header; the heatmap view uses the window's width */
+.hmwrap { overflow: visible; }
+table.hm thead th { position: sticky; top: 56px; z-index: 2; background: var(--bg); }
+table.hm .c0 { min-width: 110px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+table.hm .c1 { min-width: 120px; white-space: nowrap; }
+body.wide #run .wrap { max-width: none; }
+@media (max-width: 1399px) { table.hm td.cell { width: 44px; min-width: 44px; max-width: 44px; font-size: 11px; } table.hm .c0 { min-width: 90px; max-width: 90px; } }
 .pw.off .pillbtn { opacity: .45; cursor: default; } .pw.off .pillbtn:hover { background: transparent; }
 .pv { display: inline-grid; text-align: left; } .pv > span { grid-area: 1 / 1; white-space: nowrap; } .pv > .ghost { visibility: hidden; }
 .hmleg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); margin-left: 6px; }
@@ -223,6 +222,7 @@ async function init() {
 }
 function route() {
   const p = P(), v = p.view || "heatmap";
+  document.body.classList.toggle("wide", v === "heatmap");
   $("runhead").hidden = v === "task" || v === "trial";  // detail pages: only "Back"
   [...$("tabs").children].forEach(a => a.classList.toggle("on", a.dataset.v === (v === "trajectories" ? "trials" : v)));
   ({heatmap, trials, trajectories: trials, trial, task}[v] || heatmap)(p);
@@ -313,10 +313,6 @@ async function heatmap(p) {
   $("app").innerHTML = h;
   navLinks();
   wirePill("ds", v => go({...keep, d: v, page: 0}));
-  {  // the Task ID column sticks right after the Dataset column (its measured width + the cell spacing)
-    const c0 = $("app").querySelector("table.hm thead th.c0");
-    if (c0) { const left = c0.getBoundingClientRect().width + 2; $("app").querySelectorAll("table.hm .c1").forEach(el => { el.style.left = left + "px"; }); }
-  }
   wirePill("cfg", v => go({...keep, cfg: v, page: 0}));
   wirePill("flt", v => go({...keep, flt: v, page: 0}));
   wirePill("sort", v => go({...keep, sort: v, page: 0}));
