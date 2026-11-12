@@ -349,7 +349,13 @@ def test_cost_estimate_for_a_model_without_billed_cost(lb):
     s = lb
     smp = s["sampler"]
     base = smp.reply
-    smp.reply = lambda q: (lambda r: (setattr(r, "cost_usd", None), r)[1])(base(q))  # self-served: nothing billed
+
+    def unbilled(q):  # self-served: nothing billed
+        r = base(q)
+        r.cost_usd = None
+        return r
+
+    smp.reply = unbilled
     assert s["run_lb"]("j") == 0
     est = {"source": "OpenRouter fake/model", "date": "2026-11-12", "prompt": 2.0, "completion": 10.0}
     data, _ = s["build"](s["spec"]([{"label": "low", "job": "j"}], cost_estimate=est))
