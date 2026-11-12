@@ -275,7 +275,7 @@ def _pct(v):
     return None if v is None else 100 * v
 
 
-def dataset_cell(view: JobView, name: str) -> dict:
+def dataset_cell(view: JobView, name: str, estimate: dict | None = None) -> dict:
     """Metrics (0-100 scale) and the dataset part of the provenance, from the rows."""
     st, cfg, lock = view.store, view.cfg, view.lock
     entry = runner.dataset_entries(cfg)[name]
@@ -304,11 +304,12 @@ def dataset_cell(view: JobView, name: str) -> dict:
         "score": _pct(s["reward"]), "std": _pct(s["std"]),
         "n_repeats": sum(1 for r in s["rewards"] if r is not None), "n": n,
         "tok": (sum(tokens) / len(tokens) / 1000) if tokens and all(x is not None for x in tokens) else None,  # K / answer
-        # USD / trial over the trials whose cost is known: a provider sometimes returns no usage for a request (a few in
-        # tens of thousands); the cell is None only when most costs are unknown (a self-served model: none at all)
-        "cost": (sum(known) / len(known)) if (known := [x for x in costs if x is not None]) and len(known) >= 0.99 * len(costs)
+        # USD / trial over the trials whose cost is known: a provider sometimes returns an empty answer without usage
+        # (Z.AI: ~1.5% of GLM-5.3 Flash trials); the cell is None when over 10% are unknown (self-served: all)
+        "cost": (sum(known) / len(known)) if (known := [x for x in costs if x is not None]) and len(known) >= 0.9 * len(costs)
         else None,
         "cost_missing": (len(costs) - len(known)) or None,
+        "cost_est": None,
         "judge_cost": (s["judge_cost_usd"] / len(trials)) if s.get("judge_cost_usd") is not None and trials else None,
         "categories": {c: 100 * statistics.mean(v) for c, v in sorted(cats.items())} or None,
         "causes": dict(sorted(total.items())),
@@ -326,6 +327,13 @@ def dataset_cell(view: JobView, name: str) -> dict:
             "identity": trial_identity(trials),
         },
     }
+    if cell["cost"] is None and estimate and answered:
+        # a self-served model has no billed cost: estimate it with the same model's API price (spec `cost_estimate`,
+        # USD per 1M tokens) times our recorded tokens, and mark it as an estimate
+        ins = [t.usage.get("prompt_tokens") or 0 for t in answered]
+        outs = [t.usage.get("completion_tokens") or 0 for t in answered]
+        cell["cost"] = (estimate["prompt"] * sum(ins) + estimate["completion"] * sum(outs)) / 1e6 / len(answered)
+        cell["cost_est"] = True
     return cell
 
 
@@ -502,7 +510,7 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
                     reasons.append(f"job effort {v.cfg.get('effort')} is not the setting's effort {s['effort']}")
                 if not reasons:
                     try:
-                        cell = dataset_cell(v, name)
+                        cell = dataset_cell(v, name, m.get("cost_estimate"))
                     except Exception as e:  # noqa: BLE001 - reported as a refusal, the build goes on
                         reasons.append(f"metrics failed: {type(e).__name__}: {e}")
                 if reasons:
@@ -525,6 +533,7 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
                 "jobs": jobs, "alias": any(j["model_identity"] == "alias" for j in jp),
                 "provider": _common((j["endpoint"] or {}).get("provider_name") for j in jp),
                 "quantization": _common((j["endpoint"] or {}).get("quantization") for j in jp),
+                "cost_estimate": m.get("cost_estimate"),
             }
             levels.append(lvl)
         if not levels:

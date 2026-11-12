@@ -343,3 +343,20 @@ def test_publish_gate_refuses_excluded_trials_until_retried(lb, monkeypatch):
     assert lb["sem"]("job", "resume", "-p", st.dir, "-f", "provider_failed") == 0
     data, report = lb["build"](lb["spec"]([{"label": "low", "job": "j"}]))
     assert report["refused"] == [] and data["models"][0]["max"]["tasks"]["arith"]["excluded"] == 0
+
+
+def test_cost_estimate_for_a_model_without_billed_cost(lb):
+    s = lb
+    smp = s["sampler"]
+    base = smp.reply
+    smp.reply = lambda q: (lambda r: (setattr(r, "cost_usd", None), r)[1])(base(q))  # self-served: nothing billed
+    assert s["run_lb"]("j") == 0
+    est = {"source": "OpenRouter fake/model", "date": "2026-11-12", "prompt": 2.0, "completion": 10.0}
+    data, _ = s["build"](s["spec"]([{"label": "low", "job": "j"}], cost_estimate=est))
+    lvl = data["models"][0]["max"]
+    c = lvl["tasks"]["arith"]
+    # 5 input and 10 output tokens per trial: (5 * 2 + 10 * 10) / 1e6
+    assert c["cost_est"] is True and c["cost"] == pytest.approx(110 / 1e6)
+    assert lvl["cost_estimate"] == est
+    data, _ = s["build"](s["spec"]([{"label": "low", "job": "j"}]))  # no estimate: no cost
+    assert data["models"][0]["max"]["tasks"]["arith"]["cost"] is None
