@@ -18094,7 +18094,7 @@ window.LB = {
    "name": "GLM-5.3 Flash",
    "dev": "Z.ai",
    "type": "open",
-   "logo": null,
+   "logo": "zai",
    "params_b": 321,
    "model": "openrouter/z-ai/glm-5.3-flash",
    "max": {

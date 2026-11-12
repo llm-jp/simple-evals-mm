@@ -15,10 +15,12 @@ window.LB_LOGOS = {
  },
  // raster logos (no single-path SVG available): drawn as images, in the table and on the chart
  "images": {
+  "zai": "assets/zai-logo.png",
   "google": "assets/google-g.svg",
   "llmjp": "assets/llm-jp-logo.png"
  },
  "logoColors": {
+  "zai": "#1a1a1a",
   "google": "#4285F4",
   "llmjp": "#2563EB",
   "anthropic": "#191919",

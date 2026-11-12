@@ -285,7 +285,7 @@ models:
     name: "GLM-5.3 Flash"
     released: "2026-08-26"  # Z.ai blog, z.ai/blog/glm-5.3-flash
     dev: "Z.ai"
-    logo: null
+    logo: zai
     type: open
     params_b: 321
     model: openrouter/z-ai/glm-5.3-flash
