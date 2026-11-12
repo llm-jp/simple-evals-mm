@@ -144,6 +144,14 @@ a.backlink { font-size: 14px; }
 .pw.open .pillbtn .chev { transform: rotate(180deg); }
 .pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
 .pw.open .pop { display: block; }
+/* heatmap: its own scroll area (the window's height), column names and the Dataset / Task ID columns stay in view */
+.hmwrap { overflow: auto; max-height: calc(100vh - 120px); }
+table.hm thead th { position: sticky; top: 0; z-index: 2; background: var(--bg); }
+table.hm .c0, table.hm .c1 { position: sticky; z-index: 1; background: var(--bg); }
+table.hm .c0 { left: 0; min-width: 110px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+table.hm .c1 { left: 0; min-width: 120px; white-space: nowrap; box-shadow: 4px 0 0 var(--bg); }
+table.hm .c0 { box-shadow: 4px 0 0 var(--bg); }
+table.hm thead th.c0, table.hm thead th.c1 { z-index: 3; }
 .pw.off .pillbtn { opacity: .45; cursor: default; } .pw.off .pillbtn:hover { background: transparent; }
 .pv { display: inline-grid; text-align: left; } .pv > span { grid-area: 1 / 1; white-space: nowrap; } .pv > .ghost { visibility: hidden; }
 .hmleg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); margin-left: 6px; }
@@ -296,15 +304,19 @@ async function heatmap(p) {
     <span class="hmleg" title="Each cell: the share of the setting's attempts on the task that were correct">Pass rate <span class="bar"></span> 0 → 100%</span>
 </div>
     <div class="note" style="margin:-4px 0 8px">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · ${cols.length} settings</div>
-    <div style="overflow-x:auto"><table class="hm"><thead><tr><th class="l" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Dataset</th><th class="l" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
+    <div class="hmwrap"><table class="hm"><thead><tr><th class="l c0" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Dataset</th><th class="l c1" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
   for (const r of view) {
-    h += `<tr><td class="tid" style="color:var(--text-secondary)">${esc(IDX.datasets[r.d].label)}</td><td class="tid" title="${esc(r.t)}"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(r.t.length > 18 ? "…" + r.t.slice(-17) : r.t)}</a></td>` +
+    h += `<tr><td class="tid c0" style="color:var(--text-secondary)">${esc(IDX.datasets[r.d].label)}</td><td class="tid c1" title="${esc(r.t)}"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(r.t.length > 18 ? "…" + r.t.slice(-17) : r.t)}</a></td>` +
       r.cells.map((c, i) => `<td class="cell" style="${cellStyle(c)}" data-c='${esc(JSON.stringify(c))}' data-s="${i}" data-t="${esc(r.t)}" data-d="${r.d}">${c && c[0] != null ? Math.round(c[0] * 100) + "%" : ""}</td>`).join("") + `</tr>`;
   }
   h += `</tbody></table></div><div class="pager">${data.length.toLocaleString()} tasks · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div><div class="hov" id="hov"></div>`;
   $("app").innerHTML = h;
   navLinks();
   wirePill("ds", v => go({...keep, d: v, page: 0}));
+  {  // the Task ID column sticks right after the Dataset column (its measured width + the cell spacing)
+    const c0 = $("app").querySelector("table.hm thead th.c0");
+    if (c0) { const left = c0.getBoundingClientRect().width + 2; $("app").querySelectorAll("table.hm .c1").forEach(el => { el.style.left = left + "px"; }); }
+  }
   wirePill("cfg", v => go({...keep, cfg: v, page: 0}));
   wirePill("flt", v => go({...keep, flt: v, page: 0}));
   wirePill("sort", v => go({...keep, sort: v, page: 0}));
