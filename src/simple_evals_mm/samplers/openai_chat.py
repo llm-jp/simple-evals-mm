@@ -572,6 +572,7 @@ class OpenAIChatSampler(Sampler):
             shrinks += 1
         served = self.served
         last, refused_conn = "", False
+        answered = True  # every failed try so far was an error answer from the provider (no timeout / connection error)
         trial = rl = conn = 0
         conn_since: float | None = None  # start of the current run of connection failures
         while True:
@@ -604,6 +605,7 @@ class OpenAIChatSampler(Sampler):
             except Exception as e:  # noqa: BLE001 - connection errors, timeouts: retried
                 last = f"{type(e).__name__}: {str(e)[:200]}"
                 refused_conn = errors.is_connection_error(e)
+                answered = False
             else:
                 err = _extra(resp, "error")
                 choices = getattr(resp, "choices", None) or []
@@ -648,8 +650,14 @@ class OpenAIChatSampler(Sampler):
                 backoff = min(2 ** trial, 60)
                 print(f"[{s.provider}] {s.model}: {last} (attempt {trial}/{s.max_tries}, retry in {backoff}s)", flush=True)
             self.sleep(backoff)
-        # a served engine that still refuses connections after every retry is down, not overloaded
-        cause = errors.ENDPOINT_UNAVAILABLE if served and refused_conn else errors.PROVIDER_FAILED
+        # a served engine that still refuses connections after every retry is down, not overloaded; an API that answered
+        # every try of this request with an error (never a rate limit or a timeout) rejects the request itself
+        if served and refused_conn:
+            cause = errors.ENDPOINT_UNAVAILABLE
+        elif not served and answered and rl == 0 and trial > s.max_tries:
+            cause = errors.REQUEST_REJECTED
+        else:
+            cause = errors.PROVIDER_FAILED
         raise errors.SamplerError(f"gave up after {trial} errors / {rl} rate limits: {last}", cause, exc_type="RetryExhausted",
                                   connection=refused_conn and not rate_limited)
 
