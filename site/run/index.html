@@ -144,6 +144,7 @@ a.backlink { font-size: 14px; }
 .pw.open .pillbtn .chev { transform: rotate(180deg); }
 .pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
 .pw.open .pop { display: block; }
+.pw.off .pillbtn { opacity: .45; cursor: default; } .pw.off .pillbtn:hover { background: transparent; }
 .pv { display: inline-grid; text-align: left; } .pv > span { grid-area: 1 / 1; white-space: nowrap; } .pv > .ghost { visibility: hidden; }
 .hmleg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); margin-left: 6px; }
 .hmleg .bar { width: 90px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, hsl(214,70%,96%), hsl(214,70%,34%)); border: 1px solid var(--border); }
@@ -236,14 +237,14 @@ const IC = {
 };
 const icon = (k, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]}</svg>`;
 // options: [[value, label]] or [{group, items: [[value, label]]}]
-function pill(id, ic, label, value, options) {
+function pill(id, ic, label, value, options, disabled = false) {
   const flat = options.flatMap(o => o.items || [o]);
   const cur = (flat.find(([v]) => v === value) || flat[0] || ["", ""])[1];
   const item = ([v, l]) => `<label><input type="radio" name="${id}" value="${esc(v)}" ${v === value ? "checked" : ""}> ${esc(l)}</label>`;
   // all labels stacked in one grid cell (only the current one visible): the button is as wide as its longest option,
   // so the controls do not move when the selection changes
   const val = `<span class="pv">${flat.map(([, l]) => `<span${l === cur ? "" : ' aria-hidden="true" class="ghost"'}>${esc(l)}</span>`).join("")}</span>`;
-  return `<div class="pw" id="${id}"><button class="pillbtn" type="button" title="${esc(label)}" aria-label="${esc(label)}: ${esc(cur)}">${icon(ic)} ${val} ${icon("chev", "chev")}</button><div class="pop">` +
+  return `<div class="pw${disabled ? " off" : ""}" id="${id}"><button class="pillbtn" type="button" title="${esc(label)}" aria-label="${esc(label)}: ${esc(cur)}"${disabled ? " disabled" : ""}>${icon(ic)} ${val} ${icon("chev", "chev")}</button><div class="pop">` +
     options.map(o => o.items ? `<div class="grp">${esc(o.group)}</div>` + o.items.map(item).join("") : item(o)).join("") + `</div></div>`;
 }
 function wirePill(id, onChange) {
@@ -286,10 +287,12 @@ async function heatmap(p) {
   }
   const total = data.length;
   data = data.filter(r => r.mean != null && (flt === "all" || (flt === "none" && r.mean === 0) || (flt === "every" && r.mean === 1) || (flt === "mixed" && r.mean > 0 && r.mean < 1)));
-  if (sort === "hard") data.sort((a, b) => a.mean - b.mean); else if (sort === "easy") data.sort((a, b) => b.mean - a.mean);
+  // All incorrect / All correct: every task shown has the same pass rate, so only the task order is left
+  const sortFixed = flt === "none" || flt === "every", srt = sortFixed ? "task" : sort;
+  if (srt === "hard") data.sort((a, b) => a.mean - b.mean); else if (srt === "easy") data.sort((a, b) => b.mean - a.mean);
   const pages = Math.max(1, Math.ceil(data.length / PAGE)), view = data.slice(page * PAGE, (page + 1) * PAGE);
   const keep = {view: "heatmap", d, sort, flt, cfg};
-  let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", "Sort", sort, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]])}
+  let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", sortFixed ? "Sort (every task shown has the same pass rate: task order)" : "Sort", srt, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]], sortFixed)}
     <span class="hmleg" title="Each cell: the share of the setting's attempts on the task that were correct">Pass rate <span class="bar"></span> 0 → 100%</span>
 </div>
     <div class="note" style="margin:-4px 0 8px">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · ${cols.length} settings</div>
