@@ -635,6 +635,51 @@ def test_endpoint_unavailable_classification(clean_env, endpoints, monkeypatch, 
     assert e.value.cause == errors.PROVIDER_FAILED
 
 
+def test_request_rejected_after_every_retry_errors(clean_env, endpoints, monkeypatch):
+    """An API that answers every try of one request with an error (an upstream error inside a 200, or a 5xx), never a
+    rate limit or a timeout, rejects that request: request_rejected (counts as 0, not retried). One timeout or one
+    rate limit among the tries keeps it provider_failed (transient)."""
+    import httpx
+    import openai
+    from openai.types.chat import ChatCompletion
+
+    from simple_evals_mm.samplers import openai_chat
+
+    monkeypatch.setattr(openai_chat.time, "sleep", lambda s: None)
+    req = httpx.Request("POST", "http://x/v1/chat/completions")
+    clean_env.setenv("OPENROUTER_API_KEY", "k")
+    s = registry.make_sampler(registry.resolve("openrouter/qwen/qwen3.8-27b"))
+    s.spec.max_tries = 3
+    upstream = ChatCompletion.model_validate({**json.loads(json.dumps(CHAT_REPLY)), "choices": []})
+
+    def answering(seq):  # one item per try: a reply, or an exception to raise
+        it = iter(seq)
+
+        def create(**kw):
+            x = next(it)
+            if isinstance(x, Exception):
+                raise x
+            return x
+        rec = Recorder(None)
+        rec.chat = NS(completions=NS(create=create))
+        return rec
+
+    s5xx = openai.InternalServerError("Error code: 502", response=httpx.Response(502, request=req), body=None)
+    s._client = answering([upstream, s5xx, upstream, upstream])
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.cause == errors.REQUEST_REJECTED and errors.POLICY[errors.REQUEST_REJECTED].reward == 0.0
+    s._client = answering([upstream, openai.APITimeoutError(request=req), upstream, upstream])
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.cause == errors.PROVIDER_FAILED
+    rate = openai.RateLimitError("Error code: 429", response=httpx.Response(429, request=req), body=None)
+    s._client = answering([upstream, rate, upstream, upstream, upstream])
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.cause == errors.PROVIDER_FAILED
+
+
 def _dropping_server(mode: str):
     """A TCP server that reads each request and then closes the connection without an answer ("drop") or with a
     TCP reset ("reset"): a served engine being killed by the `sem serve` watchdog. Returns (port, accepted list, stop)."""
