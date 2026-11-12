@@ -95,7 +95,11 @@ table.hm td.frac { padding-left: 10px; color: var(--text-secondary); white-space
 .ans { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 10px 0; background: var(--bg); }
 .ans .hd { display: flex; gap: 12px; align-items: center; font-size: 13px; flex-wrap: wrap; margin-bottom: 6px; }
 
-table.hm td.cell { width: 34px; height: 22px; font-size: 11px; text-align: center; color: #0b0b0b; font-variant-numeric: tabular-nums; }
+table.hm td.cell { width: 40px; height: 24px; font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; border: 1px solid var(--border); }
+.hov { position: fixed; z-index: 50; pointer-events: none; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 10px 12px; font-size: 13px; min-width: 220px; display: none; }
+.hov b { display: block; margin-bottom: 4px; } .hov .r { display: flex; justify-content: space-between; gap: 18px; color: var(--text-secondary); } .hov .r span:last-child { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.att { display: inline-flex; gap: 3px; } .att a { display: inline-block; min-width: 22px; text-align: center; border-radius: 4px; font-size: 11px; padding: 1px 4px; text-decoration: none; }
+.att a.a1 { background: #16a34a; color: #fff; } .att a.a0 { background: #dc2626; color: #fff; } .att a.ax { background: var(--surface-2); color: var(--text-secondary); } .att a.ac { background: #f59e0b; color: #fff; }
 .slider { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; }
 .slider input[type=range] { width: 140px; }
 a.backlink { font-size: 14px; }
@@ -103,10 +107,10 @@ a.backlink { font-size: 14px; }
 <main id="top">
   <section id="run">
     <div class="wrap">
-      <p class="back"><a href="../#leaderboard">&larr; Leaderboard</a></p>
+      <div id="runhead"><p class="back"><a href="../#leaderboard">&larr; Leaderboard</a></p>
       <h2>Run</h2>
       <p class="note">Every attempt of every task for every leaderboard setting. Questions and images load from the dataset's own Hugging Face repository (dataset viewer); gated or private datasets show our side only.</p>
-      <nav class="rtabs" id="tabs"><a data-v="heatmap">Heatmap</a><a data-v="trajectories">Trajectories</a></nav>
+      <nav class="rtabs" id="tabs"><a data-v="heatmap">Heatmap</a><a data-v="trajectories">Trajectories</a></nav></div>
       <div id="app"></div>
     </div>
   </section>
@@ -147,6 +151,7 @@ async function init() {
 }
 function route() {
   const p = P(), v = p.view || "heatmap";
+  $("runhead").hidden = v === "task" || v === "trial";  // detail pages: only "Back"
   [...$("tabs").children].forEach(a => a.classList.toggle("on", a.dataset.v === v || (v === "task" && a.dataset.v === "heatmap") || (v === "trial" && a.dataset.v === (p.from || "heatmap"))));
   ({heatmap, trajectories, trial, task}[v] || heatmap)(p);
   window.scrollTo(0, 0);
@@ -154,47 +159,52 @@ function route() {
 const navLinks = () => $("app").querySelectorAll("[data-go]").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go)); });
 const goAttr = o => `data-go='${esc(JSON.stringify(o))}'`;
 
-// ---- heatmap: tasks x settings, pass rate over the attempts ----
-function cellStyle(r) {
-  if (r == null) return "";
-  const g = Math.round(r * 100);  // 0 = light red, 100 = deep green
-  const bg = r === 0 ? "#fecaca" : `hsl(142, ${45 + 25 * r}%, ${88 - 50 * r}%)`;
-  return `background:${bg};color:${r > 0.6 ? "#fff" : "#0b0b0b"}`;
+// ---- heatmap: tasks x settings, pass rate over the attempts (white 0 % -> black 100 %) ----
+function cellStyle(c) {
+  if (!c || c[0] == null) return "background:var(--surface-2)";
+  const l = Math.round(100 - 88 * c[0]);  // lightness: 100 (white) .. 12 (near black)
+  return `background:hsl(0,0%,${l}%);color:${c[0] > 0.5 ? "#fff" : "#0b0b0b"}`;
 }
+const FILT = [["all", "All"], ["none", "All incorrect"], ["mixed", "Mixed"], ["every", "All correct"]];
 async function heatmap(p) {
-  const d = p.d || "all", sort = p.sort || "hard", lo = +(p.lo ?? 0), hi = +(p.hi ?? 100), page = +(p.page || 0);
+  const d = p.d || "all", sort = p.sort || "hard", flt = p.flt || "all", page = +(p.page || 0);
   const dss = d === "all" ? allDs() : [d];
   const mats = await Promise.all(dss.map(x => getJSON(DATA + `matrix/${x}.json`)));
   const cols = IDX.settings.map((s, i) => i).filter(i => mats.some(m => m && m.settings.includes(IDX.settings[i].key)));
   let data = [];
   mats.forEach((m, j) => { if (!m) return; const ci = cols.map(i => m.settings.indexOf(IDX.settings[i].key));
-    m.tasks.forEach((t, ti) => { const rates = ci.map(c => c < 0 ? null : m.rate[ti][c]); const v = rates.filter(x => x != null);
-      data.push({d: dss[j], t, rates, mean: v.length ? v.reduce((a, b) => a + b, 0) / v.length : null}); }); });
+    m.tasks.forEach((t, ti) => { const cells = ci.map(c => c < 0 ? null : m.cells[ti][c]); const v = cells.filter(x => x && x[0] != null).map(x => x[0]);
+      data.push({d: dss[j], t, cells, mean: v.length ? v.reduce((a, b) => a + b, 0) / v.length : null}); }); });
   const total = data.length;
-  data = data.filter(r => r.mean != null && r.mean * 100 >= lo - 1e-9 && r.mean * 100 <= hi + 1e-9);
+  data = data.filter(r => r.mean != null && (flt === "all" || (flt === "none" && r.mean === 0) || (flt === "every" && r.mean === 1) || (flt === "mixed" && r.mean > 0 && r.mean < 1)));
   if (sort === "hard") data.sort((a, b) => a.mean - b.mean); else if (sort === "easy") data.sort((a, b) => b.mean - a.mean);
   const pages = Math.max(1, Math.ceil(data.length / PAGE)), view = data.slice(page * PAGE, (page + 1) * PAGE);
-  const keep = {view: "heatmap", d, sort, lo, hi};
-  const quick = [["All", 0, 100], ["0 % (solved by none)", 0, 0], ["Mixed", 1, 99], ["100 % (solved by all)", 100, 100]];
+  const keep = {view: "heatmap", d, sort, flt};
   let h = `<div class="rs-controls"><label>Dataset <select class="pick" id="ds"><option value="all">All datasets</option>${allDs().map(k => `<option value="${k}" ${k === d ? "selected" : ""}>${esc(IDX.datasets[k].label)}</option>`).join("")}</select></label>
-    <label>Sort <select class="pick" id="sort"><option value="hard" ${sort === "hard" ? "selected" : ""}>hardest first</option><option value="easy" ${sort === "easy" ? "selected" : ""}>easiest first</option><option value="task" ${sort === "task" ? "selected" : ""}>task order</option></select></label></div>
-    <div class="rs-controls"><span class="seg">${quick.map(([l, a, b]) => `<button ${goAttr({...keep, lo: a, hi: b})} class="${lo === a && hi === b ? "on" : ""}">${l}</button>`).join("")}</span>
-    <span class="slider">mean pass rate <input type="range" id="lo" min="0" max="100" value="${lo}"> <b id="lov">${lo}</b>% to <input type="range" id="hi" min="0" max="100" value="${hi}"> <b id="hiv">${hi}</b>%</span></div>
-    <div class="rs-sum"><span><b>${data.length.toLocaleString()}</b>of ${total.toLocaleString()} tasks</span><span><b>${cols.length}</b>settings</span><span class="note">cell = pass rate over the attempts (%)</span></div>
-    <div style="overflow-x:auto"><table class="hm"><thead><tr><th></th>${cols.map(i => `<th class="col" title="${esc(setName(i))}"><div>${esc(IDX.settings[i].model.replace(/-Flash-1017/, " Flash"))} · ${esc(IDX.settings[i].label)}</div></th>`).join("")}<th></th></tr></thead><tbody>`;
+    <label>Filter <select class="pick" id="flt">${FILT.map(([k, l]) => `<option value="${k}" ${k === flt ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    <label>Sort <select class="pick" id="sort"><option value="hard" ${sort === "hard" ? "selected" : ""}>hardest first</option><option value="easy" ${sort === "easy" ? "selected" : ""}>easiest first</option><option value="task" ${sort === "task" ? "selected" : ""}>task order</option></select></label>
+    <span class="note">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · cell = pass rate over the attempts</span></div>
+    <div style="overflow-x:auto"><table class="hm"><thead><tr><th></th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
   for (const r of view) {
     h += `<tr><td class="tid"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(tname(r.d, r.t))}</a></td>` +
-      r.rates.map((x, i) => `<td class="cell" style="${cellStyle(x)}" title="${esc(setName(cols[i]))}: ${x == null ? "not run" : Math.round(x * 100) + "%"}" ${goAttr({view: "task", d: r.d, t: r.t})}>${x == null ? "" : Math.round(x * 100)}</td>`).join("") +
-      `<td class="frac">${Math.round(r.mean * 100)}%</td></tr>`;
+      r.cells.map((c, i) => `<td class="cell" style="${cellStyle(c)}" data-c='${esc(JSON.stringify(c))}' data-s="${i}" data-t="${esc(r.t)}" data-d="${r.d}">${c && c[0] != null ? Math.round(c[0] * 100) + "%" : ""}</td>`).join("") + `</tr>`;
   }
-  h += `</tbody></table></div><div class="pager">${data.length.toLocaleString()} tasks · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div>`;
+  h += `</tbody></table></div><div class="pager">${data.length.toLocaleString()} tasks · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div><div class="hov" id="hov"></div>`;
   $("app").innerHTML = h;
   navLinks();
   $("ds").onchange = e => go({...keep, d: e.target.value, page: 0});
+  $("flt").onchange = e => go({...keep, flt: e.target.value, page: 0});
   $("sort").onchange = e => go({...keep, sort: e.target.value, page: 0});
-  const sl = () => { let a = +$("lo").value, b = +$("hi").value; if (a > b) [a, b] = [b, a]; $("lov").textContent = a; $("hiv").textContent = b; return [a, b]; };
-  $("lo").oninput = $("hi").oninput = sl;
-  $("lo").onchange = $("hi").onchange = () => { const [a, b] = sl(); go({...keep, lo: a, hi: b, page: 0}, false); };
+  const hov = $("hov");
+  $("app").querySelectorAll("td.cell").forEach(td => {
+    td.onmousemove = e => {
+      const c = JSON.parse(td.dataset.c), si = cols[+td.dataset.s];
+      hov.innerHTML = `<b>${esc(setName(si))}</b><div class="r"><span>${esc(tname(td.dataset.d, td.dataset.t))}</span></div>` + (c ? `<div class="r"><span>Pass rate</span><span>${c[0] == null ? "–" : Math.round(c[0] * 100) + "%"} (${c[1]}/${c[2]})</span></div><div class="r"><span>Avg cost</span><span>${usd(c[3])}</span></div><div class="r"><span>Avg duration</span><span>${secs(c[4])}</span></div><div class="r"><span>Avg output tokens</span><span>${tok(c[5] == null ? null : Math.round(c[5]))}</span></div>` : `<div class="r"><span>not run</span></div>`);
+      hov.style.display = "block"; hov.style.left = Math.min(e.clientX + 14, innerWidth - 260) + "px"; hov.style.top = (e.clientY + 14) + "px";
+    };
+    td.onmouseleave = () => { hov.style.display = "none"; };
+    td.onclick = () => { const si = cols[+td.dataset.s]; go({view: "trajectories", s: IDX.settings[si].key, d: td.dataset.d, q: td.dataset.t}); };
+  });
 }
 
 // ---- one task: the question and every trial ----
@@ -209,12 +219,20 @@ function trialTable(rows, opts) {
 }
 async function task(p) {
   const d = p.d, t = p.t;
-  const rows = (await trialsOf(d)).filter(x => x.t === t).sort((a, b) => a.S - b.S || a.k - b.k);
+  const rows = (await trialsOf(d)).filter(x => x.t === t);
+  const by = {};
+  rows.forEach(x => (by[x.S] = by[x.S] || []).push(x));
   const counted = rows.filter(x => x.r != null);
-  $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(tname(d, t))}</h2><span class="note">${esc(IDX.datasets[d].label)} · pass rate ${counted.length ? Math.round(100 * counted.reduce((a, x) => a + x.r, 0) / counted.length) : "–"}% over ${rows.length} trials</span></div>
-    ${await questionPanel(d, t)}<div class="rpanel"><h3>Trials</h3>${trialTable(rows, {d, from: "heatmap"})}</div>`;
+  const avg = (xs, f) => { const v = xs.map(f).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const lines = Object.keys(by).map(Number).sort((a, b) => a - b).map(si => {
+    const xs = by[si].sort((a, b) => a.k - b.k), c = xs.filter(x => x.r != null), k = c.filter(ok).length;
+    const att = xs.map(x => `<a href="#" class="${x.r == null ? "ax" : cut(x) ? "ac" : x.r >= 0.5 ? "a1" : "a0"}" title="attempt ${x.k}: ${x.r == null ? "excluded" : x.r.toFixed(2)}${x.c ? " · " + x.c : ""}" ${goAttr({view: "trial", d, t, s: IDX.settings[si].key, k: x.k, from: "heatmap"})}>${x.k}</a>`).join("");
+    return `<tr><td class="l">${esc(setName(si))}</td><td>${c.length ? Math.round(100 * k / c.length) + "%" : "–"} <span class="note">(${k}/${c.length})</span></td><td class="l"><span class="att">${att}</span></td><td>${tok(Math.round(avg(xs, x => x.i) ?? 0) || null)}</td><td>${tok(Math.round(avg(xs, x => x.o) ?? 0) || null)}</td><td>${secs(avg(xs, x => x.s))}</td><td>${usd(avg(xs, x => x.$))}</td></tr>`;
+  }).join("");
+  $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(tname(d, t))}</h2><span class="note">${esc(IDX.datasets[d].label)} · pass rate ${counted.length ? Math.round(100 * counted.filter(ok).length / counted.length) : "–"}% over ${rows.length} trials</span></div>
+    ${await questionPanel(d, t)}<div class="rpanel"><h3>Settings</h3><div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Setting</th><th>Pass rate</th><th class="l">Attempts (click to open)</th><th>Avg input tok</th><th>Avg output tok</th><th>Avg time</th><th>Avg cost</th></tr></thead><tbody>${lines}</tbody></table></div></div>`;
   wireBack({view: "heatmap", d});
-  $("app").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => go(JSON.parse(tr.dataset.go)));
+  navLinks();
   loadQuestion(d, t);
 }
 
