@@ -80,7 +80,7 @@ table.hm th.col div { writing-mode: vertical-rl; transform: rotate(180deg); whit
 table.hm td.cell { width: 18px; height: 18px; border-radius: 3px; background: var(--surface-2); cursor: pointer; }
 table.hm td.cell.c1 { background: #16a34a; } table.hm td.cell.c0 { background: #dc2626; } table.hm td.cell.cc { background: #f59e0b; }
 table.hm td.cell:hover { outline: 2px solid var(--text-primary); }
-table.hm td.tid { padding-right: 10px; white-space: nowrap; } table.hm td.tid a { color: var(--text-primary); }
+table.hm td.tid { padding-right: 10px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; } table.hm td.tid a { color: var(--text-primary); }
 table.hm td.frac { padding-left: 10px; color: var(--text-secondary); white-space: nowrap; }
 .range { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
 .range input { width: 52px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; background: var(--bg); color: var(--text-primary); }
@@ -99,7 +99,7 @@ table.hm td.frac { padding-left: 10px; color: var(--text-secondary); white-space
 .ans { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 10px 0; background: var(--bg); }
 .ans .hd { display: flex; gap: 12px; align-items: center; font-size: 13px; flex-wrap: wrap; margin-bottom: 6px; }
 
-table.hm td.cell { width: 40px; height: 24px; font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; border: 1px solid var(--border); }
+table.hm td.cell { width: 40px; min-width: 40px; max-width: 40px; height: 24px; font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; border: 1px solid var(--border); }
 .hov { position: fixed; z-index: 50; pointer-events: none; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 10px 12px; font-size: 13px; min-width: 220px; display: none; }
 .hov b { display: block; margin-bottom: 4px; } .hov .r { display: flex; justify-content: space-between; gap: 18px; color: var(--text-secondary); } .hov .r span:last-child { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .chat { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
@@ -147,6 +147,8 @@ a.backlink { font-size: 14px; }
 .pw.open .pillbtn .chev { transform: rotate(180deg); }
 .pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
 .pw.open .pop { display: block; }
+.hmleg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); margin-left: 6px; }
+.hmleg .bar { width: 90px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, hsl(0,70%,82%), hsl(60,70%,73%), hsl(120,70%,64%), hsl(120,70%,38%)); }
 .pop .grp { font-size: 12px; color: var(--text-secondary); padding: 8px 10px 4px; }
 .pop label { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; font-size: 14px; cursor: pointer; white-space: nowrap; }
 .pop label:hover { background: var(--surface-2); }
@@ -226,6 +228,7 @@ const goAttr = o => `data-go='${esc(JSON.stringify(o))}'`;
 // ---- icons (Lucide, ISC license) and pill controls ----
 const IC = {
   chev: '<path d="m6 9 6 6 6-6"/>', chevR: '<path d="m9 18 6-6-6-6"/>', back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
   db: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
   filter: '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
   sort: '<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>',
@@ -239,7 +242,7 @@ function pill(id, ic, label, value, options) {
   const flat = options.flatMap(o => o.items || [o]);
   const cur = (flat.find(([v]) => v === value) || flat[0] || ["", ""])[1];
   const item = ([v, l]) => `<label><input type="radio" name="${id}" value="${esc(v)}" ${v === value ? "checked" : ""}> ${esc(l)}</label>`;
-  return `<div class="pw" id="${id}"><button class="pillbtn" type="button">${icon(ic)}<span class="pl">${esc(label)}</span> ${esc(cur)} ${icon("chev", "chev")}</button><div class="pop">` +
+  return `<div class="pw" id="${id}"><button class="pillbtn" type="button" title="${esc(label)}" aria-label="${esc(label)}: ${esc(cur)}">${icon(ic)} ${esc(cur)} ${icon("chev", "chev")}</button><div class="pop">` +
     options.map(o => o.items ? `<div class="grp">${esc(o.group)}</div>` + o.items.map(item).join("") : item(o)).join("") + `</div></div>`;
 }
 function wirePill(id, onChange) {
@@ -264,7 +267,7 @@ function cellStyle(c) {
 }
 const FILT = [["all", "All"], ["none", "All incorrect"], ["every", "All correct"]];
 async function heatmap(p) {
-  const d = p.d || "all", sort = p.sort || "hard", flt = p.flt || "all", page = +(p.page || 0);
+  const d = p.d || "all", sort = p.sort || "task", flt = p.flt || "all", page = +(p.page || 0), cfg = p.cfg || "best";
   const dss = d === "all" ? allDs() : [d];
   const mats = await Promise.all(dss.map(x => getJSON(DATA + `matrix/${x}.json`)));
   const cols = ORDER().filter(i => mats.some(m => m && m.settings.includes(IDX.settings[i].key)));
@@ -272,22 +275,32 @@ async function heatmap(p) {
   mats.forEach((m, j) => { if (!m) return; const ci = cols.map(i => m.settings.indexOf(IDX.settings[i].key));
     m.tasks.forEach((t, ti) => { const cells = ci.map(c => c < 0 ? null : m.cells[ti][c]); const v = cells.filter(x => x && x[0] != null).map(x => x[0]);
       data.push({d: dss[j], t, cells, mean: v.length ? v.reduce((a, b) => a + b, 0) / v.length : null}); }); });
+  if (cfg === "best") {  // per model, the setting with the higher pass rate on these tasks (as the leaderboard's Best)
+    const colMean = cols.map((_, ci) => { const v = data.map(r => r.cells[ci]).filter(x => x && x[0] != null).map(x => x[0]); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : -1; });
+    const best = {};
+    cols.forEach((si, ci) => { const m = IDX.settings[si].model; if (!(m in best) || colMean[ci] > colMean[best[m]]) best[m] = ci; });
+    const keepCi = cols.map((_, ci) => ci).filter(ci => Object.values(best).includes(ci));
+    cols.splice(0, cols.length, ...keepCi.map(ci => cols[ci]));
+    data.forEach(r => { r.cells = keepCi.map(ci => r.cells[ci]); const v = r.cells.filter(x => x && x[0] != null).map(x => x[0]); r.mean = v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; });
+  }
   const total = data.length;
   data = data.filter(r => r.mean != null && (flt === "all" || (flt === "none" && r.mean === 0) || (flt === "every" && r.mean === 1) || (flt === "mixed" && r.mean > 0 && r.mean < 1)));
   if (sort === "hard") data.sort((a, b) => a.mean - b.mean); else if (sort === "easy") data.sort((a, b) => b.mean - a.mean);
   const pages = Math.max(1, Math.ceil(data.length / PAGE)), view = data.slice(page * PAGE, (page + 1) * PAGE);
-  const keep = {view: "heatmap", d, sort, flt};
-  let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", "Sort", sort, [["hard", "Hardest first"], ["easy", "Easiest first"], ["task", "Task order"]])}
-    <span class="note">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · cell = pass rate over the attempts</span></div>
+  const keep = {view: "heatmap", d, sort, flt, cfg};
+  let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", cfg === "best" ? `Best effort per model (${cols.length})` : "Best effort per model"], ["all", cfg === "all" ? `All effort levels (${cols.length})` : "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", "Sort", sort, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]])}
+    <span class="hmleg" title="Each cell: the share of the setting's attempts on the task that were correct">Pass rate <span class="bar"></span> 0 → 100%</span>
+    <span class="note">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks</span></div>
     <div style="overflow-x:auto"><table class="hm"><thead><tr><th class="l" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Dataset</th><th class="l" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
   for (const r of view) {
-    h += `<tr><td class="tid" style="color:var(--text-secondary)">${esc(IDX.datasets[r.d].label)}</td><td class="tid"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(r.t)}</a></td>` +
+    h += `<tr><td class="tid" style="color:var(--text-secondary)">${esc(IDX.datasets[r.d].label)}</td><td class="tid" title="${esc(r.t)}"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(r.t.length > 18 ? "…" + r.t.slice(-17) : r.t)}</a></td>` +
       r.cells.map((c, i) => `<td class="cell" style="${cellStyle(c)}" data-c='${esc(JSON.stringify(c))}' data-s="${i}" data-t="${esc(r.t)}" data-d="${r.d}">${c && c[0] != null ? Math.round(c[0] * 100) + "%" : ""}</td>`).join("") + `</tr>`;
   }
   h += `</tbody></table></div><div class="pager">${data.length.toLocaleString()} tasks · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div><div class="hov" id="hov"></div>`;
   $("app").innerHTML = h;
   navLinks();
   wirePill("ds", v => go({...keep, d: v, page: 0}));
+  wirePill("cfg", v => go({...keep, cfg: v, page: 0}));
   wirePill("flt", v => go({...keep, flt: v, page: 0}));
   wirePill("sort", v => go({...keep, sort: v, page: 0}));
   const hov = $("hov");
