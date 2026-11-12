@@ -114,13 +114,24 @@ select.pick.bsel { margin: 0 0 10px -12px; }
     const d0 = new Date(t0); for (let d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 1)); d.getTime() < t1; d.setUTCMonth(d.getUTCMonth() + 1))
       el("text", {x: sx(d.getTime()), y: H - M.b + 20, "text-anchor": "middle"}, svg, d.toISOString().slice(0, 7));
     el("text", {x: 14, y: (M.t + H - M.b) / 2, transform: `rotate(-90 14 ${(M.t + H - M.b) / 2})`, "text-anchor": "middle"}, svg, "simple-evals-mm Index");
-    best.sort((a, b) => a.index - b.index).forEach(s => {
-      const x = sx(Date.parse(s.released)), y = sy(s.index), c = colorOf(s);
+    const pts = best.map(s => ({s, x: sx(Date.parse(s.released)), y: sy(s.index)}));
+    for (const {s, x, y} of pts) {
+      const c = colorOf(s);
       if (s.lo != null) el("line", {x1: x, x2: x, y1: sy(s.lo), y2: sy(s.hi), stroke: c, "stroke-width": 2, opacity: 0.5}, svg);
       el("circle", {cx: x, cy: y, r: 6, fill: c}, svg).appendChild(el("title", {}, null, `${name(s)} · ${s.index.toFixed(1)} [${s.lo}–${s.hi}] · released ${s.released}`));
-      const right = x > W - M.r - 170;  // near the right edge: the label goes to the left of the point
-      el("text", {class: "lbl", x: right ? x - 9 : x + 9, y: y + 4, "text-anchor": right ? "end" : "start"}, svg, `${s.model}`);
-    });
+    }
+    // labels: the first of right / left / above / below that overlaps no other label or point and stays inside
+    const taken = pts.map(p => ({x0: p.x - 7, x1: p.x + 7, y0: p.y - 7, y1: p.y + 7}));
+    const hit = b => taken.some(o => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
+    for (const {s, x, y} of pts.sort((a, b) => b.s.index - a.s.index)) {
+      const w = s.model.length * 6.6 + 4;
+      const cands = [[x + 9, y + 4, "start"], [x - 9, y + 4, "end"], [x, y - 11, "middle"], [x, y + 19, "middle"], [x + 9, y - 10, "start"], [x - 9, y - 10, "end"], [x + 9, y + 18, "start"], [x - 9, y + 18, "end"]];
+      for (const [lx, ly, an] of cands) {
+        const b0 = an === "start" ? lx : an === "end" ? lx - w : lx - w / 2, b = {x0: b0, x1: b0 + w, y0: ly - 11, y1: ly + 3};
+        if (b.x0 < M.l || b.x1 > W - 4 || hit(b)) continue;
+        taken.push(b); el("text", {class: "lbl", x: lx, y: ly, "text-anchor": an}, svg, s.model); break;
+      }
+    }
   })();
 
   // 2. every setting, ranked
