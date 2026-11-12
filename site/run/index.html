@@ -98,6 +98,11 @@ table.hm td.frac { padding-left: 10px; color: var(--text-secondary); white-space
 table.hm td.cell { width: 40px; height: 24px; font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; border: 1px solid var(--border); }
 .hov { position: fixed; z-index: 50; pointer-events: none; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 10px 12px; font-size: 13px; min-width: 220px; display: none; }
 .hov b { display: block; margin-bottom: 4px; } .hov .r { display: flex; justify-content: space-between; gap: 18px; color: var(--text-secondary); } .hov .r span:last-child { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 4px; font-size: 13px; color: var(--text-secondary); }
+.stats b { display: block; font-size: 17px; color: var(--text-primary); }
+.ttabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: 16px 0 0; }
+.ttabs a { padding: 8px 16px; color: var(--text-secondary); text-decoration: none; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer; font-size: 14px; }
+.ttabs a.on { color: var(--text-primary); border-bottom-color: var(--text-primary); }
 .att { display: inline-flex; gap: 3px; } .att a { display: inline-block; min-width: 22px; text-align: center; border-radius: 4px; font-size: 11px; padding: 1px 4px; text-decoration: none; }
 .att a.a1 { background: #16a34a; color: #fff; } .att a.a0 { background: #dc2626; color: #fff; } .att a.ax { background: var(--surface-2); color: var(--text-secondary); } .att a.ac { background: #f59e0b; color: #fff; }
 .slider { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; }
@@ -110,7 +115,7 @@ a.backlink { font-size: 14px; }
       <div id="runhead"><p class="back"><a href="../#leaderboard">&larr; Leaderboard</a></p>
       <h2>Run</h2>
       <p class="note">Every attempt of every task for every leaderboard setting. Questions and images load from the dataset's own Hugging Face repository (dataset viewer); gated or private datasets show our side only.</p>
-      <nav class="rtabs" id="tabs"><a data-v="heatmap">Heatmap</a><a data-v="trajectories">Trajectories</a></nav></div>
+      <nav class="rtabs" id="tabs"><a data-v="heatmap">Heatmap</a><a data-v="trials">Trials</a></nav></div>
       <div id="app"></div>
     </div>
   </section>
@@ -146,14 +151,14 @@ function badge(x) { return !x ? `<span class="badge bx">–</span>` : x.r == nul
 async function init() {
   IDX = await getJSON(DATA + "index.json");
 
-  $("tabs").onclick = e => { const v = e.target.dataset.v; if (v) go({...P(), view: v, t: null, k: null, s: v === "trajectories" ? P().s : null}); };
+  $("tabs").onclick = e => { const v = e.target.dataset.v; if (v) go({view: v, d: P().d}); };
   route();
 }
 function route() {
   const p = P(), v = p.view || "heatmap";
   $("runhead").hidden = v === "task" || v === "trial";  // detail pages: only "Back"
-  [...$("tabs").children].forEach(a => a.classList.toggle("on", a.dataset.v === v || (v === "task" && a.dataset.v === "heatmap") || (v === "trial" && a.dataset.v === (p.from || "heatmap"))));
-  ({heatmap, trajectories, trial, task}[v] || heatmap)(p);
+  [...$("tabs").children].forEach(a => a.classList.toggle("on", a.dataset.v === (v === "trajectories" ? "trials" : v)));
+  ({heatmap, trials, trajectories: trials, trial, task}[v] || heatmap)(p);
   window.scrollTo(0, 0);
 }
 const navLinks = () => $("app").querySelectorAll("[data-go]").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go)); });
@@ -204,7 +209,7 @@ async function heatmap(p) {
       hov.style.display = "block"; hov.style.left = Math.min(e.clientX + 14, innerWidth - 260) + "px"; hov.style.top = (e.clientY + 14) + "px";
     };
     td.onmouseleave = () => { hov.style.display = "none"; };
-    td.onclick = () => { const si = cols[+td.dataset.s]; go({view: "trajectories", s: IDX.settings[si].key, d: td.dataset.d, q: td.dataset.t}); };
+    td.onclick = () => { const si = cols[+td.dataset.s]; go({view: "trials", s: IDX.settings[si].key, d: td.dataset.d, q: td.dataset.t}); };
   });
 }
 
@@ -237,27 +242,31 @@ async function task(p) {
   loadQuestion(d, t);
 }
 
-// ---- trajectories: the trials of one setting on one dataset ----
-const FILTERS = [["all", "All"], ["right", "Correct"], ["wrong", "Wrong"], ["cut", "Cut off"], ["excl", "Excluded"]];
-async function trajectories(p) {
-  const si = Math.max(0, setIdx(p.s)), st = IDX.settings[si];
-  const d = p.d && st.datasets.includes(p.d) ? p.d : st.datasets[0], f = p.f || "all", qs = (p.q || "").toLowerCase(), page = +(p.page || 0);
-  const rs = (await trialsOf(d)).filter(x => x.S === si);
-  const view = rs.filter(x => (f === "all" || (f === "right" && ok(x)) || (f === "wrong" && x.r != null && x.r < 0.5) || (f === "cut" && cut(x)) || (f === "excl" && x.r == null)) && (!qs || x.t.toLowerCase().includes(qs) || (x.x || "").toLowerCase().includes(qs)));
-  const counted = rs.filter(x => x.r != null), out = rs.filter(x => x.o != null), pages = Math.max(1, Math.ceil(view.length / PAGE));
-  const keep = {view: "trajectories", s: st.key, d, f, q: p.q};
-  let opts = "", last = null;
-  IDX.settings.forEach((x, i) => { if (x.model !== last) { if (last) opts += "</optgroup>"; opts += `<optgroup label="${esc(x.model)}">`; last = x.model; } opts += `<option value="${esc(x.key)}" ${i === si ? "selected" : ""}>${esc(setName(i))}</option>`; });
-  $("app").innerHTML = `<div class="rs-controls"><label>Setting <select class="pick" id="set">${opts}</optgroup></select></label><label>Dataset <select class="pick" id="ds">${IDX.order.filter(k => st.datasets.includes(k)).map(k => `<option value="${k}" ${k === d ? "selected" : ""}>${esc(IDX.datasets[k].label)}</option>`).join("")}</select></label></div>
-    <div class="rs-sum"><span><b>${rs.length.toLocaleString()}</b>trials</span><span><b>${counted.length ? (100 * counted.reduce((a, x) => a + x.r, 0) / counted.length).toFixed(1) : "–"}</b>mean reward (%)</span><span><b>${rs.filter(cut).length}</b>cut off</span><span><b>${rs.length - counted.length}</b>excluded</span>
-    <span><b>${tok(out.length ? Math.round(out.reduce((a, x) => a + (x.i || 0), 0) / out.length) : null)} / ${tok(out.length ? Math.round(out.reduce((a, x) => a + x.o, 0) / out.length) : null)}</b>input / output tokens</span><span><b>${secs(rs.length ? rs.reduce((a, x) => a + (x.s || 0), 0) / rs.length : null)}</b>per request</span><span><b>${(() => { const c = rs.reduce((a, x) => a + (x.$ || 0), 0); return c ? "$" + c.toFixed(2) : "–"; })()}</b>cost</span></div>
-    <div class="rs-controls"><span class="seg">${FILTERS.map(([k, l]) => `<button ${goAttr({...keep, f: k, page: 0})} class="${k === f ? "on" : ""}">${l}</button>`).join("")}</span><input class="search" id="q" placeholder="Search task id or answer…" value="${esc(p.q || "")}"></div>
-    ${trialTable(view.slice(page * PAGE, (page + 1) * PAGE), {d, task: true, from: "trajectories"})}
-    <div class="pager">${view.length.toLocaleString()} trials · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div>`;
+// ---- trials: every trial of a dataset, filtered by model, outcome and search ----
+const OUTCOMES = [["all", "All outcomes"], ["pass", "Passed"], ["fail", "Failed"], ["cut", "Cut off"], ["excl", "Excluded"]];
+async function trials(p) {
+  const d = p.d && allDs().includes(p.d) ? p.d : allDs()[0], s = p.s || "all", o = p.o || "all", qs = (p.q || "").toLowerCase(), page = +(p.page || 0);
+  const si = s === "all" ? -1 : setIdx(s);
+  const all = await trialsOf(d);
+  const view = all.filter(x => (si < 0 || x.S === si) && (o === "all" || (o === "pass" && ok(x)) || (o === "fail" && x.r != null && x.r < 0.5) || (o === "cut" && cut(x)) || (o === "excl" && x.r == null)) &&
+    (!qs || x.t.toLowerCase().includes(qs) || tname(d, x.t).toLowerCase().includes(qs) || (x.x || "").toLowerCase().includes(qs))).sort((a, b) => a.S - b.S || a.t.localeCompare(b.t) || a.k - b.k);
+  const pages = Math.max(1, Math.ceil(view.length / PAGE)), keep = {view: "trials", d, s, o, q: p.q};
+  const counted = view.filter(x => x.r != null), cost = view.reduce((a, x) => a + (x.$ || 0), 0);
+  let opts = `<option value="all">All models</option>`, last = null;
+  IDX.settings.forEach((x, i) => { if (!x.datasets.includes(d)) return; if (x.model !== last) { if (last) opts += "</optgroup>"; opts += `<optgroup label="${esc(x.model)}">`; last = x.model; } opts += `<option value="${esc(x.key)}" ${i === si ? "selected" : ""}>${esc(setName(i))}</option>`; });
+  $("app").innerHTML = `<div class="rs-controls"><label>Dataset <select class="pick" id="ds">${allDs().map(k => `<option value="${k}" ${k === d ? "selected" : ""}>${esc(IDX.datasets[k].label)}</option>`).join("")}</select></label>
+    <label>Model <select class="pick" id="set">${opts}</optgroup></select></label>
+    <label>Outcome <select class="pick" id="out">${OUTCOMES.map(([k, l]) => `<option value="${k}" ${k === o ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    <input class="search" id="q" placeholder="Search task or answer…" value="${esc(p.q || "")}"></div>
+    <div class="rs-sum"><span><b>${view.length.toLocaleString()}</b>trials</span><span><b>${counted.length ? (100 * counted.filter(ok).length / counted.length).toFixed(1) + "%" : "–"}</b>passed</span><span><b>${view.filter(cut).length}</b>cut off</span><span><b>${cost ? "$" + cost.toFixed(2) : "–"}</b>cost</span></div>
+    <div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Model</th><th class="l">Task</th><th>Attempt</th><th>Outcome</th><th class="l">Cause</th><th>Input tok</th><th>Output tok</th><th>Time</th><th>Cost</th></tr></thead><tbody>` +
+    view.slice(page * PAGE, (page + 1) * PAGE).map(x => `<tr class="row" ${goAttr({view: "trial", d, t: x.t, s: IDX.settings[x.S].key, k: x.k})}><td class="l">${esc(setName(x.S))}</td><td class="l">${esc(tname(d, x.t))}</td><td>${x.k}</td><td>${badge(x)}</td><td class="l">${x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</td><td>${tok(x.i)}</td><td>${tok(x.o)}</td><td>${secs(x.s)}</td><td>${usd(x.$)}</td></tr>`).join("") +
+    `</tbody></table></div><div class="pager">${view.length.toLocaleString()} trials · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div>`;
   navLinks();
   $("app").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => go(JSON.parse(tr.dataset.go)));
-  $("set").onchange = e => go({...keep, s: e.target.value, page: 0});
   $("ds").onchange = e => go({...keep, d: e.target.value, page: 0});
+  $("set").onchange = e => go({...keep, s: e.target.value, page: 0});
+  $("out").onchange = e => go({...keep, o: e.target.value, page: 0});
   $("q").onchange = e => go({...keep, q: e.target.value, page: 0}, false);
 }
 
@@ -268,21 +277,24 @@ function configHTML(st) {
   return `<dl class="rkv"><dt>Model</dt><dd><code>${esc(c.model || "")}</code></dd><dt>Effort</dt><dd>${esc(c.effort || "default")}</dd><dt>Max output tokens</dt><dd>${esc(c.max_output_tokens ?? "endpoint maximum")}</dd><dt>Sampling</dt><dd>${esc(samp)}</dd><dt>Judge</dt><dd>${esc(c.judge || "–")}</dd></dl>`;
 }
 async function trial(p) {
-  const d = p.d, t = p.t, si = setIdx(p.s), k = +p.k, st = IDX.settings[si];
+  const d = p.d, t = p.t, si = setIdx(p.s), k = +p.k, st = IDX.settings[si], tab = p.tab || "trajectory";
   const all = (await trialsOf(d)).filter(x => x.t === t).sort((a, b) => a.S - b.S || a.k - b.k);
   const i = all.findIndex(x => x.S === si && x.k === k), x = all[i];
-  const txt = (((await getJSON(DATA + `text/${encodeURIComponent(p.s)}/${d}.json`)) || {}).text || {})[`${t}|${k}`] || [];
-  const [ans, reas, judge] = txt;
+  const [ans, reas, judge] = (((await getJSON(DATA + `text/${encodeURIComponent(p.s)}/${d}.json`)) || {}).text || {})[`${t}|${k}`] || [];
   const nav = j => j >= 0 && j < all.length ? `<a href="#" ${goAttr({...p, s: IDX.settings[all[j].S].key, k: all[j].k})}>${j < i ? "← Previous" : "Next →"}</a>` : `<span>${j < i ? "← Previous" : "Next →"}</span>`;
-  $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(tname(d, t))}</h2>${badge(x)}<span class="note">${esc(setName(si))} · attempt ${k}</span><div class="nav2">${nav(i - 1)}<span>${i + 1} / ${all.length} trials of this task</span>${nav(i + 1)}</div></div>
-    <div class="rgrid2"><div class="rpanel"><h3>Evaluation setting</h3>${configHTML(st)}</div><div class="rpanel"><h3>This trial</h3><dl class="rkv"><dt>Reward</dt><dd>${badge(x)} ${x && x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</dd><dt>Input tokens</dt><dd>${tok(x && x.i)}</dd><dt>Output tokens</dt><dd>${tok(x && x.o)}</dd><dt>Duration</dt><dd>${secs(x && x.s)}</dd><dt>Cost</dt><dd>${usd(x && x.$)}</dd><dt>Finish</dt><dd>${esc((x && x.f) || "–")}</dd></dl></div></div>
-    ${await questionPanel(d, t)}
-    ${reas ? `<div class="rpanel"><h3>Reasoning (start)</h3><pre>${esc(reas)}</pre></div>` : ""}
-    <div class="rpanel"><h3>Answer</h3>${x && x.x != null ? `<div class="fld"><b>Extracted:</b> ${esc(x.x)}</div>` : ""}<pre>${esc(ans || "(no answer)")}</pre></div>
-    ${judge ? `<div class="rpanel"><h3>Judge</h3><pre>${esc(judge)}</pre></div>` : ""}`;
+  const TABS = [["trajectory", "Trajectory"], ["question", "Question"], ["verifier", "Verifier"], ["setting", "Setting"]];
+  let body = "";
+  if (tab === "trajectory") body = (reas ? `<div class="rpanel"><h3>Reasoning <span class="note">(start)</span></h3><pre>${esc(reas)}</pre></div>` : "") + `<div class="rpanel"><h3>Answer</h3><pre>${esc(ans || "(no answer)")}</pre></div>`;
+  else if (tab === "question") body = await questionPanel(d, t);
+  else if (tab === "verifier") body = `<div class="rpanel"><h3>Verification</h3><dl class="rkv"><dt>Grading</dt><dd>${esc(IDX.datasets[d].grading || "")}</dd><dt>Reward</dt><dd>${badge(x)} ${x && x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</dd><dt>Extracted answer</dt><dd>${esc((x && x.x) ?? "–")}</dd></dl></div>` + (judge ? `<div class="rpanel"><h3>Judge reply</h3><pre>${esc(judge)}</pre></div>` : "");
+  else body = `<div class="rpanel"><h3>Evaluation setting</h3>${configHTML(st)}</div>`;
+  $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(tname(d, t))}</h2>${badge(x)}<div class="nav2">${nav(i - 1)}<span>${i + 1} / ${all.length}</span>${nav(i + 1)}</div></div>
+    <div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k}</b>attempt</span><span><b>${tok(x && x.i)} / ${tok(x && x.o)}</b>input / output tokens</span><span><b>${secs(x && x.s)}</b>duration</span><span><b>${usd(x && x.$)}</b>cost</span><span><b>${esc((x && x.f) || "–")}</b>finish</span><span><b>${esc(IDX.datasets[d].label)}</b>dataset</span></div>
+    <nav class="ttabs">${TABS.map(([v, l]) => `<a ${goAttr({...p, tab: v})} class="${v === tab ? "on" : ""}">${l}</a>`).join("")}</nav>${body}`;
   wireBack({view: "task", d, t});
   navLinks();
-  loadQuestion(d, t);
+  $("app").querySelectorAll(".ttabs a").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go), false); });  // tabs replace, so Back leaves the trial
+  if (tab === "question") loadQuestion(d, t);
 }
 
 // ---- the question, from the Hub dataset viewer ----
