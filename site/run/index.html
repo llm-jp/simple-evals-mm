@@ -245,11 +245,11 @@ async function task(p) {
 // ---- trials: every trial of a dataset, filtered by model, outcome and search ----
 const OUTCOMES = [["all", "All outcomes"], ["pass", "Passed"], ["fail", "Failed"], ["cut", "Cut off"], ["excl", "Excluded"]];
 async function trials(p) {
-  const d = p.d && allDs().includes(p.d) ? p.d : allDs()[0], s = p.s || "all", o = p.o || "all", qs = (p.q || "").toLowerCase(), page = +(p.page || 0);
+  const d = p.d && allDs().includes(p.d) ? p.d : allDs()[0], s = p.s || "all", o = p.o || "all", page = +(p.page || 0);
   const si = s === "all" ? -1 : setIdx(s);
   const all = await trialsOf(d);
   const view = all.filter(x => (si < 0 || x.S === si) && (o === "all" || (o === "pass" && ok(x)) || (o === "fail" && x.r != null && x.r < 0.5) || (o === "cut" && cut(x)) || (o === "excl" && x.r == null)) &&
-    (!qs || x.t.toLowerCase().includes(qs) || tname(d, x.t).toLowerCase().includes(qs) || (x.x || "").toLowerCase().includes(qs))).sort((a, b) => a.S - b.S || a.t.localeCompare(b.t) || a.k - b.k);
+    (!p.q || x.t === p.q)).sort((a, b) => a.S - b.S || a.t.localeCompare(b.t) || a.k - b.k);
   const pages = Math.max(1, Math.ceil(view.length / PAGE)), keep = {view: "trials", d, s, o, q: p.q};
   const counted = view.filter(x => x.r != null), cost = view.reduce((a, x) => a + (x.$ || 0), 0);
   let opts = `<option value="all">All models</option>`, last = null;
@@ -257,8 +257,10 @@ async function trials(p) {
   $("app").innerHTML = `<div class="rs-controls"><label>Dataset <select class="pick" id="ds">${allDs().map(k => `<option value="${k}" ${k === d ? "selected" : ""}>${esc(IDX.datasets[k].label)}</option>`).join("")}</select></label>
     <label>Model <select class="pick" id="set">${opts}</optgroup></select></label>
     <label>Outcome <select class="pick" id="out">${OUTCOMES.map(([k, l]) => `<option value="${k}" ${k === o ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-    <input class="search" id="q" placeholder="Search task or answer…" value="${esc(p.q || "")}"></div>
-    <div class="rs-sum"><span><b>${view.length.toLocaleString()}</b>trials</span><span><b>${counted.length ? (100 * counted.filter(ok).length / counted.length).toFixed(1) + "%" : "–"}</b>passed</span><span><b>${view.filter(cut).length}</b>cut off</span><span><b>${cost ? "$" + cost.toFixed(2) : "–"}</b>cost</span></div>
+    ${p.q ? `<span class="badge bx" style="font-size:13px;padding:4px 10px">task ${esc(tname(d, p.q))} <a href="#" ${goAttr({...keep, q: null, page: 0})}>×</a></span>` : ""}</div>
+    <div class="rs-sum"><span><b>${new Set(view.map(x => x.t)).size.toLocaleString()}</b>tasks</span><span><b>${(() => { const ks = [...new Set(view.map(x => x.k))]; return ks.length ? Math.max(...ks) : "–"; })()}</b>attempts per task</span><span><b>${view.length.toLocaleString()}</b>trials</span>
+    <span><b>${counted.length ? (100 * counted.filter(ok).length / counted.length).toFixed(1) + "%" : "–"}</b>passed</span><span><b>${view.filter(cut).length}</b>cut off</span><span><b>${view.length - counted.length}</b>excluded</span>
+    <span><b>${tok(view.length ? Math.round(view.reduce((a, x) => a + (x.o || 0), 0) / view.length) : null)}</b>output tokens / trial</span><span><b>${secs(view.length ? view.reduce((a, x) => a + (x.s || 0), 0) / view.length : null)}</b>duration / trial</span><span><b>${cost ? "$" + cost.toFixed(2) : "–"}</b>cost</span></div>
     <div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Model</th><th class="l">Task</th><th>Attempt</th><th>Outcome</th><th class="l">Cause</th><th>Input tok</th><th>Output tok</th><th>Time</th><th>Cost</th></tr></thead><tbody>` +
     view.slice(page * PAGE, (page + 1) * PAGE).map(x => `<tr class="row" ${goAttr({view: "trial", d, t: x.t, s: IDX.settings[x.S].key, k: x.k})}><td class="l">${esc(setName(x.S))}</td><td class="l">${esc(tname(d, x.t))}</td><td>${x.k}</td><td>${badge(x)}</td><td class="l">${x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</td><td>${tok(x.i)}</td><td>${tok(x.o)}</td><td>${secs(x.s)}</td><td>${usd(x.$)}</td></tr>`).join("") +
     `</tbody></table></div><div class="pager">${view.length.toLocaleString()} trials · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div>`;
@@ -267,7 +269,6 @@ async function trials(p) {
   $("ds").onchange = e => go({...keep, d: e.target.value, page: 0});
   $("set").onchange = e => go({...keep, s: e.target.value, page: 0});
   $("out").onchange = e => go({...keep, o: e.target.value, page: 0});
-  $("q").onchange = e => go({...keep, q: e.target.value, page: 0}, false);
 }
 
 // ---- one trial ----
