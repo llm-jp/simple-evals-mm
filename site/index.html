@@ -468,12 +468,12 @@
         const b = { x0: bx0, x1: bx0 + w, y0: ly - fs + 1, y1: ly - fs + 1 + h };
         if (!inside(b) || hit(b)) continue;
         placed.push(b);
-        const t = el("text", { class: cls, x: lx, y: ly, "text-anchor": anchor }, svg);
-        if (org) t.setAttribute("data-org", org);
-        if (model) t.setAttribute("data-model", model);
-        if (fill) t.style.fill = fill;
-        if (FS !== 1) t.style.fontSize = fs + "px";
-        t.textContent = text;
+        const label = el("text", { class: cls, x: lx, y: ly, "text-anchor": anchor }, svg);
+        if (org) label.setAttribute("data-org", org);
+        if (model) label.setAttribute("data-model", model);
+        if (fill) label.style.fill = fill;
+        if (FS !== 1) label.style.fontSize = fs + "px";
+        label.textContent = text;
         return true;
       }
       return false;
