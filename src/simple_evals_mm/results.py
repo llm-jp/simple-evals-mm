@@ -182,6 +182,9 @@ def trials(st: store_mod.JobStore, name: str) -> tuple[list[dict], dict[str, lis
                     "i": usage.get("prompt_tokens"), "o": usage.get("completion_tokens"), "$": usage.get("cost_usd"),
                     "s": (traj.get("extra") or {}).get("duration_seconds"),
                     "f": (last.get("extra") or {}).get("finish_reason"),
+                    # reasoning tokens the provider reported (None = not reported): tells "no reasoning" from
+                    # "reasoned, but the text is not returned"
+                    "R": ((last.get("metrics") or {}).get("extra") or {}).get("reasoning_tokens"),
                     "x": _clip(vr.extracted, 200) if vr is not None else None,
                 })
                 texts[f"{tid}|{k}"] = [
