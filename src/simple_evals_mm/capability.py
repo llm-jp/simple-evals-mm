@@ -179,7 +179,7 @@ def scores(data: dict) -> dict:
 
 
 def build_js(spec_path: str, results_dir: str, out: str, anchors: tuple[str, str], n_boot: int = 100) -> dict:
-    """site/trends.js: the Anchor Index of every setting (90% interval), release dates, benchmark curves and scores."""
+    """site/trends.js: the simple-evals-mm Index of every setting (90% interval), release dates, benchmark curves and scores."""
     from simple_evals_mm import leaderboard as lb
 
     spec = lb.load_spec(spec_path)
