@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="simple-evals-mm evaluates LLMs and VLMs on 50+ English and Japanese text and image benchmarks, with results that can be reproduced, audited and checked against model cards.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=ee718b8650">
+<link rel="stylesheet" href="style.css?v=9ce2cbf51f">
 </head>
 <body>
 
@@ -35,7 +35,7 @@
       <a class="brand" href="#top">simple-evals-mm</a>
     </div>
     <nav class="links" aria-label="Site">
-      <a href="#leaderboard">Leaderboard</a>
+      <a aria-current="page" href="#leaderboard">Leaderboard</a>
       <a href="run/">Run</a>
       <a href="#data">Data</a>
       <a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">Code</a>
@@ -60,7 +60,7 @@
         <div class="pick-wrap">
           <select class="pick" id="pick-subject" aria-label="Score shown on the chart and in the table"></select></div>
         <div class="filter-wrap" data-filter="tasks" hidden>
-          <button class="filter-btn" aria-expanded="false" title="Tasks averaged into Overall">Tasks &#9662;</button>
+          <button class="filter-btn" aria-expanded="false" title="Tasks averaged into Overall">Tasks <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
           <div class="panel" hidden>
             <div class="presets">
               <button data-preset="all">All</button><button data-preset="ja">Japanese</button><button data-preset="en">English</button>
@@ -71,7 +71,7 @@
         </div>
         <div class="meta" id="lb-meta">Loading results…</div>
         <div class="filter-wrap right" data-filter="cfg">
-          <button class="filter-btn" aria-expanded="false">Configs &#9662;</button>
+          <button class="filter-btn" aria-expanded="false">Configs <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
           <div class="panel" hidden>
             <div class="presets">
               <button data-preset="all">All</button><button data-preset="proprietary">Proprietary</button>
@@ -109,7 +109,7 @@
           <button data-v="best" aria-pressed="true">Best</button>
           <button data-v="all" aria-pressed="false">All effort levels</button>
         </span>
-        <div class="filter-wrap right" data-filter="cfg"><button class="filter-btn" aria-expanded="false">Configs &#9662;</button>
+        <div class="filter-wrap right" data-filter="cfg"><button class="filter-btn" aria-expanded="false">Configs <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
           <div class="panel" hidden>
             <div class="presets">
               <button data-preset="all">All</button><button data-preset="proprietary">Proprietary</button>
@@ -180,24 +180,6 @@ uv run sem job show jobs/&lt;job&gt;                                            
 <script src="data.js?v=eb59c854b1"></script>
 <script>
 (function () {
-  // theme: each click shows the other theme; when that equals the system setting the page follows the system again
-  const themeBtn = document.getElementById("theme-toggle");
-  const sysTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  function showTheme() {
-    const root = document.documentElement, shown = root.dataset.theme || sysTheme();
-    root.dataset.themeShown = shown;
-    const other = shown === "dark" ? "light" : "dark";
-    const label = `Theme: ${shown}${root.dataset.theme ? "" : " (system)"} (click for ${other})`;
-    themeBtn.title = label; themeBtn.setAttribute("aria-label", label);
-  }
-  themeBtn.addEventListener("click", () => {
-    const root = document.documentElement, next = (root.dataset.theme || sysTheme()) === "dark" ? "light" : "dark";
-    if (next === sysTheme()) delete root.dataset.theme; else root.dataset.theme = next;
-    try { root.dataset.theme ? localStorage.setItem("theme", root.dataset.theme) : localStorage.removeItem("theme"); } catch (e) {}
-    showTheme();
-  });
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", showTheme);
-  showTheme();
   const D = window.LB;
   if (!D || !D.tasks || !D.models) {
     document.getElementById("lb-meta").textContent = "No results yet: site/data.js is missing. Generate it with `sem site build` once the jobs are verified.";
@@ -281,7 +263,7 @@ uv run sem job show jobs/&lt;job&gt;                                            
         row.querySelector(".cnt").textContent = `${n}/${cs.length}`;
         row.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", String(on(m, b.dataset.c))));
       }
-      w.querySelector(".filter-btn").innerHTML = `Configs (${state.cfg.size}/${ALL_CFG.length}) &#9662;`;
+      w.querySelector(".filter-btn").innerHTML = `Configs (${state.cfg.size}/${ALL_CFG.length}) <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
     }
   }
   function closePanels(except) {
@@ -323,7 +305,7 @@ uv run sem job show jobs/&lt;job&gt;                                            
   function renderTaskPanel() {
     taskWrap.hidden = !isOverall();
     taskWrap.querySelectorAll("input[data-t]").forEach(cb => { cb.checked = state.ovTasks.has(cb.dataset.t); });
-    taskWrap.querySelector(".filter-btn").innerHTML = `Tasks (${state.ovTasks.size}/${ALL_TASKS.length}) &#9662;`;
+    taskWrap.querySelector(".filter-btn").innerHTML = `Tasks (${state.ovTasks.size}/${ALL_TASKS.length}) <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
   }
   function tasksChanged() {
     renderTaskPanel(); state.sortKey = null; render();
@@ -750,5 +732,6 @@ uv run sem job show jobs/&lt;job&gt;                                            
   render();
 })();
 </script>
+<script src="theme.js"></script>
 </body>
 </html>

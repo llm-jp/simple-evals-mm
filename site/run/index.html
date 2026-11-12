@@ -23,9 +23,13 @@
     </div>
     <nav class="links" aria-label="Site">
       <a href="../#leaderboard">Leaderboard</a>
-      <a href="./">Run</a>
+      <a aria-current="page" href="./">Run</a>
       <a href="../#data">Data</a>
       <a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">Code</a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Theme: system" title="Theme: system">
+        <svg class="ic-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg class="ic-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      </button>
     </nav>
   </div>
 </header>
@@ -133,6 +137,29 @@ table.hm td.cell { width: 40px; height: 24px; font-size: 11px; text-align: cente
 .slider { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; }
 .slider input[type=range] { width: 140px; }
 a.backlink { font-size: 14px; }
+
+/* pill controls with popovers (as on speed1313.github.io) */
+.pw { position: relative; display: inline-block; }
+.pillbtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.pillbtn:hover, .pw.open .pillbtn { background: var(--surface-2); }
+.pillbtn .pl { color: var(--text-secondary); }
+.pillbtn svg, .ic { width: 16px; height: 16px; flex: none; }
+.pw.open .pillbtn .chev { transform: rotate(180deg); }
+.pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
+.pw.open .pop { display: block; }
+.pop .grp { font-size: 12px; color: var(--text-secondary); padding: 8px 10px 4px; }
+.pop label { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.pop label:hover { background: var(--surface-2); }
+.pop input { accent-color: var(--text-primary); }
+.ctl { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+.ctl .note { margin-left: 8px; }
+.think > summary { font-size: 14.5px !important; gap: 8px !important; padding: 4px 10px 4px 6px; border-radius: 999px; }
+.think > summary:hover { background: var(--surface-2); }
+.think > summary::before { content: none !important; }
+.think > summary .chev2 { transition: transform .15s; }
+.think[open] > summary .chev2 { transform: rotate(90deg); }
+a.backlink { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; border-radius: 999px; color: var(--text-primary); text-decoration: none; }
+a.backlink:hover { background: var(--surface-2); }
 </style>
 <main id="top">
   <section id="run">
@@ -173,7 +200,7 @@ const trialsOf = async d => ((await getJSON(DATA + `trials/${d}.json`)) || {rows
 const answersOf = async d => ((await getJSON(DATA + `answers/${d}.json`)) || {}).answers || {};
 const prompts_cache = {};
 const prompts = async d => (prompts_cache[d] = ((await getJSON(DATA + `prompts/${d}.json`)) || {}).prompts || {});
-const back = () => `<p class="back"><a href="#" class="backlink" id="back">&larr; Back</a></p>`;
+const back = () => `<p class="back"><a href="#" class="backlink" id="back">${icon("back")} Back</a></p>`;
 function wireBack(fallback) { $("back").onclick = e => { e.preventDefault(); history.length > 1 ? history.back() : go(fallback); }; }
 function badge(x) { return !x ? `<span class="badge bx">–</span>` : x.r == null ? `<span class="badge bx">excluded</span>` : `<span class="badge ${x.r >= 0.5 ? "b1" : "b0"}">${(+x.r).toFixed(2)}</span>`; }
 async function init() {
@@ -191,6 +218,39 @@ function route() {
 }
 const navLinks = () => $("app").querySelectorAll("[data-go]").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go)); });
 const goAttr = o => `data-go='${esc(JSON.stringify(o))}'`;
+
+
+// ---- icons (Lucide, ISC license) and pill controls ----
+const IC = {
+  chev: '<path d="m6 9 6 6 6-6"/>', chevR: '<path d="m9 18 6-6-6-6"/>', back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  db: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+  filter: '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+  sort: '<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>',
+  bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+  check: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+};
+const icon = (k, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]}</svg>`;
+// options: [[value, label]] or [{group, items: [[value, label]]}]
+function pill(id, ic, label, value, options) {
+  const flat = options.flatMap(o => o.items || [o]);
+  const cur = (flat.find(([v]) => v === value) || flat[0] || ["", ""])[1];
+  const item = ([v, l]) => `<label><input type="radio" name="${id}" value="${esc(v)}" ${v === value ? "checked" : ""}> ${esc(l)}</label>`;
+  return `<div class="pw" id="${id}"><button class="pillbtn" type="button">${icon(ic)}<span class="pl">${esc(label)}</span> ${esc(cur)} ${icon("chev", "chev")}</button><div class="pop">` +
+    options.map(o => o.items ? `<div class="grp">${esc(o.group)}</div>` + o.items.map(item).join("") : item(o)).join("") + `</div></div>`;
+}
+function wirePill(id, onChange) {
+  const w = $(id); if (!w) return;
+  w.querySelector(".pillbtn").onclick = e => { e.stopPropagation(); document.querySelectorAll(".pw.open").forEach(x => x !== w && x.classList.remove("open")); w.classList.toggle("open"); };
+  w.querySelectorAll("input").forEach(i => i.onchange = () => { w.classList.remove("open"); onChange(i.value); });
+}
+document.addEventListener("click", e => { if (!e.target.closest(".pw")) document.querySelectorAll(".pw.open").forEach(x => x.classList.remove("open")); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".pw.open").forEach(x => x.classList.remove("open")); });
+const settingOptions = (d, all) => {
+  const groups = [], seen = {};
+  IDX.settings.forEach(x => { if (d && !x.datasets.includes(d)) return; if (!seen[x.model]) { seen[x.model] = {group: x.model, items: []}; groups.push(seen[x.model]); } seen[x.model].items.push([x.key, setName(IDX.settings.indexOf(x))]); });
+  return all ? [["all", "All models"], ...groups] : groups;
+};
 
 // ---- heatmap: tasks x settings, pass rate over the attempts (red 0 % -> green 100 %) ----
 function cellStyle(c) {
@@ -214,9 +274,7 @@ async function heatmap(p) {
   if (sort === "hard") data.sort((a, b) => a.mean - b.mean); else if (sort === "easy") data.sort((a, b) => b.mean - a.mean);
   const pages = Math.max(1, Math.ceil(data.length / PAGE)), view = data.slice(page * PAGE, (page + 1) * PAGE);
   const keep = {view: "heatmap", d, sort, flt};
-  let h = `<div class="rs-controls"><label>Dataset <select class="pick" id="ds"><option value="all">All datasets</option>${allDs().map(k => `<option value="${k}" ${k === d ? "selected" : ""}>${esc(IDX.datasets[k].label)}</option>`).join("")}</select></label>
-    <label>Filter <select class="pick" id="flt">${FILT.map(([k, l]) => `<option value="${k}" ${k === flt ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-    <label>Sort <select class="pick" id="sort"><option value="hard" ${sort === "hard" ? "selected" : ""}>hardest first</option><option value="easy" ${sort === "easy" ? "selected" : ""}>easiest first</option><option value="task" ${sort === "task" ? "selected" : ""}>task order</option></select></label>
+  let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", "Sort", sort, [["hard", "Hardest first"], ["easy", "Easiest first"], ["task", "Task order"]])}
     <span class="note">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · cell = pass rate over the attempts</span></div>
     <div style="overflow-x:auto"><table class="hm"><thead><tr><th></th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
   for (const r of view) {
@@ -226,9 +284,9 @@ async function heatmap(p) {
   h += `</tbody></table></div><div class="pager">${data.length.toLocaleString()} tasks · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div><div class="hov" id="hov"></div>`;
   $("app").innerHTML = h;
   navLinks();
-  $("ds").onchange = e => go({...keep, d: e.target.value, page: 0});
-  $("flt").onchange = e => go({...keep, flt: e.target.value, page: 0});
-  $("sort").onchange = e => go({...keep, sort: e.target.value, page: 0});
+  wirePill("ds", v => go({...keep, d: v, page: 0}));
+  wirePill("flt", v => go({...keep, flt: v, page: 0}));
+  wirePill("sort", v => go({...keep, sort: v, page: 0}));
   const hov = $("hov");
   $("app").querySelectorAll("td.cell").forEach(td => {
     td.onmousemove = e => {
@@ -301,11 +359,7 @@ async function trials(p) {
     (!p.q || x.t === p.q)).sort((a, b) => a.S - b.S || a.t.localeCompare(b.t) || a.k - b.k);
   const pages = Math.max(1, Math.ceil(view.length / PAGE)), keep = {view: "trials", d, s, o, q: p.q};
   const counted = view.filter(x => x.r != null), cost = view.reduce((a, x) => a + (x.$ || 0), 0);
-  let opts = `<option value="all">All models</option>`, last = null;
-  IDX.settings.forEach((x, i) => { if (!x.datasets.includes(d)) return; if (x.model !== last) { if (last) opts += "</optgroup>"; opts += `<optgroup label="${esc(x.model)}">`; last = x.model; } opts += `<option value="${esc(x.key)}" ${i === si ? "selected" : ""}>${esc(setName(i))}</option>`; });
-  $("app").innerHTML = `<div class="rs-controls"><label>Dataset <select class="pick" id="ds">${allDs().map(k => `<option value="${k}" ${k === d ? "selected" : ""}>${esc(IDX.datasets[k].label)}</option>`).join("")}</select></label>
-    <label>Model <select class="pick" id="set">${opts}</optgroup></select></label>
-    <label>Outcome <select class="pick" id="out">${OUTCOMES.map(([k, l]) => `<option value="${k}" ${k === o ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+  $("app").innerHTML = `<div class="ctl">${pill("ds", "db", "Dataset", d, allDs().map(k => [k, IDX.datasets[k].label]))}${pill("set", "bot", "Model", si < 0 ? "all" : IDX.settings[si].key, settingOptions(d, true))}${pill("out", "check", "Outcome", o, OUTCOMES)}
     ${p.q ? `<span class="badge bx" style="font-size:13px;padding:4px 10px">task ${esc(tname(d, p.q))} <a href="#" ${goAttr({...keep, q: null, page: 0})}>×</a></span>` : ""}</div>
     <div class="rs-sum"><span><b>${new Set(view.map(x => x.t)).size.toLocaleString()}</b>tasks</span><span><b>${(() => { const ks = [...new Set(view.map(x => x.k))]; return ks.length ? Math.max(...ks) : "–"; })()}</b>attempts per task</span><span><b>${view.length.toLocaleString()}</b>trials</span>
     <span><b>${counted.length ? (100 * counted.filter(ok).length / counted.length).toFixed(1) + "%" : "–"}</b>passed</span><span><b>${view.filter(cut).length}</b>cut off</span><span><b>${view.length - counted.length}</b>excluded</span>
@@ -316,9 +370,9 @@ async function trials(p) {
   navLinks();
   $("app").querySelectorAll("tr.row").forEach(tr => tr.onclick = e => { if (!e.target.closest("a.tasklink")) go(JSON.parse(tr.dataset.go)); });
   $("app").querySelectorAll("a.tasklink").forEach(a => a.onclick = e => { e.preventDefault(); e.stopPropagation(); go(JSON.parse(a.dataset.go)); });
-  $("ds").onchange = e => go({...keep, d: e.target.value, page: 0});
-  $("set").onchange = e => go({...keep, s: e.target.value, page: 0});
-  $("out").onchange = e => go({...keep, o: e.target.value, page: 0});
+  wirePill("ds", v => go({...keep, d: v, page: 0}));
+  wirePill("set", v => go({...keep, s: v, page: 0}));
+  wirePill("out", v => go({...keep, o: v, page: 0}));
 }
 
 // ---- one trial ----
@@ -340,7 +394,7 @@ async function trial(p) {
     const userText = pr ? pr.replace(/\n\[\d+ image\(s\)\]$/, "") : null;
     body = `<div class="chat"><div class="msg user"><div class="who">User</div><div id="uimg"></div>${userText != null ? esc(userText) : `<span class="note">The question is not shown: ${esc(IDX.datasets[d].note || "no public viewer")}.</span>`}</div>` +
       `<div class="msg asst"><div class="who">${esc(setName(si))}</div>` +
-      `<details class="think"><summary>Reasoning${x && x.R ? ` · ${tok(x.R)} tokens` : ""}</summary><div class="tbody">${reas ? esc(reas) :
+      `<details class="think"><summary>${icon("chevR", "chev2")}${icon("bulb")} Reasoning${x && x.R ? ` <span class="note">· ${tok(x.R)} tokens</span>` : ""}</summary><div class="tbody">${reas ? esc(reas) :
         x && x.R > 0 ? `Hidden by the provider (${tok(x.R)} reasoning tokens; the text is not returned).` : x && x.R === 0 ? "None (the model answered without reasoning)." : "Unavailable."}</div></details>` +
       `<div>${esc(ans || "(no answer)")}</div></div></div>`;
   }
@@ -428,5 +482,6 @@ async function loadQuestion(d, tid) {
 }
 init();
 </script>
+<script src="../theme.js"></script>
 </body>
 </html>
