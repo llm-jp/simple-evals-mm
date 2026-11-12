@@ -15,6 +15,7 @@ window.LB_LOGOS = {
  },
  // raster logos (no single-path SVG available): drawn as images, in the table and on the chart
  "images": {
+  "google": "assets/google-g.svg",
   "llmjp": "assets/llm-jp-logo.png"
  },
  "logoColors": {
