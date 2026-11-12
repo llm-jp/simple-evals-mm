@@ -34,3 +34,9 @@ def test_benchmark_curve_adds_each_questions_floor(tmp_path):
     lo, mid = capability.benchmark_curve(fitres, data, 0, np.array([-50.0, 0.0]))
     assert np.isclose(lo, (0.25 + 0.1) / 2)  # far below the difficulty: the mean guessing rate
     assert np.isclose(mid, ((0.25 + 0.75 * 0.5) + (0.1 + 0.9 * 0.5)) / 2)
+
+
+def test_residuals_read_the_curve_at_the_index():
+    res = {"settings": [{"key": "a", "index": 110.0}], "scores": {"x": {"a": 70.0}},
+           "curves": {"x": [[100.0, 50.0], [120.0, 70.0]]}}
+    assert capability.residuals(res) == {"x": {"a": 10.0}}  # predicted 60 at index 110
