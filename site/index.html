@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="simple-evals-mm evaluates LLMs and VLMs on 50+ English and Japanese text and image benchmarks, with results that can be reproduced, audited and checked against model cards.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=9ce2cbf51f">
+<link rel="stylesheet" href="style.css?v=e25715f842">
 </head>
 <body>
 
@@ -162,7 +162,7 @@
 </footer>
 
 <script src="logos.js?v=b490b43537"></script>
-<script src="data.js?v=eb59c854b1"></script>
+<script src="data.js?v=14652c670f"></script>
 <script>
 (function () {
   const D = window.LB;
@@ -325,7 +325,8 @@
              n_repeats: Math.min(...ts.map(t => t.n_repeats || SITE.n_runs)) };
   }
   const pickVal = lvl => state.subject.startsWith("t:") ? lvl.tasks[state.subject.slice(2)] : isOverall() ? overallOf(lvl) : lvl.benchmarks[state.subject.slice(2)];
-  const has = lvl => { const d = pickVal(lvl); return d && d.score != null && d[state.x] != null; };
+  // a configuration is plotted when it has a score; one without a cost goes to the "no price" band of the cost axis
+  const has = lvl => { const d = pickVal(lvl); return d && d.score != null && (d[state.x] != null || state.x === "cost"); };
   function points() {
     const pts = [];
     for (const m of D.models) {
@@ -403,22 +404,38 @@
       renderTable();
       return;
     }
-    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const noX = pts.filter(p => p.x == null), withX = pts.filter(p => p.x != null);
+    const xs = withX.length ? withX.map(p => p.x) : [0.001, 0.01], ys = pts.map(p => p.y);
     const LOG = state.scale === "log";
     const x0 = LOG ? Math.min(...xs) / 1.8 : 0, x1 = LOG ? Math.max(...xs) * 1.8 : Math.max(...xs) * 1.08;
     const y0 = Math.max(0, Math.floor((Math.min(...ys) - 6) / 10) * 10), y1 = 100;
-    const sx = LOG ? v => M.l + (Math.log10(v) - Math.log10(x0)) / (Math.log10(x1) - Math.log10(x0)) * (W - M.l - M.r)
-                   : v => M.l + (v - x0) / (x1 - x0) * (W - M.l - M.r);
+    // "no price" band: a strip left of the cost scale (an axis break separates it), for configurations without a cost
+    const BAND = noX.length ? Math.round(64 * FS) : 0, PL = M.l + BAND;
+    const sx = LOG ? v => PL + (Math.log10(v) - Math.log10(x0)) / (Math.log10(x1) - Math.log10(x0)) * (W - PL - M.r)
+                   : v => PL + (v - x0) / (x1 - x0) * (W - PL - M.r);
     const sy = v => H - M.b - (v - y0) / (y1 - y0) * (H - M.t - M.b);
-    for (const p of pts) { p.cx = sx(p.x); p.cy = sy(p.y); }
+    for (const p of withX) { p.cx = sx(p.x); p.cy = sy(p.y); }
+    // in the band, markers at their score; close ones side by side
+    noX.sort((a, b) => b.y - a.y).forEach((p, i, arr) => {
+      p.cy = sy(p.y);
+      const near = arr.slice(0, i).filter(q => Math.abs(q.cy - p.cy) < 24).length;
+      p.cx = M.l + BAND / 2 + (near % 2 ? 1 : -1) * Math.ceil(near / 2) * 18 * (near ? 1 : 0);
+    });
 
     const g = el("g", { class: "axis" }, svg);
     for (let v = y0; v <= y1; v += 10) {
       el("line", { class: "gridline", x1: M.l, x2: W - M.r, y1: sy(v), y2: sy(v) }, g);
       el("text", { x: M.l - 10, y: sy(v) + 4, "text-anchor": "end" }, g).textContent = v + "%";
     }
+    if (BAND) {
+      el("rect", { x: M.l, y: M.t, width: BAND - 10, height: H - M.t - M.b, fill: "var(--surface-2)", opacity: 0.6, rx: 4 }, g);
+      el("text", { x: M.l + (BAND - 10) / 2, y: H - M.b + 20, "text-anchor": "middle" }, g).textContent = "no price";
+      const bx = M.l + BAND - 5, by = H - M.b;  // axis break: two short slashes between the band and the scale
+      for (const dx of [-3, 3]) el("line", { x1: bx + dx - 3, y1: by + 6, x2: bx + dx + 3, y2: by - 6, stroke: "var(--text-muted)", "stroke-width": 1.4 }, g);
+    }
     for (const v of (LOG ? logTicks(x0, x1) : linTicks(x1))) {
       el("line", { class: "gridline", x1: sx(v), x2: sx(v), y1: M.t, y2: H - M.b, "stroke-dasharray": "2 4" }, g);
+      if (BAND && sx(v) - (M.l + (BAND - 10) / 2) < (W < 600 ? 62 : 48)) continue;  // label too close to "no price"
       el("text", { x: sx(v), y: H - M.b + 20, "text-anchor": "middle" }, g).textContent =
         state.x === "cost" ? (v === 0 ? "$0" : fmtCost(v).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")) : (v === 0 ? "0" : v >= 1 ? +v.toFixed(1) + "K" : v * 1000 + "");
     }
@@ -463,7 +480,7 @@
     }
     const gp = el("g", {}, svg);
     for (const p of pts) {
-      marker(gp, p.cx, p.cy, p.m, { dashed: p.effort !== "max" });
+      marker(gp, p.cx, p.cy, p.m, { dashed: p.effort !== "max" || p.x == null });
     }
     const NAME_CANDS = [[16, -8, "start"], [-16, -8, "end"], [16, 18, "start"], [-16, 18, "end"], [0, -18, "middle"], [0, 28, "middle"],
       [20, 4, "start"], [-20, 4, "end"], [0, -30, "middle"], [0, 40, "middle"], [30, -20, "start"], [-30, -20, "end"]];
@@ -498,7 +515,7 @@
       + (lvl.provider ? ` · via ${lvl.provider}${lvl.quantization && lvl.quantization !== "unknown" ? " (" + lvl.quantization + ")" : ""}` : "");
     tip.innerHTML = `<div class="tt-name" style="color:${nameColor(p.m)}">${esc(p.m.name)}</div><div class="tt-sub">${esc(sub)}</div>
       <div class="tt-row"><span>${esc(scopeLabel())}</span><b>${p.d.score.toFixed(1)}%${p.d.std != null ? ` <span class="pm">± ${p.d.std.toFixed(1)}</span>` : ""}${p.d.n_repeats && p.d.n_repeats < SITE.n_runs ? ` <span class="pm">(${p.d.n_repeats} attempts)</span>` : ""}</b></div>
-      <div class="tt-row"><span>Cost / question</span><b>${p.d.cost != null ? fmtCostE(p.d) : "–"}</b></div>
+      <div class="tt-row"><span>Cost / question</span><b>${p.d.cost != null ? fmtCostE(p.d) : "no price"}</b></div>
       <div class="tt-row"><span>Output tokens / question</span><b>${p.d.tok != null ? fmtTok(p.d.tok) : "–"}</b></div>`;
     placeTip(p);
   }
@@ -609,7 +626,7 @@
       + `<dt>Per dataset</dt><dd><details><summary>${Object.keys(lvl.tasks).length} datasets: data digest, attempts, verification, judge</summary><div class="prov-wrap"><table class="prov"><thead><tr><th>Task</th><th>Score</th><th>Issues</th><th>Revision</th><th>Tasks · sha256</th><th>Attempts</th><th>Verification</th><th>Judge</th><th>Served as</th></tr></thead><tbody>${provRows}</tbody></table></div></details></dd></dl>`;
   }
   function renderTable() {
-    document.getElementById("table-note").textContent = `${tScope().label}: % judged correct, mean over ${SITE.n_runs} attempts (AIME 10, IFBench 5; ± standard deviation across attempts); "–" = not evaluated. All benchmarks are evaluated without tools. Cut-off answers, refused requests and inputs longer than the context count as 0; transient API, judge and verifier failures are excluded from the mean. Cost and output tokens are per question on this benchmark. Click a row for its job, endpoint, settings, per-benchmark provenance and the commands that reproduce it.`;
+    document.getElementById("table-note").textContent = `${tScope().label}: % judged correct, mean over ${SITE.n_runs} attempts (AIME 10, IFBench 5; ± standard deviation across attempts); "–" = not evaluated. All benchmarks are evaluated without tools. Cut-off answers, refused requests and inputs longer than the context count as 0; transient API, judge and verifier failures are excluded from the mean. Cost and output tokens are per question on this benchmark. Cost is the billed API cost of the model's requests (the judge's is not included); ≈ marks an estimate for a self-served model (the same model's API price × our tokens), and a model with neither shows "–" in the table and sits in the chart's "no price" band. Click a row for its job, endpoint, settings, per-benchmark provenance and the commands that reproduce it.`;
     const cs = cols();
     if (!state.sortKey || !cs.some(c => c.key === state.sortKey)) { state.sortKey = "score"; state.sortDir = -1; }
     thead.innerHTML = cs.map(c => `<th data-k="${esc(c.key)}" class="${c.key === state.sortKey ? "sorted" : ""} ${c.key === "score" ? "hl" : ""} ${c.cls === "sep" ? "sep" : ""}">${esc(c.label)}</th>`).join("");
@@ -633,7 +650,7 @@
       tr.innerHTML = `<td><span class="mname">${logoHTML(r.m)}${esc(r.m.name)} <span class="effort-tag">${esc(effLabel(r.m, r.effort))}</span>${aliasTag(r.lvl)}</span></td>`
         + `<td class="barcol">${pct != null ? `<div class="sbar"><i style="width:${pct}%;background:${nameColor(r.m)}"></i>${whisk}</div>` : ""}</td>`
         + `<td class="hl overall">${d.score != null ? d.score.toFixed(1) : "–"}${d.std != null ? ` <span class="pm">± ${d.std.toFixed(1)}</span>` : ""}${d.n_repeats && d.n_repeats < SITE.n_runs ? ` <span class="pm" title="fewer attempts than the other configurations">(${d.n_repeats} attempts)</span>` : ""}</td>`
-        + `<td class="sep" ${d.cost_est ? 'title="estimate: the same model\'s API price x our tokens (row details)"' : ""}>${d.cost != null ? fmtCostE(d) : "–"}</td><td>${d.tok != null ? fmtTok(d.tok) : "–"}</td>`;
+        + `<td class="sep" ${d.cost_est ? 'title="estimate: the same model\'s API price x our tokens (row details)"' : d.cost == null ? 'title="no price: a self-served model with no API listing to price it"' : ""}>${d.cost != null ? fmtCostE(d) : "–"}</td><td>${d.tok != null ? fmtTok(d.tok) : "–"}</td>`;
       const key = r.m.key + "|" + r.effort;
       tr.className = "has-settings" + (openRows.has(key) ? " open" : "");
       tr.title = "Show the job, settings and provenance of this configuration";
