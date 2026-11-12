@@ -195,8 +195,9 @@ select.pick.bsel { margin: 0 0 10px -12px; }
     const cur = (T.curves[key] || []).filter(([x]) => x >= ymin && x <= ymax);
     el("path", {d: cur.map(([x, y], i) => `${i ? "L" : "M"}${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(""), fill: "none", stroke: "var(--text-muted)", "stroke-width": 2.5}, svg);
     const sc = T.scores[key] || {}, label = (T.benchmarks.find(b => b.key === key) || {}).label || key;
-    S.filter(s => sc[s.key] != null).forEach(s =>
-      hover(marker(svg, sx(s.index), sy(sc[s.key]), s, 8), s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`));
+    const pts = S.filter(s => sc[s.key] != null).map(s => ({s, x: sx(s.index), y: sy(sc[s.key])}));
+    for (const {s, x, y} of pts) hover(marker(svg, x, y, s, 8), s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`);
+    labels(svg, pts, W, M, name);  // setting names where they fit; every point has the hover card
   }
   sel.onchange = bench; bench();
 })();
