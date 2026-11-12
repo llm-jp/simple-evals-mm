@@ -149,7 +149,8 @@ a.backlink { font-size: 14px; }
 table.hm thead th { position: sticky; top: 56px; z-index: 2; background: var(--bg); }
 table.hm .c0 { min-width: 110px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 table.hm .c1 { min-width: 120px; white-space: nowrap; }
-body.wide #run .wrap { max-width: none; }
+/* a heatmap wider than the page column (all effort levels) is centred on the window instead of the column */
+.hmwrap.bleed { width: 100vw; margin-left: calc(50% - 50vw); display: flex; justify-content: center; }
 @media (max-width: 1399px) { table.hm td.cell { width: 44px; min-width: 44px; max-width: 44px; font-size: 11px; } table.hm .c0 { min-width: 90px; max-width: 90px; } }
 .pw.off .pillbtn { opacity: .45; cursor: default; } .pw.off .pillbtn:hover { background: transparent; }
 .pv { display: inline-grid; text-align: left; } .pv > span { grid-area: 1 / 1; white-space: nowrap; } .pv > .ghost { visibility: hidden; }
@@ -222,7 +223,6 @@ async function init() {
 }
 function route() {
   const p = P(), v = p.view || "heatmap";
-  document.body.classList.toggle("wide", v === "heatmap");
   $("runhead").hidden = v === "task" || v === "trial";  // detail pages: only "Back"
   [...$("tabs").children].forEach(a => a.classList.toggle("on", a.dataset.v === (v === "trajectories" ? "trials" : v)));
   ({heatmap, trials, trajectories: trials, trial, task}[v] || heatmap)(p);
@@ -313,6 +313,10 @@ async function heatmap(p) {
   $("app").innerHTML = h;
   navLinks();
   wirePill("ds", v => go({...keep, d: v, page: 0}));
+  {  // keep the page column (aligned with the header) unless the table is wider than it
+    const w = $("app").querySelector(".hmwrap"), t = w && w.querySelector("table.hm");
+    if (t && t.getBoundingClientRect().width > w.getBoundingClientRect().width) w.classList.add("bleed");
+  }
   wirePill("cfg", v => go({...keep, cfg: v, page: 0}));
   wirePill("flt", v => go({...keep, flt: v, page: 0}));
   wirePill("sort", v => go({...keep, sort: v, page: 0}));
