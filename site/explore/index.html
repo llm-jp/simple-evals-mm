@@ -176,6 +176,10 @@ table.hm .c1 { min-width: 120px; white-space: nowrap; }
 table.hm thead th { box-shadow: inset 0 -1px 0 var(--border); }
 table.hm .c1 { box-shadow: inset -1px 0 0 var(--border); }
 table.hm thead th.c1 { box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border); }
+/* faint row lines under the labels, so each label lines up with its row of cells */
+table.hm tbody td.tid { border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+table.hm .hl, table.hm th.col.hl div { color: var(--text-primary) !important; font-weight: 700; }
+table.hm td.tid.hl { background: var(--surface-2); }
 /* a heatmap wider than the page column (all effort levels) is centred on the window instead of the column */
 .hmwrap.bleed { width: 100vw; margin-left: calc(50% - 50vw); display: flex; justify-content: center; }
 /* phones / short screens: nothing sticky; the table scrolls sideways in its own box, the page does not */
@@ -363,13 +367,22 @@ async function heatmap(p) {
   wirePill("flt", v => go({...keep, flt: v, page: 0}));
   wirePill("sort", v => go({...keep, sort: v, page: 0}));
   const hov = $("hov");
+  // hover: the cell's row labels and column name are emphasized (where a cell sits in a wide table)
+  const ths = [...$("app").querySelectorAll("table.hm thead th.col")];
+  const mark = td => {
+    $("app").querySelectorAll("table.hm .hl").forEach(x => x.classList.remove("hl"));
+    if (!td) return;
+    td.parentElement.querySelectorAll("td.tid").forEach(x => x.classList.add("hl"));
+    const th = ths[+td.dataset.s]; if (th) th.classList.add("hl");
+  };
   $("app").querySelectorAll("td.cell").forEach(td => {
     td.onmousemove = e => {
       const c = JSON.parse(td.dataset.c), si = cols[+td.dataset.s];
       hov.innerHTML = `<b>${esc(setName(si))}</b><div class="r"><span>${esc(ttitle(td.dataset.d, td.dataset.t))}</span></div>` + (c ? `<div class="r"><span>Pass rate</span><span>${c[0] == null ? "–" : Math.round(c[0] * 100) + "%"} (${c[1]}/${c[2]})</span></div><div class="r"><span>Avg cost</span><span>${usd(c[3])}</span></div><div class="r"><span>Avg duration</span><span>${secs(c[4])}</span></div><div class="r"><span>Avg output tokens</span><span>${tok(c[5] == null ? null : Math.round(c[5]))}</span></div>` : `<div class="r"><span>not run</span></div>`);
       hov.style.display = "block"; hov.style.left = Math.min(e.clientX + 14, innerWidth - 260) + "px"; hov.style.top = (e.clientY + 14) + "px";
     };
-    td.onmouseleave = () => { hov.style.display = "none"; };
+    td.onmouseleave = () => { hov.style.display = "none"; mark(null); };
+    td.onmouseenter = () => mark(td);
     td.onclick = () => { const si = cols[+td.dataset.s]; go({view: "trials", s: IDX.settings[si].key, d: td.dataset.d, q: td.dataset.t}); };
   });
 }
