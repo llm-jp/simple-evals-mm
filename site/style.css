@@ -350,3 +350,12 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 @media (max-width: 640px) { .cl-items li { grid-template-columns: 1fr; gap: 3px; } .cl-tag { justify-self: start; } }
 
 .canary-foot { font-size: 11px; color: var(--text-secondary); margin-top: 6px; letter-spacing: .01em; }
+/* phones: the header's links and theme toggle fit the width */
+@media (max-width: 520px) {
+  nav.links { gap: 0; }
+  nav.links a { padding: 6px 6px; font-size: 13px; }
+  header.site .brand { font-size: 14px; }
+  header.site .org, header.site .divider { display: none; }  /* the LLM-jp logo: in the footer */
+  header.site .wrap { padding: 0 14px; }
+  .theme-toggle { margin-left: 2px; }
+}

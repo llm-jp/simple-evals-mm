@@ -36,108 +36,108 @@
 
 <style>
 .rs-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
-.rs-sum { display: flex; gap: 22px; flex-wrap: wrap; margin: 10px 0 14px; font-size: 14px; color: var(--text-secondary); }
+.rs-sum { display: flex; gap: 22px; flex-wrap: wrap; margin: 10px 0 14px; font-size: 15px; color: var(--text-secondary); }
 .rs-sum b { color: var(--text-primary); font-size: 18px; display: block; }
-.seg button { border: 1px solid var(--border); background: var(--surface-1); padding: 5px 10px; font-size: 13px; cursor: pointer; color: var(--text-primary); }
+.seg button { border: 1px solid var(--border); background: var(--surface-1); padding: 5px 10px; font-size: 14px; cursor: pointer; color: var(--text-primary); }
 .seg button.on { background: var(--text-primary); color: var(--bg); }
 .seg button:first-child { border-radius: 6px 0 0 6px; } .seg button:last-child { border-radius: 0 6px 6px 0; }
 input.search { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; min-width: 240px; background: var(--bg); color: var(--text-primary); }
-table.rs { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.rs { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
 table.rs th, table.rs td { padding: 7px 10px; text-align: right; white-space: nowrap; border-top: 1px solid var(--border); }
-table.rs th { background: var(--surface-2); color: var(--text-secondary); font-size: 13px; position: sticky; top: 0; }
+table.rs th { background: var(--surface-2); color: var(--text-secondary); font-size: 14px; position: sticky; top: 0; }
 table.rs td.l, table.rs th.l { text-align: left; }
 table.rs tr.row { cursor: pointer; } table.rs tr.row:hover { background: var(--surface-2); }
 td.prev { white-space: normal; max-width: 480px; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
-.badge { display: inline-block; min-width: 36px; text-align: center; border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 600; }
+.badge { display: inline-block; min-width: 36px; text-align: center; border-radius: 6px; padding: 1px 6px; font-size: 13px; font-weight: 600; }
 .b1 { background: #dcfce7; color: #166534; } .b0 { background: #fee2e2; color: #991b1b; } .bx { background: var(--surface-2); color: var(--text-secondary); }
 .cause { color: #c2410c; font-weight: 600; }
 table.rs tr.detail td { background: var(--surface-1); white-space: normal; text-align: left; }
 .dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 900px) { .dgrid { grid-template-columns: 1fr; } }
-.dgrid h4 { margin: 4px 0 6px; font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
-.dgrid pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; background: var(--code-bg); padding: 10px; border-radius: 6px; max-height: 420px; overflow: auto; margin: 0 0 8px; }
+.dgrid h4 { margin: 4px 0 6px; font-size: 14px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.dgrid pre { white-space: pre-wrap; word-break: break-word; font-size: 14px; background: var(--code-bg); padding: 10px; border-radius: 6px; max-height: 420px; overflow: auto; margin: 0 0 8px; }
 .dgrid img { max-width: 100%; max-height: 420px; border: 1px solid var(--border); border-radius: 6px; margin: 4px 0; }
-.fld { font-size: 13px; margin: 2px 0; } .fld b { color: var(--text-secondary); font-weight: 600; }
-.note { font-size: 13px; color: var(--text-secondary); }
-.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin: 10px 0; font-size: 13px; }
+.fld { font-size: 14px; margin: 2px 0; } .fld b { color: var(--text-secondary); font-weight: 600; }
+.note { font-size: 14px; color: var(--text-secondary); }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin: 10px 0; font-size: 14px; }
 .pager button { border: 1px solid var(--border); background: var(--surface-1); border-radius: 6px; padding: 4px 10px; cursor: pointer; color: var(--text-primary); }
-.canary { font-size: 12px; color: var(--text-secondary); margin-top: 28px; }
+.canary { font-size: 13px; color: var(--text-secondary); margin-top: 28px; }
 
 .chips { display: inline-flex; gap: 2px; flex-wrap: wrap; vertical-align: middle; }
 .chip { width: 12px; height: 12px; border-radius: 2px; display: inline-block; background: var(--surface-2); }
 .chip.c1 { background: #16a34a; } .chip.c0 { background: #dc2626; } .chip.cc { background: #f59e0b; }
-.legend { font-size: 12px; color: var(--text-secondary); } .legend .chip { margin: 0 3px 0 10px; vertical-align: -1px; }
+.legend { font-size: 13px; color: var(--text-secondary); } .legend .chip { margin: 0 3px 0 10px; vertical-align: -1px; }
 .ans { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: var(--bg); }
-.ans .hd { display: flex; gap: 12px; align-items: center; font-size: 13px; flex-wrap: wrap; }
-details > summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); margin: 4px 0; }
+.ans .hd { display: flex; gap: 12px; align-items: center; font-size: 14px; flex-wrap: wrap; }
+details > summary { cursor: pointer; font-size: 14px; color: var(--text-secondary); margin: 4px 0; }
 
 .rtabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: 14px 0 10px; }
 .rtabs a { padding: 8px 16px; color: var(--text-secondary); text-decoration: none; border-bottom: 2px solid transparent; font-weight: 600; }
 .rtabs a.on { color: var(--text-primary); border-bottom-color: var(--text-primary); }
-table.hm { border-collapse: separate; border-spacing: 2px; font-size: 13px; }
-table.hm th.col { height: 150px; vertical-align: bottom; padding: 0 0 4px; }
-table.hm th.col div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-weight: 500; color: var(--text-secondary); font-size: 12px; }
+table.hm { border-collapse: separate; border-spacing: 2px; font-size: 14px; }
+table.hm th.col { vertical-align: bottom; padding: 0 0 4px; text-align: center; }
+table.hm th.col div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-weight: 500; color: var(--text-secondary); font-size: 13px; line-height: 1.25; display: inline-block; text-align: left; }
 table.hm td.cell { width: 18px; height: 18px; border-radius: 3px; background: var(--surface-2); cursor: pointer; }
 table.hm td.cell.c1 { background: #16a34a; } table.hm td.cell.c0 { background: #dc2626; } table.hm td.cell.cc { background: #f59e0b; }
 table.hm td.cell:hover { outline: 2px solid var(--text-primary); }
 table.hm td.tid { padding-right: 10px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; } table.hm td.tid a { color: var(--text-primary); }
 table.hm td.frac { padding-left: 10px; color: var(--text-secondary); white-space: nowrap; }
-.range { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.range { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
 .range input { width: 52px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; background: var(--bg); color: var(--text-primary); }
 .rpanel { border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin: 14px 0; background: var(--surface-1); }
 .rpanel h3 { margin: 0 0 10px; font-size: 15px; }
-.rpanel pre { white-space: pre-wrap; word-break: break-word; font-size: 13.5px; background: var(--code-bg); padding: 12px; border-radius: 8px; max-height: 560px; overflow: auto; margin: 0; }
+.rpanel pre { white-space: pre-wrap; word-break: break-word; font-size: 14.5px; background: var(--code-bg); padding: 12px; border-radius: 8px; max-height: 560px; overflow: auto; margin: 0; }
 .rpanel img { max-width: 100%; max-height: 560px; border: 1px solid var(--border); border-radius: 8px; margin: 6px 0; }
-.rkv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: 14px; }
+.rkv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: 15px; }
 .rkv dt { color: var(--text-secondary); } .rkv dd { margin: 0; }
 .trial-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .trial-head h2 { margin: 0; }
 .rgrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } @media (max-width: 1000px) { .rgrid2 { grid-template-columns: 1fr; } }
 .ans { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 10px 0; background: var(--bg); }
-.ans .hd { display: flex; gap: 12px; align-items: center; font-size: 13px; flex-wrap: wrap; margin-bottom: 6px; }
+.ans .hd { display: flex; gap: 12px; align-items: center; font-size: 14px; flex-wrap: wrap; margin-bottom: 6px; }
 
-table.hm td.cell { width: 50px; min-width: 50px; max-width: 50px; height: 32px; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; border: 1px solid var(--border); }
-.hov { position: fixed; z-index: 50; pointer-events: none; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 10px 12px; font-size: 13px; min-width: 220px; display: none; }
+table.hm td.cell { width: 50px; min-width: 50px; max-width: 50px; height: 32px; font-size: 13px; text-align: center; font-variant-numeric: tabular-nums; border: 1px solid var(--border); }
+.hov { position: fixed; z-index: 50; pointer-events: none; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 10px 12px; font-size: 14px; min-width: 220px; display: none; }
 .hov b { display: block; margin-bottom: 4px; } .hov .r { display: flex; justify-content: space-between; gap: 18px; color: var(--text-secondary); } .hov .r span:last-child { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .chat { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
-.msg { max-width: 88%; border-radius: 14px; padding: 12px 16px; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.msg { max-width: 88%; border-radius: 14px; padding: 12px 16px; font-size: 15.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 .msg.user { align-self: flex-end; background: var(--surface-2); border: 1px solid var(--border); }
 .msg.asst { align-self: flex-start; background: var(--bg); border: 1px solid var(--border); }
-.msg .who { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; white-space: normal; }
+.msg .who { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; white-space: normal; }
 .msg img { max-width: 100%; max-height: 520px; border-radius: 10px; border: 1px solid var(--border); display: block; margin: 4px 0 10px; }
-.msg .sec { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); margin: 2px 0 6px; white-space: normal; }
+.msg .sec { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); margin: 2px 0 6px; white-space: normal; }
 .msg .reason { border-left: 3px solid var(--border); padding: 2px 0 2px 12px; margin-bottom: 12px; color: var(--text-secondary); white-space: normal; }
 .msg .final { border-top: 1px solid var(--border); padding-top: 10px; }
 .msg details { white-space: normal; margin-bottom: 8px; }
 .rbox { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); margin-bottom: 12px; white-space: normal; }
-.rbox .rh { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px; }
-.rbox .rh b { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); }
-.rbox .rh button { margin-left: auto; border: 1px solid var(--border); background: var(--bg); color: var(--text-primary); border-radius: 6px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; }
-.rbox .rt { padding: 0 12px 12px; } .rbox .rt pre { margin: 0; white-space: pre-wrap; font-size: 13px; background: var(--code-bg); padding: 10px; border-radius: 8px; max-height: 480px; overflow: auto; }
+.rbox .rh { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 14px; }
+.rbox .rh b { font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); }
+.rbox .rh button { margin-left: auto; border: 1px solid var(--border); background: var(--bg); color: var(--text-primary); border-radius: 6px; padding: 3px 10px; font-size: 13.5px; cursor: pointer; }
+.rbox .rt { padding: 0 12px 12px; } .rbox .rt pre { margin: 0; white-space: pre-wrap; font-size: 14px; background: var(--code-bg); padding: 10px; border-radius: 8px; max-height: 480px; overflow: auto; }
 .rbox.collapsed .rt pre { max-height: 4.8em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent); }
 .think { white-space: normal; margin: 0 0 10px; }
-.think > summary { list-style: none; cursor: pointer; color: var(--text-secondary); font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
+.think > summary { list-style: none; cursor: pointer; color: var(--text-secondary); font-size: 14.5px; display: inline-flex; align-items: center; gap: 6px; }
 .think > summary::-webkit-details-marker { display: none; }
-.think > summary::before { content: "▸"; font-size: 11px; transition: transform .15s; }
+.think > summary::before { content: "▸"; font-size: 12px; transition: transform .15s; }
 .think[open] > summary::before { transform: rotate(90deg); }
-.think .tbody { border-left: 2px solid var(--border); margin: 8px 0 4px 4px; padding: 2px 0 2px 12px; color: var(--text-secondary); font-size: 13.5px; white-space: pre-wrap; max-height: 480px; overflow: auto; }
-.rstat { display: inline-block; border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text-secondary); } .msg details pre { white-space: pre-wrap; font-size: 13px; background: var(--code-bg); padding: 10px; border-radius: 8px; max-height: 420px; overflow: auto; }
-.ph { width: 320px; max-width: 100%; height: 200px; border: 1.5px dashed #a8a7a2; border-radius: 10px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--text-secondary); font-size: 12.5px; text-align: center; padding: 10px; margin: 4px 0 10px; white-space: normal; }
+.think .tbody { border-left: 2px solid var(--border); margin: 8px 0 4px 4px; padding: 2px 0 2px 12px; color: var(--text-secondary); font-size: 14.5px; white-space: pre-wrap; max-height: 480px; overflow: auto; }
+.rstat { display: inline-block; border-radius: 999px; padding: 1px 10px; font-size: 13px; font-weight: 600; background: var(--surface-2); color: var(--text-secondary); } .msg details pre { white-space: pre-wrap; font-size: 14px; background: var(--code-bg); padding: 10px; border-radius: 8px; max-height: 420px; overflow: auto; }
+.ph { width: 320px; max-width: 100%; height: 200px; border: 1.5px dashed #a8a7a2; border-radius: 10px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--text-secondary); font-size: 13.5px; text-align: center; padding: 10px; margin: 4px 0 10px; white-space: normal; }
 .ph svg { width: 36px; height: 36px; opacity: .55; }
-.stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 4px; font-size: 13px; color: var(--text-secondary); }
+.stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 4px; font-size: 14px; color: var(--text-secondary); }
 .stats b { display: block; font-size: 17px; color: var(--text-primary); }
 .ttabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: 16px 0 0; }
-.ttabs a { padding: 8px 16px; color: var(--text-secondary); text-decoration: none; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer; font-size: 14px; }
+.ttabs a { padding: 8px 16px; color: var(--text-secondary); text-decoration: none; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer; font-size: 15px; }
 .ttabs a.on { color: var(--text-primary); border-bottom-color: var(--text-primary); }
-.att { display: inline-flex; gap: 3px; } .att a { display: inline-block; min-width: 22px; text-align: center; border-radius: 4px; font-size: 11px; padding: 1px 4px; text-decoration: none; }
+.att { display: inline-flex; gap: 3px; } .att a { display: inline-block; min-width: 22px; text-align: center; border-radius: 4px; font-size: 12px; padding: 1px 4px; text-decoration: none; }
 .att a.a1 { background: #16a34a; color: #fff; } .att a.a0 { background: #dc2626; color: #fff; } .att a.ax { background: var(--surface-2); color: var(--text-secondary); } .att a.ac { background: #f59e0b; color: #fff; }
-.slider { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; }
+.slider { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
 .slider input[type=range] { width: 140px; }
-a.backlink { font-size: 14px; }
+a.backlink { font-size: 15px; }
 
 /* pill controls with popovers (as on speed1313.github.io) */
 .pw { position: relative; display: inline-block; }
-.pillbtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.pillbtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 15px; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
 .pillbtn:hover, .pw.open .pillbtn { background: var(--surface-2); }
 .pillbtn .pl { color: var(--text-secondary); }
 .pillbtn svg, .ic { width: 16px; height: 16px; flex: none; }
@@ -146,23 +146,31 @@ a.backlink { font-size: 14px; }
 .pw.open .pop { display: block; }
 /* heatmap: the page scrolls; the column names stay under the site header; the heatmap view uses the window's width */
 .hmwrap { overflow: visible; }
-table.hm thead th { position: sticky; top: 56px; z-index: 2; background: var(--bg); }
+@media (min-width: 900px) and (min-height: 700px) {
+  /* the bar's background spans the window, so a table wider than the column does not show through beside it */
+  .hmbar { position: sticky; top: 56px; z-index: 4; background: var(--bg); box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); }
+  table.hm thead th { position: sticky; top: var(--hmtop, 56px); z-index: 2; background: var(--bg); }
+}
 table.hm .c0 { min-width: 110px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 table.hm .c1 { min-width: 120px; white-space: nowrap; }
 /* a heatmap wider than the page column (all effort levels) is centred on the window instead of the column */
 .hmwrap.bleed { width: 100vw; margin-left: calc(50% - 50vw); display: flex; justify-content: center; }
-@media (max-width: 1399px) { table.hm td.cell { width: 44px; min-width: 44px; max-width: 44px; font-size: 11px; } table.hm .c0 { min-width: 90px; max-width: 90px; } }
+/* phones / short screens: nothing sticky; the table scrolls sideways in its own box, the page does not */
+@media (max-width: 899px), (max-height: 699px) {
+  .hmwrap, .hmwrap.bleed { width: auto; margin-left: 0; display: block; overflow-x: auto; }
+}
+@media (max-width: 1399px) { table.hm td.cell { width: 44px; min-width: 44px; max-width: 44px; font-size: 12px; } table.hm .c0 { min-width: 90px; max-width: 90px; } }
 .pw.off .pillbtn { opacity: .45; cursor: default; } .pw.off .pillbtn:hover { background: transparent; }
 .pv { display: inline-grid; text-align: left; } .pv > span { grid-area: 1 / 1; white-space: nowrap; } .pv > .ghost { visibility: hidden; }
-.hmleg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); margin-left: 6px; }
+.hmleg { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); margin-left: 6px; }
 .hmleg .bar { width: 90px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, hsl(214,70%,96%), hsl(214,70%,34%)); border: 1px solid var(--border); }
-.pop .grp { font-size: 12px; color: var(--text-secondary); padding: 8px 10px 4px; }
-.pop label { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.pop .grp { font-size: 13px; color: var(--text-secondary); padding: 8px 10px 4px; }
+.pop label { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; font-size: 15px; cursor: pointer; white-space: nowrap; }
 .pop label:hover { background: var(--surface-2); }
 .pop input { accent-color: var(--text-primary); }
 .ctl { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
 .ctl .note { margin-left: 8px; }
-.think > summary { font-size: 14.5px !important; gap: 8px !important; padding: 4px 10px 4px 6px; border-radius: 999px; }
+.think > summary { font-size: 15.5px !important; gap: 8px !important; padding: 4px 10px 4px 6px; border-radius: 999px; }
 .think > summary:hover { background: var(--surface-2); }
 .think > summary::before { content: none !important; }
 .think > summary .chev2 { transition: transform .15s; }
@@ -175,7 +183,7 @@ a.backlink:hover { background: var(--surface-2); }
     <div class="wrap">
       <div id="runhead"><p class="back"><a href="../#leaderboard">&larr; Leaderboard</a></p>
       <h2>Run</h2>
-      <p class="note">Every attempt of every task for every leaderboard setting. Questions and images load from the dataset's own Hugging Face repository (dataset viewer); gated or private datasets show our side only.</p>
+      <p class="intro">Every attempt of every task for every leaderboard setting. Questions and images load from the dataset's own Hugging Face repository (dataset viewer); gated or private datasets show our side only.</p>
       <nav class="rtabs" id="tabs"><a data-v="heatmap">Heatmap</a><a data-v="trials">Trials</a></nav></div>
       <div id="app"></div>
     </div>
@@ -300,11 +308,11 @@ async function heatmap(p) {
   if (srt === "hard") data.sort((a, b) => a.mean - b.mean); else if (srt === "easy") data.sort((a, b) => b.mean - a.mean);
   const pages = Math.max(1, Math.ceil(data.length / PAGE)), view = data.slice(page * PAGE, (page + 1) * PAGE);
   const keep = {view: "heatmap", d, sort, flt, cfg};
-  let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", sortFixed ? "Sort (every task shown has the same pass rate: task order)" : "Sort", srt, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]], sortFixed)}
+  let h = `<div class="hmbar"><div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", sortFixed ? "Sort (every task shown has the same pass rate: task order)" : "Sort", srt, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]], sortFixed)}
     <span class="hmleg" title="Each cell: the share of the setting's attempts on the task that were correct">Pass rate <span class="bar"></span> 0 → 100%</span>
 </div>
-    <div class="note" style="margin:-4px 0 8px">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · ${cols.length} settings</div>
-    <div class="hmwrap"><table class="hm"><thead><tr><th class="l c0" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Dataset</th><th class="l c1" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
+    <div class="note" style="margin:-4px 0 0;padding-bottom:8px">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · ${cols.length} settings</div></div>
+    <div class="hmwrap"><table class="hm"><thead><tr><th class="l c0" style="vertical-align:bottom;text-align:left;font-size:13px;color:var(--text-secondary)">Dataset</th><th class="l c1" style="vertical-align:bottom;text-align:left;font-size:13px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col" title="${esc(setName(i))}"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
   for (const r of view) {
     h += `<tr><td class="tid c0" style="color:var(--text-secondary)">${esc(IDX.datasets[r.d].label)}</td><td class="tid c1" title="${esc(r.t)}"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(r.t.length > 18 ? "…" + r.t.slice(-17) : r.t)}</a></td>` +
       r.cells.map((c, i) => `<td class="cell" style="${cellStyle(c)}" data-c='${esc(JSON.stringify(c))}' data-s="${i}" data-t="${esc(r.t)}" data-d="${r.d}">${c && c[0] != null ? Math.round(c[0] * 100) + "%" : ""}</td>`).join("") + `</tr>`;
@@ -313,6 +321,10 @@ async function heatmap(p) {
   $("app").innerHTML = h;
   navLinks();
   wirePill("ds", v => go({...keep, d: v, page: 0}));
+  {  // the column names stick right under the controls bar
+    const bar = $("app").querySelector(".hmbar");
+    if (bar) document.documentElement.style.setProperty("--hmtop", (56 + bar.getBoundingClientRect().height) + "px");
+  }
   {  // keep the page column (aligned with the header) unless the table is wider than it
     const w = $("app").querySelector(".hmwrap"), t = w && w.querySelector("table.hm");
     if (t && t.getBoundingClientRect().width > w.getBoundingClientRect().width) w.classList.add("bleed");
@@ -396,7 +408,7 @@ async function trials(p) {
   const pages = Math.max(1, Math.ceil(view.length / PAGE)), keep = {view: "trials", d, s, o, q: p.q};
   const counted = view.filter(x => x.r != null), cost = view.reduce((a, x) => a + (x.$ || 0), 0);
   $("app").innerHTML = `<div class="ctl">${pill("ds", "db", "Dataset", d, allDs().map(k => [k, IDX.datasets[k].label]))}${pill("set", "bot", "Model", si < 0 ? "all" : IDX.settings[si].key, settingOptions(d, true))}${pill("out", "check", "Reward", o, OUTCOMES)}
-    ${p.q ? `<span class="badge bx" style="font-size:13px;padding:4px 10px">task ${esc(ttitle(d, p.q))} <a href="#" ${goAttr({...keep, q: null, page: 0})}>×</a></span>` : ""}</div>
+    ${p.q ? `<span class="badge bx" style="font-size:14px;padding:4px 10px">task ${esc(ttitle(d, p.q))} <a href="#" ${goAttr({...keep, q: null, page: 0})}>×</a></span>` : ""}</div>
     <div class="rs-sum"><span><b>${new Set(view.map(x => x.t)).size.toLocaleString()}</b>tasks</span><span><b>${(() => { const ks = [...new Set(view.map(x => x.k))]; return ks.length ? Math.max(...ks) : "–"; })()}</b>attempts per task</span><span><b>${view.length.toLocaleString()}</b>trials</span>
     <span><b>${counted.length ? (100 * counted.filter(ok).length / counted.length).toFixed(1) + "%" : "–"}</b>correct</span><span><b>${view.filter(cut).length}</b>cut off</span><span><b>${view.length - counted.length}</b>excluded</span>
     <span><b>${tok(view.length ? Math.round(view.reduce((a, x) => a + (x.o || 0), 0) / view.length) : null)}</b>output tokens / trial</span><span><b>${secs(view.length ? view.reduce((a, x) => a + (x.s || 0), 0) / view.length : null)}</b>duration / trial</span><span><b>${cost ? "$" + cost.toFixed(2) : "–"}</b>cost</span></div>
