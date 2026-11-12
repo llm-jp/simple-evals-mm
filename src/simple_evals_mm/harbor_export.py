@@ -114,6 +114,7 @@ def export_job(st: store_mod.JobStore, out_root: str, datasets: list[str] | None
                  "kwargs": {k: cfg.get(k) for k in ("effort", "max_output_tokens", "temperature", "top_p")
                             if cfg.get(k) is not None}}
     evals, n_total, starts, ends = {}, 0, [], []
+    totals = {"n_input_tokens": 0, "n_cache_tokens": 0, "n_output_tokens": 0, "cost_usd": 0.0}
     for ds in names:
         _, ver = st.read_verification(ds)
         rewards, n_trials, n_errors = [], 0, 0
@@ -147,7 +148,7 @@ def export_job(st: store_mod.JobStore, out_root: str, datasets: list[str] | None
                     "task_id": {"path": f"{ds}/{tid}"}, "source": ds,
                     "task_checksum": row.get("task_checksum") or "",
                     "config": {"task": {"path": f"{ds}/{tid}", "source": ds}, "trial_name": name, "agent": agent_cfg},
-                    "agent_info": {"name": AGENT, "version": version,
+                    "agent_info": {"name": AGENT, "version": (row.get("generation_commit") or "")[:12] or version,
                                    "model_info": {"name": model_name, "provider": provider}},
                     "agent_result": {"n_input_tokens": usage.get("prompt_tokens"),
                                      "n_cache_tokens": usage.get("cached_tokens"),
@@ -162,7 +163,11 @@ def export_job(st: store_mod.JobStore, out_root: str, datasets: list[str] | None
                         "exception_traceback": "",
                         "occurred_at": row.get("finished_at") or row.get("started_at")},
                     "started_at": row.get("started_at"), "finished_at": row.get("finished_at"),
+                    "agent_execution": {"started_at": row.get("started_at"), "finished_at": row.get("finished_at")},
                 }
+                for key, src in (("n_input_tokens", "prompt_tokens"), ("n_cache_tokens", "cached_tokens"),
+                                 ("n_output_tokens", "completion_tokens"), ("cost_usd", "cost_usd")):
+                    totals[key] += usage.get(src) or 0
                 _write(os.path.join(tdir, "result.json"), result)
                 os.makedirs(os.path.join(tdir, "verifier"), exist_ok=True)
                 with open(os.path.join(tdir, "verifier", "test-stdout.txt"), "w", encoding="utf-8") as f:
@@ -187,5 +192,6 @@ def export_job(st: store_mod.JobStore, out_root: str, datasets: list[str] | None
         "started_at": min(starts) if starts else now, "finished_at": max(ends) if ends else now,
         "n_total_trials": n_total,
         "stats": {"n_completed_trials": n_total - sum(e["n_errors"] for e in evals.values()),
-                  "n_errored_trials": sum(e["n_errors"] for e in evals.values()), "evals": evals}})
+                  "n_errored_trials": sum(e["n_errors"] for e in evals.values()), "evals": evals,
+                  **{k: (round(v, 6) if k == "cost_usd" else v) for k, v in totals.items()}}})
     return {"dir": job_out, "n_trials": n_total, "datasets": names}
