@@ -108,6 +108,8 @@ table.hm td.cell { width: 40px; height: 24px; font-size: 11px; text-align: cente
 .msg .reason { border-left: 3px solid var(--border); padding: 2px 0 2px 12px; margin-bottom: 12px; color: var(--text-secondary); white-space: normal; }
 .msg .final { border-top: 1px solid var(--border); padding-top: 10px; }
 .msg details { white-space: normal; margin-bottom: 8px; } .msg details pre { white-space: pre-wrap; font-size: 13px; background: var(--code-bg); padding: 10px; border-radius: 8px; max-height: 420px; overflow: auto; }
+.ph { width: 320px; max-width: 100%; height: 200px; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--text-secondary); font-size: 12.5px; text-align: center; padding: 10px; margin: 4px 0 10px; white-space: normal; }
+.ph svg { width: 36px; height: 36px; opacity: .55; }
 .stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 4px; font-size: 13px; color: var(--text-secondary); }
 .stats b { display: block; font-size: 17px; color: var(--text-primary); }
 .ttabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: 16px 0 0; }
@@ -325,19 +327,23 @@ async function trial(p) {
   if (tab === "trajectory") {  // the images the model saw, from the Hub row; say so when they cannot be shown
     const box = $("uimg"), pr = (prompts_cache[d] || {})[t] || "", m = pr.match(/\[(\d+) image\(s\)\]$/), n = m ? +m[1] : null;
     const why = IDX.datasets[d].mode ? null : (IDX.datasets[d].note || "no public viewer");
-    const miss = reason => `<div class="note" style="border:1px dashed var(--border);border-radius:8px;padding:10px;margin-bottom:10px">${n ? n + " image(s)" : "Image(s)"} not shown: ${esc(reason)}.</div>`;
-    if (why) { if (box && n) box.innerHTML = miss(why); }
+    const miss = (reason, link) => Array.from({length: n || 1}, () => placeholder(reason, link || IDX.datasets[d].url)).join("");
+    if (why) { if (box && n) box.innerHTML = miss(`(${why})`); }
     else fetchRow(d, t).then(r => {
       if (!box) return;
       let ims = r && r.j.rows && r.j.rows.length ? rowImages(r.j.rows[0].row) : [];
       if (n) ims = ims.slice(0, n);
-      if (!ims.length) { if (n) box.innerHTML = miss(r && r.j.error ? "the Hugging Face dataset viewer returned an error" : "the dataset viewer has no image for this row"); return; }
-      box.innerHTML = ims.map(src => `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;note&quot;>(an image could not be loaded from the dataset viewer)</div>'">`).join("");
+      if (!ims.length) { if (n) box.innerHTML = miss(r && r.j.error ? "(the dataset viewer returned an error)" : "(no image in the dataset row)", r && r.link); return; }
+      window.__ph = placeholder("(the dataset viewer did not serve it)", r && r.link);
+      box.innerHTML = ims.map(src => `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.outerHTML=window.__ph">`).join("");
     });
   }
 }
 
 // ---- the question, from the Hub dataset viewer ----
+// placeholder for an image that cannot be shown: the reason and a link to the dataset row
+const PH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>`;
+const placeholder = (reason, link) => `<div class="ph">${PH_ICON}<div>Image not available<br>${esc(reason)}</div>${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">Open on Hugging Face</a>` : ""}</div>`;
 const IMG_URL = /^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg|bmp)(\?\S*)?$/i;
 // the images of a dataset row: image fields (viewer assets, data URIs); plain image URLs only when the row has no image
 // field (e.g. HakushoBench's image_url), since other URL fields are attribution links (CVQA's "Image Source")
