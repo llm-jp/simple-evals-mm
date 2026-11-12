@@ -133,7 +133,7 @@ def test_clean_job_metrics_and_provenance(lb, monkeypatch):
     assert j["served_identity"] == {"canonical_slug": "fake/model-20261101"} and "--job-name j" in j["command"]
     assert lvl["provider"] == "FakeCloud" and lvl["quantization"] == "bf16" and lvl["alias"] is False
     assert data["tasks"][0]["n"] == 4 and data["site"]["version"] == "0.5.0" and data["site"]["n_runs"] == 2
-    assert data["causes"]["zeroed"] == ["budget_exhausted", "refused", "context_overflow"]
+    assert data["causes"]["zeroed"] == ["budget_exhausted", "refused", "context_overflow", "request_rejected"]
 
 
 def test_row_combines_two_jobs_and_marks_alias(lb):
