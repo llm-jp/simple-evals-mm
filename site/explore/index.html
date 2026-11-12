@@ -148,7 +148,9 @@ a.backlink { font-size: 15px; }
 .hmwrap { overflow: visible; }
 @media (min-width: 900px) and (min-height: 700px) {
   /* the bar's background spans the window, so a table wider than the column does not show through beside it */
-  .hmbar { position: sticky; top: 56px; z-index: 4; background: var(--bg); box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); }
+  .hmbar { position: sticky; top: 56px; z-index: 4; background: var(--bg); }
+  /* the bar's background spans the window (a pseudo-element, so the drop-down lists below the bar are not clipped) */
+  .hmbar::before { content: ""; position: absolute; top: 0; bottom: 0; left: -100vw; right: -100vw; background: var(--bg); z-index: -1; }
   table.hm thead th { position: sticky; top: var(--hmtop, 56px); z-index: 2; background: var(--bg); }
 }
 table.hm .c0 { min-width: 110px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
