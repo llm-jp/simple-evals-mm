@@ -66,3 +66,19 @@ def test_trial_dir_names_are_safe_and_distinct():
     a, b = harbor_export.trial_dir_name("d", "a/b", 1), harbor_export.trial_dir_name("d", "a_b", 1)
     assert a != b and "/" not in a and b == "d__a_b__a1"
     assert len(harbor_export.trial_dir_name("d", "x" * 300, 3)) < 100
+
+
+def test_export_several_jobs_as_one(job_env, tmp_path):
+    assert job_env["run"](name="lo") == 0
+    assert job_env["run"]("-k", "2", name="hi") == 0
+    sts = [job_env["store"]("lo"), job_env["store"]("hi")]
+    rep = harbor_export.export_jobs(sts, str(tmp_path / "h"), "both", n_tasks=2)
+    job = tmp_path / "h" / "both"
+    assert rep["n_trials"] == 2 + 4 and rep["datasets"] == ["arith"]
+    res = json.loads((job / "result.json").read_text())
+    # the same model and effort in both jobs: the job names tell the settings apart
+    assert set(res["stats"]["evals"]) == {"direct__fake (lo)__arith", "direct__fake (hi)__arith"}
+    names = sorted(p.name for p in job.iterdir() if p.is_dir())
+    assert all(n.startswith(("lo__arith__", "hi__arith__")) for n in names) and len(names) == 6
+    cfg = json.loads((job / "config.json").read_text())
+    assert len(cfg["agents"]) == 2 and cfg["n_attempts"] == 2
