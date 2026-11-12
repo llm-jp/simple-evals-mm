@@ -52,3 +52,6 @@ logs/
 
 # v0.5 job results (sem run; DEFAULT_JOBS_DIR)
 /jobs/
+
+# analysis page data: quotes benchmark questions and answers; built locally, published only after review
+site/analysis.js
