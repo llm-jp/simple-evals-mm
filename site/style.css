@@ -369,3 +369,11 @@ p.back a:hover { color: var(--text-primary); }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-right: auto; font-size: 13px; color: var(--text-secondary); }
 .chart-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .chart-legend .lg-band { display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: var(--surface-2); }
+
+/* organization legend of the leaderboard chart (and /trends): click to highlight, the others fade */
+.org-legend { display: flex; flex-wrap: wrap; gap: 2px 4px; flex-basis: 100%; }
+.org-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; padding: 3px 8px 3px 4px; border-radius: 999px; cursor: pointer; }
+.org-btn:hover { background: var(--surface-2); }
+.org-btn[aria-pressed="true"] { border-color: var(--text-secondary); color: var(--text-primary); }
+.org-btn .logo { width: 18px; height: 18px; }
+svg .faded { opacity: 0.12; transition: opacity .15s; }

@@ -91,6 +91,7 @@
           <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
         </div>
         <div class="chart-foot">
+          <div class="org-legend" id="org-legend" title="Hover an organization to highlight it; click to keep it"></div>
           <div class="chart-legend" id="chart-legend"></div>
           <div class="axis-controls" role="toolbar" aria-label="X axis">
             <span class="seg" data-key="x">
@@ -354,7 +355,7 @@
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 60 ? "var(--text-primary)" : logoColor(m);
   };
   function marker(parent, cx, cy, m, { dashed = false, est = false } = {}) {
-    const g = el("g", { transform: `translate(${cx} ${cy})` }, parent);
+    const g = el("g", { transform: `translate(${cx} ${cy})`, "data-org": m.dev, "data-model": m.key }, parent);
     const ring = { fill: "#ffffff", stroke: "var(--text-muted)", "stroke-width": 1.8 };
     if (dashed) ring["stroke-dasharray"] = "3 2";
     el("circle", { r: 11, ...ring }, g);
@@ -458,7 +459,7 @@
     const placed = [];
     const hit = b => [...placed, ...boxes].some(o => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
     const inside = b => b.x0 >= M.l && b.x1 <= W - M.r && b.y0 >= M.t && b.y1 <= H - M.b;
-    function place(cls, text, cx, cy, cands, fs, fill) {
+    function place(cls, text, cx, cy, cands, fs, fill, org, model) {
       fs *= FS;
       const w = text.length * fs * 0.56 + 4, h = fs + 3;
       for (const [dx, dy, anchor] of cands) {
@@ -468,6 +469,8 @@
         if (!inside(b) || hit(b)) continue;
         placed.push(b);
         const t = el("text", { class: cls, x: lx, y: ly, "text-anchor": anchor }, svg);
+        if (org) t.setAttribute("data-org", org);
+        if (model) t.setAttribute("data-model", model);
         if (fill) t.style.fill = fill;
         if (FS !== 1) t.style.fontSize = fs + "px";
         t.textContent = text;
@@ -484,7 +487,7 @@
         const a = ps[i], b = ps[i + 1];
         const len = Math.hypot(b.cx - a.cx, b.cy - a.cy) || 1, sh = 13;
         if (len > 2 * sh) el("line", { x1: a.cx + (b.cx - a.cx) / len * sh, y1: a.cy + (b.cy - a.cy) / len * sh,
-          x2: b.cx - (b.cx - a.cx) / len * sh, y2: b.cy - (b.cy - a.cy) / len * sh, stroke: nameColor(a.m), "stroke-width": 1.6, opacity: 0.5 }, svg);
+          x2: b.cx - (b.cx - a.cx) / len * sh, y2: b.cy - (b.cy - a.cy) / len * sh, stroke: nameColor(a.m), "stroke-width": 1.6, opacity: 0.5, "data-org": a.m.dev, "data-model": a.m.key }, svg);
         pairs.push({ a, b, len });
       }
     }
@@ -498,25 +501,44 @@
       const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2;
       const nx = -(b.cy - a.cy) / len, ny = (b.cx - a.cx) / len;
       const up = ny < 0 ? 1 : -1;
-      const ok = len > 90 && place("mlabel", a.m.name, mx, my, [[up * nx * 12, up * ny * 12 + 4, "middle"], [-up * nx * 14, -up * ny * 14 + 8, "middle"]], 12, nameColor(a.m));
-      if (!ok) place("mlabel", a.m.name, b.cx, b.cy, NAME_CANDS, 12, nameColor(a.m)) || place("mlabel", a.m.name, a.cx, a.cy, NAME_CANDS, 12, nameColor(a.m));
+      const ok = len > 90 && place("mlabel", a.m.name, mx, my, [[up * nx * 12, up * ny * 12 + 4, "middle"], [-up * nx * 14, -up * ny * 14 + 8, "middle"]], 12, nameColor(a.m), a.m.dev, a.m.key);
+      if (!ok) place("mlabel", a.m.name, b.cx, b.cy, NAME_CANDS, 12, nameColor(a.m), a.m.dev, a.m.key) || place("mlabel", a.m.name, a.cx, a.cy, NAME_CANDS, 12, nameColor(a.m), a.m.dev, a.m.key);
     }
     for (const p of pts) {
       if (byModel.get(p.m.key).length > 1) continue;
-      place("mlabel", p.m.name, p.cx, p.cy, NAME_CANDS, 12, nameColor(p.m));
+      place("mlabel", p.m.name, p.cx, p.cy, NAME_CANDS, 12, nameColor(p.m), p.m.dev, p.m.key);
     }
     for (const p of pts) {
       if (byModel.get(p.m.key).length < 2) continue;
-      place("elabel", effLabel(p.m, p.effort), p.cx, p.cy, [[0, 25, "middle"], [0, -16, "middle"], [15, 4, "start"], [-15, 4, "end"]], 10.5);
+      place("elabel", effLabel(p.m, p.effort), p.cx, p.cy, [[0, 25, "middle"], [0, -16, "middle"], [15, 4, "start"], [-15, 4, "end"]], 10.5, null, p.m.dev, p.m.key);
     }
     const gh = el("g", {}, svg);
     for (const p of pts) {
       const c = el("circle", { cx: p.cx, cy: p.cy, r: 15, fill: "transparent", style: "cursor:pointer" }, gh);
-      c.addEventListener("mouseenter", () => showTip(p));
-      c.addEventListener("mouseleave", () => tip.style.opacity = 0);
+      c.addEventListener("mouseenter", () => { showTip(p); hoverModel = p.m.key; applyPick(); });
+      c.addEventListener("mouseleave", () => { tip.style.opacity = 0; hoverModel = null; applyPick(); });
       c.addEventListener("click", e => { e.stopPropagation(); showTip(p); });  // touch: a tap shows it, a tap elsewhere hides it
     }
+    orgLegend(pts);
     renderTable();
+  }
+  // organizations in the chart: a legend whose items highlight their points (the others fade)
+  const picked = new Set();
+  function orgLegend(pts) {
+    const ms = []; for (const p of pts) if (!ms.some(m => m.dev === p.m.dev)) ms.push(p.m);
+    const box = document.getElementById("org-legend");
+    box.innerHTML = ms.map(m => `<button type="button" class="org-btn" data-org="${esc(m.dev)}" aria-pressed="${picked.has(m.dev)}">${logoHTML(m)}${esc(m.dev)}</button>`).join("");
+    box.onclick = e => { const b = e.target.closest(".org-btn"); if (!b) return; picked.has(b.dataset.org) ? picked.delete(b.dataset.org) : picked.add(b.dataset.org); applyPick(); };
+    box.onmouseover = e => { const b = e.target.closest(".org-btn"); if (b && hovered !== b.dataset.org) { hovered = b.dataset.org; applyPick(); } };
+    box.onmouseleave = () => { hovered = null; applyPick(); };
+    applyPick();
+  }
+  let hovered = null, hoverModel = null;  // hovering an organization (legend) or a point (its model) highlights it
+  function applyPick() {
+    const on = hovered ? new Set([...picked, hovered]) : picked;
+    svg.querySelectorAll("[data-org]").forEach(e => e.classList.toggle("faded",
+      hoverModel ? e.dataset.model !== hoverModel : on.size > 0 && !on.has(e.dataset.org)));
+    document.querySelectorAll("#org-legend .org-btn").forEach(b => b.setAttribute("aria-pressed", picked.has(b.dataset.org)));
   }
 
   function showTip(p) {
