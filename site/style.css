@@ -166,8 +166,6 @@ td.hl, th.hl { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .pm { color: var(--text-muted); font-size: 11px; }
 
 /* about */
-figure.overview-fig { margin: 12px 0 18px; background: #ffffff; border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
-figure.overview-fig img { width: 100%; display: block; }
 
 /* data: task blocks (collapsed to the first two rows until expanded) */
 .cards.collapsed .task-card:nth-child(n+5) { display: none; }
