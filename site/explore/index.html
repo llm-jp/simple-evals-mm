@@ -132,7 +132,6 @@ table.hm td.cell { width: 50px; min-width: 50px; max-width: 50px; height: 32px; 
 .att a.a1 { background: #16a34a; color: #fff; } .att a.a0 { background: #dc2626; color: #fff; } .att a.ax { background: var(--surface-2); color: var(--text-secondary); } .att a.ac { background: #f59e0b; color: #fff; }
 .slider { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
 .slider input[type=range] { width: 140px; }
-a.backlink { font-size: 15px; }
 
 /* pill controls with popovers (as on speed1313.github.io) */
 .pw { position: relative; display: inline-block; }
@@ -143,6 +142,15 @@ a.backlink { font-size: 15px; }
 .pw.open .pillbtn .chev { transform: rotate(180deg); }
 .pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
 .pw.open .pop { display: block; }
+/* alignment: the first selector starts at the column's left edge; the page never scrolls sideways */
+.ctl > .pw:first-child { margin-left: -12px; }
+html, body { overflow-x: clip; }
+/* dataset cards: the description takes the free height, so the results of cards in a row line up */
+article.dscard .desc { flex-grow: 1; }
+article.dscard .facts { margin-top: 0; }
+/* trial summary: the reward is a value like the others (colour, not a badge) */
+.rtok { margin-left: 6px; font-size: 13px; color: var(--text-secondary); }
+.stats .rv1 { color: #15803d; } .stats .rv0 { color: #b91c1c; }
 .dshead { border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin: 4px 0 14px; background: var(--surface-1); }
 .dshead .desc { margin: 6px 0; color: var(--text-secondary); font-size: 15px; }
 .dres { margin: 12px 0 10px; }
@@ -195,7 +203,8 @@ table.hm thead th { box-shadow: inset 0 -1px 0 var(--border); }
 table.hm .c1 { box-shadow: inset -1px 0 0 var(--border); }
 table.hm thead th.c1 { box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border); }
 /* a heatmap wider than the page column (all effort levels) is centred on the window instead of the column */
-.hmwrap.bleed { width: 100vw; margin-left: calc(50% - 50vw); display: flex; justify-content: center; }
+.hmwrap.bleed { width: calc(100vw - 32px); margin-left: calc(50% - 50vw + 16px); display: flex; justify-content: center; }
+.hmwrap.scrollx { overflow-x: auto; }
 /* phones / short screens: nothing sticky; the table scrolls sideways in its own box, the page does not */
 @media (max-width: 899px), (max-height: 699px) {
   .hmwrap, .hmwrap.bleed { width: auto; margin-left: 0; display: block; overflow-x: auto; }
@@ -216,8 +225,13 @@ table.hm thead th.c1 { box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 
 .think > summary::before { content: none !important; }
 .think > summary .chev2 { transition: transform .15s; }
 .think[open] > summary .chev2 { transform: rotate(90deg); }
-a.backlink { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; border-radius: 999px; color: var(--text-primary); text-decoration: none; }
-a.backlink:hover { background: var(--surface-2); }
+@media (max-width: 520px) {  /* phones: one row per figure, label left and value right */
+  .dgrid3 { grid-template-columns: 1fr; }
+  .dgrid3 .dc { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .dgrid3 .dv { font-size: 18px; } .dgrid3 .ds { display: none; }
+  .dgrid3 .dwide { display: block; }
+}
+.cards > * { min-width: 0; }
 </style>
 <main id="top">
   <section id="run">
@@ -225,7 +239,7 @@ a.backlink:hover { background: var(--surface-2); }
       <div id="runhead"><p class="back"><a href="../#leaderboard">&larr; Leaderboard</a></p>
       <h2>Explore</h2>
       <p class="intro">Every attempt of every task for every leaderboard setting. Questions and images load from the dataset's own Hugging Face repository (dataset viewer); gated or private datasets show our side only.</p>
-      <nav class="rtabs" id="tabs"><a data-v="datasets">Datasets</a><a data-v="heatmap">Heatmap</a><a data-v="tasks">Tasks</a><a data-v="trials">Trials</a></nav></div>
+      <nav class="rtabs" id="tabs"><a data-v="benchmarks">Benchmarks</a><a data-v="heatmap">Heatmap</a><a data-v="tasks">Tasks</a><a data-v="trials">Trials</a></nav></div>
       <div id="app"></div>
     </div>
   </section>
@@ -262,20 +276,20 @@ const trialsOf = async d => ((await getJSON(DATA + `trials/${d}.json`)) || {rows
 const answersOf = async d => ((await getJSON(DATA + `answers/${d}.json`)) || {}).answers || {};
 const prompts_cache = {};
 const prompts = async d => (prompts_cache[d] = ((await getJSON(DATA + `prompts/${d}.json`)) || {}).prompts || {});
-const back = () => `<p class="back"><a href="#" class="backlink" id="back">${icon("back")} Back</a></p>`;
+const back = () => `<p class="back"><a href="#" id="back">&larr; Back</a></p>`;
 function wireBack(fallback) { $("back").onclick = e => { e.preventDefault(); history.length > 1 ? history.back() : go(fallback); }; }
 function badge(x) { return !x ? `<span class="badge bx">–</span>` : x.r == null ? `<span class="badge bx">excluded</span>` : `<span class="badge ${x.r >= 0.5 ? "b1" : "b0"}">${(+x.r).toFixed(2)}</span>`; }
 async function init() {
   IDX = await getJSON(DATA + "index.json");
 
-  $("tabs").onclick = e => { const v = e.target.dataset.v; if (v) go(v === "datasets" ? {view: v} : {view: v, d: P().d}); };
+  $("tabs").onclick = e => { const v = e.target.dataset.v; if (v) go(v === "benchmarks" ? {view: v} : {view: v, d: P().d}); };
   route();
 }
 function route() {
-  const p = P(), v = p.view || "datasets";
+  const p = P(), v = p.view === "datasets" ? "benchmarks" : (p.view || "benchmarks");  // view=datasets: older links
   $("runhead").hidden = v === "task" || v === "trial";  // detail pages: only "Back"
   [...$("tabs").children].forEach(a => a.classList.toggle("on", a.dataset.v === (v === "trajectories" ? "trials" : v)));
-  ({datasets, heatmap, tasks: tasklist, trials, trajectories: trials, trial, task}[v] || datasets)(p);
+  ({benchmarks: datasets, heatmap, tasks: tasklist, trials, trajectories: trials, trial, task}[v] || datasets)(p);
   window.scrollTo(0, 0);
 }
 const navLinks = () => $("app").querySelectorAll("[data-go]").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go)); });
@@ -357,11 +371,11 @@ async function heatmap(p) {
   if (srt === "hard") data.sort((a, b) => a.mean - b.mean); else if (srt === "easy") data.sort((a, b) => b.mean - a.mean);
   const pages = Math.max(1, Math.ceil(data.length / PAGE)), view = data.slice(page * PAGE, (page + 1) * PAGE);
   const keep = {view: "heatmap", d, sort, flt, cfg};
-  let h = dsHeader(d) + `<div class="hmbar"><div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", sortFixed ? "Sort (every task shown has the same pass rate: task order)" : "Sort", srt, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]], sortFixed)}
+  let h = dsHeader(d) + `<div class="hmbar"><div class="ctl">${pill("ds", "db", "Benchmark", d, [["all", "All benchmarks"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", sortFixed ? "Sort (every task shown has the same pass rate: task order)" : "Sort", srt, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]], sortFixed)}
     <span class="hmleg" title="Each cell: the share of the setting's attempts on the task that were correct">Pass rate <span class="bar"></span> 0 → 100%</span>
 </div>
     <div class="note" style="margin:-4px 0 0;padding-bottom:8px">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · ${cols.length} settings</div></div>
-    <div class="hmwrap"><table class="hm"><thead><tr><th class="l c0" style="vertical-align:bottom;text-align:left;font-size:13px;color:var(--text-secondary)">Dataset</th><th class="l c1" style="vertical-align:bottom;text-align:left;font-size:13px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col" title="${esc(setName(i))}"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
+    <div class="hmwrap"><table class="hm"><thead><tr><th class="l c0" style="vertical-align:bottom;text-align:left;font-size:13px;color:var(--text-secondary)">Benchmark</th><th class="l c1" style="vertical-align:bottom;text-align:left;font-size:13px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col" title="${esc(setName(i))}"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
   for (const r of view) {
     h += `<tr><td class="tid c0" style="color:var(--text-secondary)">${esc(IDX.datasets[r.d].label)}</td><td class="tid c1" title="${esc(r.t)}"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(r.t.length > 18 ? "…" + r.t.slice(-17) : r.t)}</a></td>` +
       r.cells.map((c, i) => `<td class="cell" style="${cellStyle(c)}" data-c='${esc(JSON.stringify(c))}' data-s="${i}" data-t="${esc(r.t)}" data-d="${r.d}">${c && c[0] != null ? Math.round(c[0] * 100) + "%" : ""}</td>`).join("") + `</tr>`;
@@ -376,7 +390,9 @@ async function heatmap(p) {
   }
   {  // keep the page column (aligned with the header) unless the table is wider than it
     const w = $("app").querySelector(".hmwrap"), t = w && w.querySelector("table.hm");
-    if (t && t.getBoundingClientRect().width > w.getBoundingClientRect().width) w.classList.add("bleed");
+    const tw = t ? t.getBoundingClientRect().width : 0;
+    if (tw > innerWidth - 32) w.classList.add("scrollx");                 // wider than the window: its own sideways scroll
+    else if (tw > w.getBoundingClientRect().width) w.classList.add("bleed");  // wider than the column: centred on the window
   }
   wirePill("cfg", v => go({...keep, cfg: v, page: 0}));
   wirePill("flt", v => go({...keep, flt: v, page: 0}));
@@ -473,7 +489,7 @@ async function datasets(p) {
   const shown = keys.filter(d => cat === "All" || (META[d] || {}).category === cat);
   const pct = v => v == null ? "–" : Math.round(100 * v) + "%";
   let h = `<div class="ctl">${pill("cat", "db", "Category", cat, [["All", "All categories"], ...CATS.map(c => [c, c])])}</div>
-    <div class="note" style="margin:-4px 0 8px">${shown.length} of ${keys.length} datasets</div><div class="cards">`;
+    <div class="note" style="margin:-4px 0 8px">${shown.length} of ${keys.length} benchmarks</div><div class="cards">`;
   for (const d of shown) {
     const t = META[d] || {label: IDX.datasets[d].label}, st = stats[d] || {};
     const ncol = stats[d] && stats[d].ncols;
@@ -492,7 +508,7 @@ async function datasets(p) {
     </article>`;
   }
   $("app").innerHTML = h + `</div>`;
-  wirePill("cat", v => go({view: "datasets", category: v === "All" ? null : v}));
+  wirePill("cat", v => go({view: "benchmarks", category: v === "All" ? null : v}));
   navLinks();
 }
 
@@ -512,10 +528,10 @@ async function tasklist(p) {
   if (srt === "hard") data.sort((a, b) => a.mean - b.mean); else if (srt === "easy") data.sort((a, b) => b.mean - a.mean);
   const pages = Math.max(1, Math.ceil(data.length / PAGE)), view = data.slice(page * PAGE, (page + 1) * PAGE);
   const keep = {view: "tasks", d, sort, flt, cfg, q};
-  let h = dsHeader(d) + `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", sortFixed ? "Sort (every task shown has the same pass rate: task order)" : "Sort", srt, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]], sortFixed)}
+  let h = dsHeader(d) + `<div class="ctl">${pill("ds", "db", "Benchmark", d, [["all", "All benchmarks"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", sortFixed ? "Sort (every task shown has the same pass rate: task order)" : "Sort", srt, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]], sortFixed)}
     <input class="search" id="tq" placeholder="Search the question or task id…" value="${esc(q)}"></div>
     <div class="note" style="margin:-4px 0 8px">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · ${cols.length} models (settings)</div>
-    <div style="overflow-x:auto"><table class="rs tl"><thead><tr><th class="l">Dataset</th><th class="l">Task ID</th><th class="l">Question</th><th title="The mean, over the models, of each model's pass rate on this task (its correct share of attempts)">Avg. over models</th><th title="Models that answered correctly in every attempt">Always solved by</th></tr></thead><tbody>`;
+    <div style="overflow-x:auto"><table class="rs tl"><thead><tr><th class="l">Benchmark</th><th class="l">Task ID</th><th class="l">Question</th><th title="The mean, over the models, of each model's pass rate on this task (its correct share of attempts)">Avg. over models</th><th title="Models that answered correctly in every attempt">Always solved by</th></tr></thead><tbody>`;
   for (const r of view) {
     const qt = qtext(r), ni = nimg(r), solved = r.cells.filter(c => c && c[0] === 1).length;
     const prev = IDX.datasets[r.d].hide_prompt ? `<span class="note">not shown (${esc(IDX.datasets[r.d].note || "not public")})</span>` : esc(qt.length > 150 ? qt.slice(0, 150) + "…" : qt);
@@ -545,12 +561,12 @@ async function trials(p) {
     (!p.q || x.t === p.q)).sort((a, b) => a.S - b.S || a.t.localeCompare(b.t) || a.k - b.k);
   const pages = Math.max(1, Math.ceil(view.length / PAGE)), keep = {view: "trials", d, s, o, q: p.q};
   const counted = view.filter(x => x.r != null), cost = view.reduce((a, x) => a + (x.$ || 0), 0);
-  $("app").innerHTML = dsHeader(d) + `<div class="ctl">${pill("ds", "db", "Dataset", d, allDs().map(k => [k, IDX.datasets[k].label]))}${pill("set", "bot", "Model", si < 0 ? "all" : IDX.settings[si].key, settingOptions(d, true))}${pill("out", "check", "Reward", o, OUTCOMES)}
+  $("app").innerHTML = dsHeader(d) + `<div class="ctl">${pill("ds", "db", "Benchmark", d, allDs().map(k => [k, IDX.datasets[k].label]))}${pill("set", "bot", "Model", si < 0 ? "all" : IDX.settings[si].key, settingOptions(d, true))}${pill("out", "check", "Reward", o, OUTCOMES)}
     ${p.q ? `<span class="badge bx" style="font-size:14px;padding:4px 10px">task ${esc(ttitle(d, p.q))} <a href="#" ${goAttr({...keep, q: null, page: 0})}>×</a></span>` : ""}</div>
     <div class="rs-sum"><span><b>${new Set(view.map(x => x.t)).size.toLocaleString()}</b>tasks</span><span><b>${(() => { const ks = [...new Set(view.map(x => x.k))]; return ks.length ? Math.max(...ks) : "–"; })()}</b>attempts per task</span><span><b>${view.length.toLocaleString()}</b>trials</span>
     <span><b>${counted.length ? (100 * counted.filter(ok).length / counted.length).toFixed(1) + "%" : "–"}</b>correct</span><span><b>${view.filter(cut).length}</b>cut off</span><span><b>${view.length - counted.length}</b>excluded</span>
     <span><b>${tok(view.length ? Math.round(view.reduce((a, x) => a + (x.o || 0), 0) / view.length) : null)}</b>output tokens / trial</span><span><b>${secs(view.length ? view.reduce((a, x) => a + (x.s || 0), 0) / view.length : null)}</b>duration / trial</span><span><b>${cost ? "$" + cost.toFixed(2) : "–"}</b>cost</span></div>
-    <div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Model</th><th class="l">Dataset</th><th class="l">Task ID</th><th>Attempt</th><th>Reward</th><th class="l">Cause</th><th>Input tok</th><th>Output tok</th><th>Time</th><th>Cost</th></tr></thead><tbody>` +
+    <div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Model</th><th class="l">Benchmark</th><th class="l">Task ID</th><th>Attempt</th><th>Reward</th><th class="l">Cause</th><th>Input tok</th><th>Output tok</th><th>Time</th><th>Cost</th></tr></thead><tbody>` +
     view.slice(page * PAGE, (page + 1) * PAGE).map(x => `<tr class="row" ${goAttr({view: "trial", d, t: x.t, s: IDX.settings[x.S].key, k: x.k})}><td class="l">${esc(setName(x.S))}</td><td class="l">${esc(IDX.datasets[d].label)}</td><td class="l"><a href="?view=task&d=${d}&t=${encodeURIComponent(x.t)}" class="tasklink" ${goAttr({view: "task", d, t: x.t})}>${esc(x.t)}</a></td><td>${x.k}</td><td>${badge(x)}</td><td class="l">${x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</td><td>${tok(x.i)}</td><td>${tok(x.o)}</td><td>${secs(x.s)}</td><td>${usd(x.$)}</td></tr>`).join("") +
     `</tbody></table></div><div class="pager">${view.length.toLocaleString()} trials · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div>`;
   navLinks();
@@ -613,7 +629,7 @@ async function trial(p) {
     const userText = pr ? pr.replace(/\n\[\d+ image\(s\)\]$/, "") : null;
     body = `<div class="chat"><div class="msg user"><div class="who">User</div><div id="uimg"></div>${userText != null ? esc(userText) : `<span class="note">The question is not shown: ${esc(IDX.datasets[d].note || "no public viewer")}.</span>`}</div>` +
       `<div class="msg asst"><div class="who">${esc(setName(si))}</div>` +
-      `<details class="think"><summary>${icon("chevR", "chev2")}${icon("bulb")} Reasoning${x && x.R ? ` <span class="note">· ${tok(x.R)} tokens</span>` : ""}</summary><div class="tbody">${reas ? esc(reas) :
+      `<details class="think"><summary>${icon("chevR", "chev2")}${icon("bulb")} Reasoning${x && x.R ? `<span class="rtok">· ${tok(x.R)} tokens</span>` : ""}</summary><div class="tbody">${reas ? esc(reas) :
         x && x.R > 0 ? `Hidden by the provider (${tok(x.R)} reasoning tokens; the text is not returned).` : x && x.R === 0 ? "None (the model answered without reasoning)." : "Unavailable."}</div></details>` +
       `<div>${esc(ans || "(no answer)")}</div></div></div>`;
   }
@@ -621,7 +637,7 @@ async function trial(p) {
   else body = await metricsHTML(p, st, x);
   const nAtt = all.filter(y => y.S === si).length;
   $("app").innerHTML = back() + `<div class="trial-head"><h2><a href="?view=task&d=${d}&t=${encodeURIComponent(t)}" ${goAttr({view: "task", d, t})} style="color:inherit">${esc(ttitle(d, t))}</a></h2></div>
-    <div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k} of ${nAtt}</b>attempt</span><span><b>${tok(x && x.i)}</b>input tokens</span><span><b>${tok(x && x.o)}</b>output tokens</span><span><b>${secs(x && x.s)}</b>duration</span><span><b>${usd(x && x.$)}</b>cost</span><span><b>${esc((x && x.f) || "–")}</b>finish reason</span><span><b style="font-size:17px">${badge(x)}</b>reward${x && x.c ? ` · <span class="cause">${esc(x.c)}</span>` : ""}</span></div>
+    <div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k} of ${nAtt}</b>attempt</span><span><b>${tok(x && x.i)}</b>input tokens</span><span><b>${tok(x && x.o)}</b>output tokens</span><span><b>${secs(x && x.s)}</b>duration</span><span><b>${usd(x && x.$)}</b>cost</span><span><b>${esc((x && x.f) || "–")}</b>finish reason</span><span><b class="${!x || x.r == null ? "" : x.r >= 0.5 ? "rv1" : "rv0"}">${!x ? "–" : x.r == null ? "excluded" : (+x.r).toFixed(2)}</b>reward${x && x.c ? ` · <span class="cause">${esc(x.c)}</span>` : ""}</span></div>
     <nav class="ttabs">${TABS.map(([v, l]) => `<a ${goAttr({...p, tab: v})} class="${v === tab ? "on" : ""}">${l}</a>`).join("")}</nav>${body}`;
   wireBack({view: "task", d, t});
   navLinks();

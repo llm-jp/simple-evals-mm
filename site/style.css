@@ -327,9 +327,10 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 
 /* changelog page */
 #changelog { padding-top: 40px; padding-bottom: 56px; }
-#changelog .back { margin: 0 0 14px; font-size: 14px; }
-#changelog .back a { color: var(--text-secondary); text-decoration: none; }
-#changelog .back a:hover { color: var(--text-primary); }
+/* the back link: one style on every page (left edge flush with the content) */
+p.back { margin: 0 0 14px; font-size: 15px; }
+p.back a { color: var(--text-secondary); text-decoration: none; }
+p.back a:hover { color: var(--text-primary); }
 .cl-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; }
 .changelog { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--border); }
 .cl-entry { position: relative; padding: 0 0 28px 22px; scroll-margin-top: 80px; }
@@ -359,3 +360,8 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
   header.site .wrap { padding: 0 14px; }
   .theme-toggle { margin-left: 2px; }
 }
+
+/* alignment: the first selector of a control row starts at the column's left edge (its pill padding hangs outside) */
+.lb-top > .pick-wrap:first-child select.pick { margin-left: -12px; }
+/* the jobs table nested in a leaderboard row: its own padding, not the row table's */
+#lb table.prov th, #lb table.prov td { padding: 3px 10px 3px 0 !important; }

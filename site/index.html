@@ -59,11 +59,11 @@
         <div class="pick-wrap">
           <select class="pick" id="pick-subject" aria-label="Score shown on the chart and in the table"></select></div>
         <div class="filter-wrap" data-filter="tasks" hidden>
-          <button class="filter-btn" aria-expanded="false" title="Tasks averaged into Overall">Tasks <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <button class="filter-btn" aria-expanded="false" title="Benchmarks averaged into Overall">Benchmarks <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
           <div class="panel" hidden>
             <div class="presets">
               <button data-preset="all">All</button><button data-preset="ja">Japanese</button><button data-preset="en">English</button>
-              <button data-preset="multimodal" title="Tasks with images in the input">Multimodal</button><button data-preset="text">Text only</button><button data-preset="none">None</button>
+              <button data-preset="multimodal" title="Benchmarks with images in the input">Multimodal</button><button data-preset="text">Text only</button><button data-preset="none">None</button>
             </div>
             <div class="task-list"></div>
           </div>
@@ -186,8 +186,8 @@
                   ...MEMBERS.map(t => ({ key: "t:" + t.key, label: t.label }))];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-  document.getElementById("lb-meta").innerHTML = `${TASKS.length} tasks · last updated ${esc(D.updated)}`
-    + ` <a class="changelog-btn" href="changelog.html" title="Models, tasks, scoring and reporting changes, by date">`
+  document.getElementById("lb-meta").innerHTML = `${TASKS.length} benchmarks · last updated ${esc(D.updated)}`
+    + ` <a class="changelog-btn" href="changelog.html" title="Models, benchmarks, scoring and reporting changes, by date">`
     + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>Changelog</a>`;
 
   const state = { view: "best", subject: SCOPES[0].key, x: "cost", scale: "log", sortKey: null, sortDir: -1, cfg: new Set() };
@@ -205,7 +205,7 @@
   const ovPartial = () => state.ovTasks.size < ALL_TASKS.length;
   const scopeLabel = () => {
     const s = SCOPES.find(s => s.key === state.subject);
-    return isOverall() && ovPartial() ? `Overall (${state.ovTasks.size} of ${ALL_TASKS.length} tasks)` : s.label;
+    return isOverall() && ovPartial() ? `Overall (${state.ovTasks.size} of ${ALL_TASKS.length} benchmarks)` : s.label;
   };
 
   // ---- score pulldown + segmented controls ----
@@ -290,7 +290,7 @@
   function renderTaskPanel() {
     taskWrap.hidden = !isOverall();
     taskWrap.querySelectorAll("input[data-t]").forEach(cb => { cb.checked = state.ovTasks.has(cb.dataset.t); });
-    taskWrap.querySelector(".filter-btn").innerHTML = `Tasks (${state.ovTasks.size}/${ALL_TASKS.length}) <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
+    taskWrap.querySelector(".filter-btn").innerHTML = `Benchmarks (${state.ovTasks.size}/${ALL_TASKS.length}) <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
   }
   function tasksChanged() {
     renderTaskPanel(); state.sortKey = null; render();
@@ -609,7 +609,7 @@
       + `<dt>Per dataset</dt><dd><details><summary>${Object.keys(lvl.tasks).length} datasets: data digest, attempts, verification, judge</summary><div class="prov-wrap"><table class="prov"><thead><tr><th>Task</th><th>Score</th><th>Issues</th><th>Revision</th><th>Tasks · sha256</th><th>Attempts</th><th>Verification</th><th>Judge</th><th>Served as</th></tr></thead><tbody>${provRows}</tbody></table></div></details></dd></dl>`;
   }
   function renderTable() {
-    document.getElementById("table-note").textContent = `${tScope().label}: % judged correct, mean over ${SITE.n_runs} attempts (AIME 10, IFBench 5; ± standard deviation across attempts); "–" = not evaluated. All tasks are evaluated without tools. Cut-off answers, refused requests and inputs longer than the context count as 0; transient API, judge and verifier failures are excluded from the mean. Cost and output tokens are per question on this task. Click a row for its job, endpoint, settings, per-dataset provenance and the commands that reproduce it.`;
+    document.getElementById("table-note").textContent = `${tScope().label}: % judged correct, mean over ${SITE.n_runs} attempts (AIME 10, IFBench 5; ± standard deviation across attempts); "–" = not evaluated. All benchmarks are evaluated without tools. Cut-off answers, refused requests and inputs longer than the context count as 0; transient API, judge and verifier failures are excluded from the mean. Cost and output tokens are per question on this benchmark. Click a row for its job, endpoint, settings, per-benchmark provenance and the commands that reproduce it.`;
     const cs = cols();
     if (!state.sortKey || !cs.some(c => c.key === state.sortKey)) { state.sortKey = "score"; state.sortDir = -1; }
     thead.innerHTML = cs.map(c => `<th data-k="${esc(c.key)}" class="${c.key === state.sortKey ? "sorted" : ""} ${c.key === "score" ? "hl" : ""} ${c.cls === "sep" ? "sep" : ""}">${esc(c.label)}</th>`).join("");
@@ -617,8 +617,8 @@
     const isTotal = TOTAL.some(b => "b:" + b.key === state.subject);
     const all = rowsNow();
     const omitted = isTotal ? all.filter(r => (tVal(r.lvl) || {}).score == null) : [];
-    if (omitted.length) document.getElementById("table-note").textContent += ` Not in ${tScope().label} (missing tasks): `
-      + omitted.map(r => `${r.m.name} (${effLabel(r.m, r.effort)})`).join(", ") + "; see the single-task scores.";
+    if (omitted.length) document.getElementById("table-note").textContent += ` Not in ${tScope().label} (missing benchmarks): `
+      + omitted.map(r => `${r.m.name} (${effLabel(r.m, r.effort)})`).join(", ") + "; see the single-benchmark scores.";
     const rows = all.filter(r => !omitted.includes(r)).sort((a, b) => {
       const va = val(a, state.sortKey), vb = val(b, state.sortKey);
       return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * state.sortDir;
