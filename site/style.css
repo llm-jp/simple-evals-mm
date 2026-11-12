@@ -332,9 +332,8 @@ p.back { margin: 0 0 14px; font-size: 15px; }
 p.back a { color: var(--text-secondary); text-decoration: none; }
 p.back a:hover { color: var(--text-primary); }
 .cl-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; }
-.changelog { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--border); }
-.cl-entry { position: relative; padding: 0 0 28px 22px; scroll-margin-top: 80px; }
-.cl-entry::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); }
+.changelog { list-style: none; margin: 0; padding: 0; }
+.cl-entry { position: relative; padding: 0 0 28px; scroll-margin-top: 80px; }
 .cl-when { font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .cl-version { font-size: 12px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 8px; text-decoration: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cl-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
