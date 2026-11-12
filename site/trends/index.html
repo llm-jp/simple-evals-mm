@@ -51,7 +51,13 @@
 .method { max-width: 860px; color: var(--text-secondary); font-size: 15px; line-height: 1.65; }
 .method code { font-size: 13px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 .method .eq { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-primary); background: var(--code-bg); border-radius: 8px; padding: 10px 14px; margin: 8px 0; display: block; font-size: 14px; }
-select.pick.bsel { margin: 0 0 10px -12px; }
+.eqi { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); border-radius: 6px; padding: 1px 6px; color: var(--text-primary); }
+table.bt { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+table.bt th, table.bt td { padding: 6px 10px; text-align: right; border-top: 1px solid var(--border); white-space: nowrap; }
+table.bt th { background: var(--surface-2); color: var(--text-secondary); font-size: 13px; }
+table.bt td.l, table.bt th.l { text-align: left; }
+table.bt tr.brow { cursor: pointer; } table.bt tr.brow:hover { background: var(--surface-2); }
+table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; border: 1px solid var(--border); }
 </style>
 <main id="top">
   <section id="trends">
@@ -69,9 +75,10 @@ select.pick.bsel { margin: 0 0 10px -12px; }
         <svg class="tr-chart" id="c-rank" viewBox="0 0 960 600" role="img" aria-label="simple-evals-mm Index of every setting"></svg></div>
 
       <div class="tr-sec"><h3>simple-evals-mm Index vs benchmark score</h3>
-        <p class="intro">The fitted curve of one benchmark (its expected score at each capability) and the models' actual scores. A steep curve that is already at the top is a saturated benchmark; a shallow one still separates the models.</p>
-        <select class="pick bsel" id="bsel" aria-label="Benchmark"></select>
-        <svg class="tr-chart" id="c-bench" viewBox="0 0 960 460" role="img" aria-label="Benchmark score against the simple-evals-mm Index"></svg></div>
+        <p class="intro">Each benchmark's fitted curve: its expected score at each capability. A curve already at the top for every model is saturated; one that rises late still separates the models. Pick benchmarks in the table below; with a single benchmark, the models' actual scores are shown too.</p>
+        <svg class="tr-chart" id="c-bench" viewBox="0 0 960 460" role="img" aria-label="Benchmark score against the simple-evals-mm Index"></svg>
+        <p class="intro" style="margin-top:14px">Each curve is summarized by one logistic, <span class="eqi">score = g + (1 − g) · σ(α · (x − D))</span>: <b>D</b> is the index at which the benchmark is half solved (above guessing g), <b>α</b> its slope per index point; the fit error is the RMS distance to the curve.</p>
+        <div style="overflow-x:auto"><table class="rs bt" id="b-table"></table></div></div>
 
       <div class="tr-sec" id="method"><h3>How the simple-evals-mm Index is computed</h3>
         <div class="method">
@@ -202,24 +209,45 @@ select.pick.bsel { margin: 0 0 10px -12px; }
     });
   })();
 
-  // 3. benchmark curve + the settings' scores
-  const sel = document.getElementById("bsel");
-  sel.innerHTML = T.benchmarks.map(b => `<option value="${esc(b.key)}">${esc(b.label)}</option>`).join("");
+  // 3. benchmark curves (several at once) + the models' scores when one is picked; the fitted logistic per benchmark
+  const BPAL = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#be185d", "#4d7c0f", "#7c2d12", "#1e3a8a"];
+  const pickedB = new Set(["jgraphqa", "hakushobench", "mmmu_pro", "zerobench"].filter(k => T.curves[k]));
+  const bColor = {}; let nextC = 0;
+  const colorB = k => bColor[k] || (bColor[k] = BPAL[nextC++ % BPAL.length]);
+  const blabel = k => (T.benchmarks.find(b => b.key === k) || {}).label || k;
+  function benchTable() {
+    const rows = T.benchmarks.filter(b => T.fits[b.key]).sort((a, b) => T.fits[a.key].D - T.fits[b.key].D);
+    document.getElementById("b-table").innerHTML = `<thead><tr><th class="l">Benchmark</th><th class="l">Category</th><th>D (half solved)</th><th>α (slope)</th><th>Guessing g</th><th>Fit error</th></tr></thead><tbody>`
+      + rows.map(b => { const f = T.fits[b.key], on = pickedB.has(b.key);
+        return `<tr class="brow" data-b="${esc(b.key)}"><td class="l"><span class="sw" style="background:${on ? colorB(b.key) : "transparent"}"></span>${esc(b.label)}</td><td class="l">${esc(b.category || "")}</td>`
+          + `<td>${f.D < ymin ? `< ${ymin} <span style="color:var(--text-muted)">(saturated)</span>` : f.D.toFixed(1)}</td><td>${f.alpha.toFixed(3)}</td><td>${f.guess ? (100 * f.guess).toFixed(0) + "%" : "–"}</td><td>${f.rmse.toFixed(1)} pt</td></tr>`; }).join("") + `</tbody>`;
+    document.querySelectorAll("#b-table tr.brow").forEach(tr => tr.onclick = () => { const k = tr.dataset.b; pickedB.has(k) ? pickedB.delete(k) : pickedB.add(k); bench(); });
+  }
   function bench() {
     const svg = document.getElementById("c-bench"); while (svg.firstChild) svg.removeChild(svg.firstChild);
-    const key = sel.value, W = 960, H = 460, M = {l: 56, r: 24, t: 20, b: 44};
+    const W = 960, H = 460, M = {l: 56, r: 130, t: 20, b: 44};
     const sx = v => M.l + (v - ymin) / (ymax - ymin) * (W - M.l - M.r), sy = v => H - M.b - v / 100 * (H - M.t - M.b);
     for (let v = 0; v <= 100; v += 20) { el("line", {class: "grid", x1: M.l, x2: W - M.r, y1: sy(v), y2: sy(v)}, svg); el("text", {x: M.l - 8, y: sy(v) + 4, "text-anchor": "end"}, svg, v + "%"); }
     for (let v = ymin; v <= ymax; v += 10) el("text", {x: sx(v), y: H - M.b + 20, "text-anchor": "middle"}, svg, v);
     el("text", {x: (M.l + W - M.r) / 2, y: H - 6, "text-anchor": "middle"}, svg, "simple-evals-mm Index");
-    const cur = (T.curves[key] || []).filter(([x]) => x >= ymin && x <= ymax);
-    el("path", {d: cur.map(([x, y], i) => `${i ? "L" : "M"}${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(""), fill: "none", stroke: "var(--text-muted)", "stroke-width": 2.5}, svg);
-    const sc = T.scores[key] || {}, label = (T.benchmarks.find(b => b.key === key) || {}).label || key;
-    const pts = S.filter(s => sc[s.key] != null).map(s => ({s, x: sx(s.index), y: sy(sc[s.key])}));
-    for (const {s, x, y} of pts) hover(marker(svg, x, y, s, 8), s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`);
-    labels(svg, pts, W, M, name);  // setting names where they fit; every point has the hover card
+    const keys = [...pickedB], ends = [];
+    for (const k of keys) {
+      const cur = (T.curves[k] || []).filter(([x]) => x >= ymin && x <= ymax); if (!cur.length) continue;
+      el("path", {d: cur.map(([x, y], i) => `${i ? "L" : "M"}${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(""), fill: "none", stroke: colorB(k), "stroke-width": 2.5}, svg);
+      ends.push({k, y: sy(cur[cur.length - 1][1])});
+    }
+    // curve names at the right end, spread so they do not overlap
+    ends.sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 14);
+    for (const e of ends) el("text", {x: W - M.r + 8, y: e.y + 4, fill: colorB(e.k), "font-weight": 600}, svg, blabel(e.k)).style.fill = colorB(e.k);
+    if (keys.length === 1) {  // one benchmark: the models' actual scores too
+      const sc = T.scores[keys[0]] || {}, label = blabel(keys[0]);
+      const pts = S.filter(s => sc[s.key] != null).map(s => ({s, x: sx(s.index), y: sy(sc[s.key])}));
+      for (const {s, x, y} of pts) hover(marker(svg, x, y, s, 8), s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`);
+      labels(svg, pts, W - M.r + M.l, M, name);
+    }
+    benchTable(); applyPick();
   }
-  sel.onchange = () => { bench(); applyPick(); }; bench();
+  bench();
 })();
 </script>
 <script src="../theme.js"></script>

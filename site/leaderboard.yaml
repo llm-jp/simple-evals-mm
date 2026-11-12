@@ -204,8 +204,8 @@ tasks:
 # them gets none. `overall: true` without tasks = every task above.
 benchmarks:
   - {key: Overall, label: Overall, overall: true}
-# Model rows. released = first public availability (the OpenRouter listing date; the Hugging Face repository's creation
-# date when the model is not on OpenRouter), the x axis of /trends.
+# Model rows. released = the developer's official release / announcement date (its source in the comment), the x axis
+# of /trends.
 # Model rows. params_b = total parameters (B) from the Hugging Face weights (safetensors metadata, 2026-10-26),
 # omitted when the weights are not published (the site's "<= 100B" preset treats it as unknown). logo: a
 # site/logos.js key (missing -> the developer's initial). settings: one or two, the lower one first; `job` supplies
@@ -215,7 +215,7 @@ benchmarks:
 models:
   - key: opus55
     name: "Claude Opus 5.5"
-    released: "2026-09-22"  # openrouter: first listing on OpenRouter
+    released: "2026-09-22"  # Anthropic announcement, anthropic.com/news/claude-opus-5-5
     dev: "Anthropic"
     logo: anthropic
     type: proprietary
@@ -225,7 +225,7 @@ models:
       - {label: "max", effort: "max", job: opus55__max, datasets: {jawildtext: opus55__max__newtasks, mechaja_v2_mini: opus55__max__newtasks, perceptionbench: opus55__max__extra, livecodebench: opus55__max__lcb}}
   - key: gpt6-astra
     name: "GPT-6 Astra"
-    released: "2026-09-04"  # openrouter: first listing on OpenRouter
+    released: "2026-09-03"  # OpenAI API changelog
     dev: "OpenAI"
     logo: openai
     type: proprietary
@@ -235,7 +235,7 @@ models:
       - {label: "max", effort: "max", job: gpt6-astra__max, datasets: {jawildtext: gpt6-astra__max__newtasks, mechaja_v2_mini: gpt6-astra__max__newtasks, perceptionbench: gpt6-astra__max__extra, livecodebench: gpt6-astra__max__parity2}}
   - key: gemini38-flash
     name: "Gemini 3.8 Flash"
-    released: "2026-09-02"  # openrouter: first listing on OpenRouter
+    released: "2026-09-02"  # Gemini API changelog
     dev: "Google"
     logo: googlegemini
     type: proprietary
@@ -245,7 +245,7 @@ models:
       - {label: "high", effort: "high", job: gemini38-flash__high, datasets: {jawildtext: gemini38-flash__high__newtasks, mechaja_v2_mini: gemini38-flash__high__newtasks, perceptionbench: gemini38-flash__high__extra, livecodebench: gemini38-flash__high__lcb}}
   - key: qwen38-flash
     name: "Qwen3.8 Flash"
-    released: "2026-08-26"  # openrouter: first listing on OpenRouter
+    released: "2026-08-26"  # Qwen announcement (X)
     dev: "Alibaba (Qwen)"
     logo: qwen
     type: proprietary
@@ -254,7 +254,7 @@ models:
       - {label: "thinking", effort: "high", job: qwen38-flash__high, datasets: {jawildtext: qwen38-flash__high__newtasks, mechaja_v2_mini: qwen38-flash__high__newtasks, perceptionbench: qwen38-flash__high__extra, livecodebench: qwen38-flash__high__parity2}}  # thinking on, sent explicitly (v0.5.1; preset effort "high")
   - key: kimi-k31-pro
     name: "Kimi K3.1 Pro"
-    released: "2026-10-23"  # openrouter: first listing on OpenRouter
+    released: "2026-10-23"  # Moonshot announcement (X, UTC)
     dev: "Moonshot AI"
     logo: kimi
     type: open
@@ -264,7 +264,7 @@ models:
       - {label: "max", effort: "max", job: kimi-k31-pro__max, datasets: {jawildtext: kimi-k31-pro__max__newtasks, mechaja_v2_mini: kimi-k31-pro__max__newtasks, perceptionbench: kimi-k31-pro__max__extra, livecodebench: kimi-k31-pro__max__lcb}}
   - key: dsv41-flash
     name: "DeepSeek-V4.1-Flash-1017"
-    released: "2026-10-17"  # openrouter: first listing on OpenRouter
+    released: "2026-10-17"  # DeepSeek news, api-docs.deepseek.com/news/news261017
     dev: "DeepSeek"
     logo: deepseek
     type: open
@@ -275,7 +275,7 @@ models:
       - {label: "max", effort: "max", job: dsv41-flash__max, datasets: {jawildtext: dsv41-flash__max__newtasks, mechaja_v2_mini: dsv41-flash__max__newtasks, perceptionbench: dsv41-flash__max__extra, livecodebench: dsv41-flash__max__lcb}}
   - key: glm53-flash
     name: "GLM-5.3 Flash"
-    released: "2026-08-26"  # openrouter: first listing on OpenRouter
+    released: "2026-08-26"  # Z.ai blog, z.ai/blog/glm-5.3-flash
     dev: "Z.ai"
     logo: null
     type: open
@@ -286,7 +286,7 @@ models:
       - {label: "max", effort: "max", job: glm53-flash__max, datasets: {jawildtext: glm53-flash__max__newtasks, mechaja_v2_mini: glm53-flash__max__newtasks, perceptionbench: glm53-flash__max__extra, livecodebench: glm53-flash__max__lcb}}
   - key: qwen38-27b
     name: "Qwen3.8-27B"
-    released: "2026-08-14"  # openrouter: first listing on OpenRouter
+    released: "2026-08-14"  # Qwen3.8 README news
     dev: "Alibaba (Qwen)"
     logo: qwen
     type: open
@@ -298,7 +298,7 @@ models:
       - {label: "xhigh", effort: "xhigh", job: qwen38-27b__xhigh, datasets: {jawildtext: qwen38-27b__xhigh__newtasks, mechaja_v2_mini: qwen38-27b__xhigh__newtasks, perceptionbench: qwen38-27b__xhigh__extra, livecodebench: qwen38-27b__xhigh__parity2}}
   - key: gemma4-31b
     name: "Gemma 4 31B"
-    released: "2026-04-02"  # openrouter: first listing on OpenRouter
+    released: "2026-04-02"  # Google AI Studio changelog
     dev: "Google"
     logo: googlegemini
     type: open
@@ -309,7 +309,7 @@ models:
       - {label: "thinking", effort: "high", job: gemma4-31b__high, datasets: {jawildtext: gemma4-31b__high__newtasks, mechaja_v2_mini: gemma4-31b__high__newtasks, perceptionbench: gemma4-31b__high__extra, livecodebench: gemma4-31b__high__parity2}}  # Gemma 4 thinking on (enable_thinking=true; preset effort "high")
   - key: muse-glimmer-30b
     name: "Muse Glimmer 30B"
-    released: "2026-08-09"  # openrouter: first listing on OpenRouter
+    released: "2026-08-10"  # launch reports (no dated Meta post found; Meta developer blog 2026-08-12)
     dev: "Meta"
     logo: meta
     type: open
@@ -321,7 +321,7 @@ models:
       - {label: "xhigh", effort: "xhigh", job: muse-glimmer-30b__xhigh, datasets: {jawildtext: muse-glimmer-30b__xhigh__newtasks, mechaja_v2_mini: muse-glimmer-30b__xhigh__newtasks, perceptionbench: muse-glimmer-30b__xhigh__extra, livecodebench: muse-glimmer-30b__xhigh__parity2}}
   - key: qwen35-9b
     name: "Qwen3.5-9B"
-    released: "2026-03-10"  # openrouter: first listing on OpenRouter
+    released: "2026-03-02"  # Qwen3.5 README news
     dev: "Alibaba (Qwen)"
     logo: qwen
     type: open
@@ -333,7 +333,7 @@ models:
       - {label: "thinking", job: qwen35-9b__default, datasets: {jawildtext: qwen35-9b__high__newtasks, mechaja_v2_mini: qwen35-9b__high__newtasks, perceptionbench: qwen35-9b__high__extra, livecodebench: qwen35-9b__default__parity2}}
   - key: gemma4-12b
     name: "Gemma 4 12B"
-    released: "2026-05-23"  # huggingface: Hugging Face repository created
+    released: "2026-06-03"  # Gemma releases page
     dev: "Google"
     logo: googlegemini
     type: open
@@ -343,7 +343,7 @@ models:
       - {label: "thinking", effort: "high", job: gemma4-12b__high, datasets: {jawildtext: gemma4-12b__high__newtasks, mechaja_v2_mini: gemma4-12b__high__newtasks, perceptionbench: gemma4-12b__high__extra, livecodebench: gemma4-12b__high__parity2}}  # Gemma 4 thinking on (enable_thinking=true; preset effort "high")
   - key: llmjp4-vl-9b
     name: "LLM-jp-4-VL 9B"
-    released: "2026-08-15"  # huggingface: Hugging Face repository created
+    released: "2026-09-01"  # LLM-jp blog, llm-jp.nii.ac.jp/blog/llm-jp-4-vl-9b
     dev: "LLM-jp"
     logo: llmjp
     type: open
