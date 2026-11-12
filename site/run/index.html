@@ -159,11 +159,12 @@ function route() {
 const navLinks = () => $("app").querySelectorAll("[data-go]").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go)); });
 const goAttr = o => `data-go='${esc(JSON.stringify(o))}'`;
 
-// ---- heatmap: tasks x settings, pass rate over the attempts (white 0 % -> black 100 %) ----
+// ---- heatmap: tasks x settings, pass rate over the attempts (red 0 % -> green 100 %) ----
 function cellStyle(c) {
   if (!c || c[0] == null) return "background:var(--surface-2)";
-  const l = Math.round(100 - 88 * c[0]);  // lightness: 100 (white) .. 12 (near black)
-  return `background:hsl(0,0%,${l}%);color:${c[0] > 0.5 ? "#fff" : "#0b0b0b"}`;
+  // red (0 %) -> amber (50 %) -> green (100 %), light enough for the % text
+  const hue = Math.round(120 * c[0]);
+  return `background:hsl(${hue},70%,${c[0] === 1 ? 38 : 82 - 18 * c[0]}%);color:${c[0] === 1 ? "#fff" : "#0b0b0b"}`;
 }
 const FILT = [["all", "All"], ["none", "All incorrect"], ["mixed", "Mixed"], ["every", "All correct"]];
 async function heatmap(p) {
