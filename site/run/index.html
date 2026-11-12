@@ -107,7 +107,14 @@ table.hm td.cell { width: 40px; height: 24px; font-size: 11px; text-align: cente
 .msg .sec { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); margin: 2px 0 6px; white-space: normal; }
 .msg .reason { border-left: 3px solid var(--border); padding: 2px 0 2px 12px; margin-bottom: 12px; color: var(--text-secondary); white-space: normal; }
 .msg .final { border-top: 1px solid var(--border); padding-top: 10px; }
-.msg details { white-space: normal; margin-bottom: 8px; } .msg details pre { white-space: pre-wrap; font-size: 13px; background: var(--code-bg); padding: 10px; border-radius: 8px; max-height: 420px; overflow: auto; }
+.msg details { white-space: normal; margin-bottom: 8px; }
+.rbox { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); margin-bottom: 12px; white-space: normal; }
+.rbox .rh { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px; }
+.rbox .rh b { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); }
+.rbox .rh button { margin-left: auto; border: 1px solid var(--border); background: var(--bg); color: var(--text-primary); border-radius: 6px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; }
+.rbox .rt { padding: 0 12px 12px; } .rbox .rt pre { margin: 0; white-space: pre-wrap; font-size: 13px; background: var(--code-bg); padding: 10px; border-radius: 8px; max-height: 480px; overflow: auto; }
+.rbox.collapsed .rt pre { max-height: 4.8em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent); }
+.rstat { display: inline-block; border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text-secondary); } .msg details pre { white-space: pre-wrap; font-size: 13px; background: var(--code-bg); padding: 10px; border-radius: 8px; max-height: 420px; overflow: auto; }
 .ph { width: 320px; max-width: 100%; height: 200px; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--text-secondary); font-size: 12.5px; text-align: center; padding: 10px; margin: 4px 0 10px; white-space: normal; }
 .ph svg { width: 36px; height: 36px; opacity: .55; }
 .stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 4px; font-size: 13px; color: var(--text-secondary); }
@@ -305,10 +312,10 @@ async function trial(p) {
     const userText = pr ? pr.replace(/\n\[\d+ image\(s\)\]$/, "") : null;
     body = `<div class="chat"><div class="msg user"><div class="who">User</div><div id="uimg"></div>${userText != null ? esc(userText) : `<span class="note">The question is not shown: ${esc(IDX.datasets[d].note || "no public viewer")}.</span>`}</div>` +
       `<div class="msg asst"><div class="who">${esc(setName(si))}</div>` +
-      (reas ? `<div class="reason"><details><summary class="sec" style="display:list-item">Reasoning <span style="text-transform:none;font-weight:400">(start)</span></summary><pre>${esc(reas)}</pre></details></div>`
-        : `<div class="reason"><div class="sec">Reasoning</div><span class="note">${x && x.R > 0 ? `Unavailable: the model reasoned (${tok(x.R)} reasoning tokens), but the provider does not return the text.`
-            : x && x.R === 0 ? "None: the model answered without reasoning (0 reasoning tokens)."
-            : "No reasoning text, and the provider did not report reasoning tokens."}</span></div>`) +
+      (reas ? `<div class="rbox collapsed" id="rbox"><div class="rh"><b>Reasoning</b><span class="note">${x && x.R ? tok(x.R) + " tokens · " : ""}the start is shown</span><button id="rtog">Show full</button></div><div class="rt"><pre>${esc(reas)}</pre></div></div>`
+        : `<div class="rbox"><div class="rh"><b>Reasoning</b>${x && x.R > 0 ? `<span class="rstat">hidden by the provider</span><span class="note">the model reasoned (${tok(x.R)} tokens), but the text is not returned</span>`
+            : x && x.R === 0 ? `<span class="rstat">none</span><span class="note">the model answered without reasoning (0 reasoning tokens)</span>`
+            : `<span class="rstat">unknown</span><span class="note">no reasoning text was returned and no reasoning-token count was reported, so it is not known whether the model reasoned</span>`}</div></div>`) +
       `<div class="final"><div class="sec">Final answer</div>${esc(ans || "(no answer)")}</div></div></div>`;
   }
   else if (tab === "verifier") body = `<div class="rpanel"><h3>Verification</h3><dl class="rkv"><dt>Grading</dt><dd>${esc(IDX.datasets[d].grading || "")}</dd><dt>Reference answer</dt><dd id="refans">${IDX.datasets[d].mode ? "<span class=note>loading from the dataset…</span>" : `<span class=note>not shown (${esc(IDX.datasets[d].note || "no public viewer")})</span>`}</dd><dt>Extracted answer</dt><dd>${esc((x && x.x) ?? "–")}</dd><dt>Reward</dt><dd>${badge(x)} ${x && x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</dd></dl></div>` + (judge ? `<div class="rpanel"><h3>Judge reply</h3><pre>${esc(judge)}</pre></div>` : "");
@@ -321,6 +328,7 @@ async function trial(p) {
   navLinks();
   // tabs and Previous / Next replace the history entry, so one Back leaves the trial page
   $("app").querySelectorAll(".ttabs a, .nav2 a").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go), false); });
+  if ($("rtog")) $("rtog").onclick = () => { const b = $("rbox"), c = b.classList.toggle("collapsed"); $("rtog").textContent = c ? "Show full" : "Collapse"; };
   if (tab === "verifier") fetchRow(d, t).then(r => {
     const el = $("refans");
     if (!el || !IDX.datasets[d].mode) return;
