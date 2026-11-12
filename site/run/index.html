@@ -316,7 +316,8 @@ async function trial(p) {
     <nav class="ttabs">${TABS.map(([v, l]) => `<a ${goAttr({...p, tab: v})} class="${v === tab ? "on" : ""}">${l}</a>`).join("")}</nav>${body}`;
   wireBack({view: "task", d, t});
   navLinks();
-  $("app").querySelectorAll(".ttabs a").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go), false); });  // tabs replace, so Back leaves the trial
+  // tabs and Previous / Next replace the history entry, so one Back leaves the trial page
+  $("app").querySelectorAll(".ttabs a, .nav2 a").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go), false); });
   if (tab === "verifier") fetchRow(d, t).then(r => {
     const el = $("refans");
     if (!el || !IDX.datasets[d].mode) return;
