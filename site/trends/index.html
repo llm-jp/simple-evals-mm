@@ -56,6 +56,12 @@ table.bt { width: 100%; border-collapse: collapse; font-size: 14px; font-variant
 table.bt th, table.bt td { padding: 6px 10px; text-align: right; border-top: 1px solid var(--border); white-space: nowrap; }
 table.bt th { background: var(--surface-2); color: var(--text-secondary); font-size: 13px; }
 table.bt td.l, table.bt th.l { text-align: left; }
+.bchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.bchip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
+.bchip:hover { border-color: var(--text-secondary); }
+.bchip .sw { width: 10px; height: 10px; border-radius: 50%; margin: 0; border: 1px solid var(--border); }
+.bchip[aria-pressed="true"] { color: var(--text-primary); border-color: var(--text-primary); }
+.bchip.act { border-style: dashed; }
 table.bt tr.brow { cursor: pointer; } table.bt tr.brow:hover { background: var(--surface-2); }
 table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; border: 1px solid var(--border); }
 </style>
@@ -75,7 +81,8 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
         <svg class="tr-chart" id="c-rank" viewBox="0 0 960 600" role="img" aria-label="simple-evals-mm Index of every setting"></svg></div>
 
       <div class="tr-sec"><h3>simple-evals-mm Index vs benchmark score</h3>
-        <p class="intro">Each benchmark's fitted curve: its expected score at each capability. A curve already at the top for every model is saturated; one that rises late still separates the models. Pick benchmarks in the table below; dots are the models' actual scores (logo markers when one benchmark is picked).</p>
+        <p class="intro">Each benchmark's fitted curve: its expected score at each capability. A curve already at the top for every model is saturated; one that rises late still separates the models. Pick benchmarks above the chart (easiest first); dots are the models' actual scores (logo markers when one benchmark is picked).</p>
+        <div class="bchips" id="bchips"></div>
         <svg class="tr-chart" id="c-bench" viewBox="0 0 960 460" role="img" aria-label="Benchmark score against the simple-evals-mm Index"></svg>
         <p class="intro" style="margin-top:14px">Each curve is summarized by one logistic, <span class="eqi">score = g + (1 − g) · σ(α · (x − D))</span>: <b>D</b> is the index at which the benchmark is half solved (above guessing g), <b>α</b> its slope per index point; the fit error is the RMS distance to the curve.</p>
         <div style="overflow-x:auto"><table class="rs bt" id="b-table"></table></div></div>
@@ -223,6 +230,20 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
           + `<td>${f.D < ymin ? `< ${ymin} <span style="color:var(--text-muted)">(saturated)</span>` : f.D.toFixed(1)}</td><td>${f.alpha.toFixed(3)}</td><td>${f.guess ? (100 * f.guess).toFixed(0) + "%" : "–"}</td><td>${f.rmse.toFixed(1)} pt</td></tr>`; }).join("") + `</tbody>`;
     document.querySelectorAll("#b-table tr.brow").forEach(tr => tr.onclick = () => { const k = tr.dataset.b; pickedB.has(k) ? pickedB.delete(k) : pickedB.add(k); bench(); });
   }
+  const DEFAULT_B = ["jgraphqa", "hakushobench", "mmmu_pro", "zerobench"].filter(k => T.curves[k]);
+  function benchChips() {
+    const rows = T.benchmarks.filter(b => T.fits[b.key]).sort((a, b) => T.fits[a.key].D - T.fits[b.key].D);
+    const box = document.getElementById("bchips");
+    box.innerHTML = rows.map(b => { const on = pickedB.has(b.key);
+        return `<button type="button" class="bchip" data-b="${esc(b.key)}" aria-pressed="${on}"><span class="sw" style="background:${on ? colorB(b.key) : "transparent"}"></span>${esc(b.label)}</button>`; }).join("")
+      + `<button type="button" class="bchip act" data-act="reset">Reset</button><button type="button" class="bchip act" data-act="all">All</button><button type="button" class="bchip act" data-act="none">None</button>`;
+    box.onclick = e => { const c = e.target.closest(".bchip"); if (!c) return;
+      if (c.dataset.act === "reset") { pickedB.clear(); DEFAULT_B.forEach(k => pickedB.add(k)); }
+      else if (c.dataset.act === "all") rows.forEach(b => pickedB.add(b.key));
+      else if (c.dataset.act === "none") pickedB.clear();
+      else pickedB.has(c.dataset.b) ? pickedB.delete(c.dataset.b) : pickedB.add(c.dataset.b);
+      bench(); };
+  }
   function bench() {
     const svg = document.getElementById("c-bench"); while (svg.firstChild) svg.removeChild(svg.firstChild);
     const W = 960, H = 460, M = {l: 56, r: 130, t: 20, b: 44};
@@ -253,7 +274,7 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
         }
       }
     }
-    benchTable(); applyPick();
+    benchChips(); benchTable(); applyPick();
   }
   bench();
 })();
