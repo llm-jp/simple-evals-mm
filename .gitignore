@@ -55,3 +55,4 @@ logs/
 
 # analysis page data: quotes benchmark questions and answers; built locally, published only after review
 site/analysis.js
+site/results/
