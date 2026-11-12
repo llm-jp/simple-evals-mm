@@ -276,9 +276,9 @@ async function heatmap(p) {
   const keep = {view: "heatmap", d, sort, flt};
   let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", "Sort", sort, [["hard", "Hardest first"], ["easy", "Easiest first"], ["task", "Task order"]])}
     <span class="note">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · cell = pass rate over the attempts</span></div>
-    <div style="overflow-x:auto"><table class="hm"><thead><tr><th></th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
+    <div style="overflow-x:auto"><table class="hm"><thead><tr><th class="l" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Dataset</th><th class="l" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
   for (const r of view) {
-    h += `<tr><td class="tid"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(tname(r.d, r.t))}</a></td>` +
+    h += `<tr><td class="tid" style="color:var(--text-secondary)">${esc(IDX.datasets[r.d].label)}</td><td class="tid"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(r.t)}</a></td>` +
       r.cells.map((c, i) => `<td class="cell" style="${cellStyle(c)}" data-c='${esc(JSON.stringify(c))}' data-s="${i}" data-t="${esc(r.t)}" data-d="${r.d}">${c && c[0] != null ? Math.round(c[0] * 100) + "%" : ""}</td>`).join("") + `</tr>`;
   }
   h += `</tbody></table></div><div class="pager">${data.length.toLocaleString()} tasks · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div><div class="hov" id="hov"></div>`;
@@ -291,7 +291,7 @@ async function heatmap(p) {
   $("app").querySelectorAll("td.cell").forEach(td => {
     td.onmousemove = e => {
       const c = JSON.parse(td.dataset.c), si = cols[+td.dataset.s];
-      hov.innerHTML = `<b>${esc(setName(si))}</b><div class="r"><span>${esc(tname(td.dataset.d, td.dataset.t))}</span></div>` + (c ? `<div class="r"><span>Pass rate</span><span>${c[0] == null ? "–" : Math.round(c[0] * 100) + "%"} (${c[1]}/${c[2]})</span></div><div class="r"><span>Avg cost</span><span>${usd(c[3])}</span></div><div class="r"><span>Avg duration</span><span>${secs(c[4])}</span></div><div class="r"><span>Avg output tokens</span><span>${tok(c[5] == null ? null : Math.round(c[5]))}</span></div>` : `<div class="r"><span>not run</span></div>`);
+      hov.innerHTML = `<b>${esc(setName(si))}</b><div class="r"><span>${esc(ttitle(td.dataset.d, td.dataset.t))}</span></div>` + (c ? `<div class="r"><span>Pass rate</span><span>${c[0] == null ? "–" : Math.round(c[0] * 100) + "%"} (${c[1]}/${c[2]})</span></div><div class="r"><span>Avg cost</span><span>${usd(c[3])}</span></div><div class="r"><span>Avg duration</span><span>${secs(c[4])}</span></div><div class="r"><span>Avg output tokens</span><span>${tok(c[5] == null ? null : Math.round(c[5]))}</span></div>` : `<div class="r"><span>not run</span></div>`);
       hov.style.display = "block"; hov.style.left = Math.min(e.clientX + 14, innerWidth - 260) + "px"; hov.style.top = (e.clientY + 14) + "px";
     };
     td.onmouseleave = () => { hov.style.display = "none"; };
@@ -328,7 +328,7 @@ async function questionPanel(d, t) {
 }
 function trialTable(rows, opts) {
   return `<div style="overflow-x:auto"><table class="rs"><thead><tr>${opts.task ? `<th class="l">Task</th>` : `<th class="l">Setting</th>`}<th>Attempt</th><th>Reward</th><th class="l">Cause</th><th>Input tok</th><th>Output tok</th><th>Time</th><th>Cost</th><th class="l">Extracted answer</th></tr></thead><tbody>` +
-    rows.map(x => `<tr class="row" ${goAttr({view: "trial", d: opts.d, t: x.t, s: IDX.settings[x.S].key, k: x.k, from: opts.from})}>${opts.task ? `<td class="l">${esc(tname(opts.d, x.t))}</td>` : `<td class="l">${esc(setName(x.S))}</td>`}<td>${x.k}</td><td>${badge(x)}</td><td class="l">${x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</td><td>${tok(x.i)}</td><td>${tok(x.o)}</td><td>${secs(x.s)}</td><td>${usd(x.$)}</td><td class="l prev">${esc(x.x ?? "")}</td></tr>`).join("") + `</tbody></table></div>`;
+    rows.map(x => `<tr class="row" ${goAttr({view: "trial", d: opts.d, t: x.t, s: IDX.settings[x.S].key, k: x.k, from: opts.from})}>${opts.task ? `<td class="l">${esc(ttitle(opts.d, x.t))}</td>` : `<td class="l">${esc(setName(x.S))}</td>`}<td>${x.k}</td><td>${badge(x)}</td><td class="l">${x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</td><td>${tok(x.i)}</td><td>${tok(x.o)}</td><td>${secs(x.s)}</td><td>${usd(x.$)}</td><td class="l prev">${esc(x.x ?? "")}</td></tr>`).join("") + `</tbody></table></div>`;
 }
 async function task(p) {
   const d = p.d, t = p.t;
@@ -350,7 +350,7 @@ async function task(p) {
 }
 
 // ---- trials: every trial of a dataset, filtered by model, outcome and search ----
-const OUTCOMES = [["all", "All outcomes"], ["pass", "Passed"], ["fail", "Failed"], ["cut", "Cut off"], ["excl", "Excluded"]];
+const OUTCOMES = [["all", "All"], ["pass", "Correct"], ["fail", "Incorrect"], ["cut", "Cut off"], ["excl", "Excluded"]];
 async function trials(p) {
   const d = p.d && allDs().includes(p.d) ? p.d : allDs()[0], s = p.s || "all", o = p.o || "all", page = +(p.page || 0);
   const si = s === "all" ? -1 : setIdx(s);
@@ -359,13 +359,13 @@ async function trials(p) {
     (!p.q || x.t === p.q)).sort((a, b) => a.S - b.S || a.t.localeCompare(b.t) || a.k - b.k);
   const pages = Math.max(1, Math.ceil(view.length / PAGE)), keep = {view: "trials", d, s, o, q: p.q};
   const counted = view.filter(x => x.r != null), cost = view.reduce((a, x) => a + (x.$ || 0), 0);
-  $("app").innerHTML = `<div class="ctl">${pill("ds", "db", "Dataset", d, allDs().map(k => [k, IDX.datasets[k].label]))}${pill("set", "bot", "Model", si < 0 ? "all" : IDX.settings[si].key, settingOptions(d, true))}${pill("out", "check", "Outcome", o, OUTCOMES)}
-    ${p.q ? `<span class="badge bx" style="font-size:13px;padding:4px 10px">task ${esc(tname(d, p.q))} <a href="#" ${goAttr({...keep, q: null, page: 0})}>×</a></span>` : ""}</div>
+  $("app").innerHTML = `<div class="ctl">${pill("ds", "db", "Dataset", d, allDs().map(k => [k, IDX.datasets[k].label]))}${pill("set", "bot", "Model", si < 0 ? "all" : IDX.settings[si].key, settingOptions(d, true))}${pill("out", "check", "Reward", o, OUTCOMES)}
+    ${p.q ? `<span class="badge bx" style="font-size:13px;padding:4px 10px">task ${esc(ttitle(d, p.q))} <a href="#" ${goAttr({...keep, q: null, page: 0})}>×</a></span>` : ""}</div>
     <div class="rs-sum"><span><b>${new Set(view.map(x => x.t)).size.toLocaleString()}</b>tasks</span><span><b>${(() => { const ks = [...new Set(view.map(x => x.k))]; return ks.length ? Math.max(...ks) : "–"; })()}</b>attempts per task</span><span><b>${view.length.toLocaleString()}</b>trials</span>
-    <span><b>${counted.length ? (100 * counted.filter(ok).length / counted.length).toFixed(1) + "%" : "–"}</b>passed</span><span><b>${view.filter(cut).length}</b>cut off</span><span><b>${view.length - counted.length}</b>excluded</span>
+    <span><b>${counted.length ? (100 * counted.filter(ok).length / counted.length).toFixed(1) + "%" : "–"}</b>correct</span><span><b>${view.filter(cut).length}</b>cut off</span><span><b>${view.length - counted.length}</b>excluded</span>
     <span><b>${tok(view.length ? Math.round(view.reduce((a, x) => a + (x.o || 0), 0) / view.length) : null)}</b>output tokens / trial</span><span><b>${secs(view.length ? view.reduce((a, x) => a + (x.s || 0), 0) / view.length : null)}</b>duration / trial</span><span><b>${cost ? "$" + cost.toFixed(2) : "–"}</b>cost</span></div>
-    <div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Model</th><th class="l">Task</th><th>Attempt</th><th>Outcome</th><th class="l">Cause</th><th>Input tok</th><th>Output tok</th><th>Time</th><th>Cost</th></tr></thead><tbody>` +
-    view.slice(page * PAGE, (page + 1) * PAGE).map(x => `<tr class="row" ${goAttr({view: "trial", d, t: x.t, s: IDX.settings[x.S].key, k: x.k})}><td class="l">${esc(setName(x.S))}</td><td class="l"><a href="?view=task&d=${d}&t=${encodeURIComponent(x.t)}" class="tasklink" ${goAttr({view: "task", d, t: x.t})}>${esc(tname(d, x.t))}</a></td><td>${x.k}</td><td>${badge(x)}</td><td class="l">${x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</td><td>${tok(x.i)}</td><td>${tok(x.o)}</td><td>${secs(x.s)}</td><td>${usd(x.$)}</td></tr>`).join("") +
+    <div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Model</th><th class="l">Dataset</th><th class="l">Task ID</th><th>Attempt</th><th>Reward</th><th class="l">Cause</th><th>Input tok</th><th>Output tok</th><th>Time</th><th>Cost</th></tr></thead><tbody>` +
+    view.slice(page * PAGE, (page + 1) * PAGE).map(x => `<tr class="row" ${goAttr({view: "trial", d, t: x.t, s: IDX.settings[x.S].key, k: x.k})}><td class="l">${esc(setName(x.S))}</td><td class="l">${esc(IDX.datasets[d].label)}</td><td class="l"><a href="?view=task&d=${d}&t=${encodeURIComponent(x.t)}" class="tasklink" ${goAttr({view: "task", d, t: x.t})}>${esc(x.t)}</a></td><td>${x.k}</td><td>${badge(x)}</td><td class="l">${x.c ? `<span class="cause">${esc(x.c)}</span>` : ""}</td><td>${tok(x.i)}</td><td>${tok(x.o)}</td><td>${secs(x.s)}</td><td>${usd(x.$)}</td></tr>`).join("") +
     `</tbody></table></div><div class="pager">${view.length.toLocaleString()} trials · page ${page + 1} / ${pages} <button ${goAttr({...keep, page: Math.max(0, page - 1)})}>Previous</button><button ${goAttr({...keep, page: Math.min(pages - 1, page + 1)})}>Next</button></div>`;
   navLinks();
   $("app").querySelectorAll("tr.row").forEach(tr => tr.onclick = e => { if (!e.target.closest("a.tasklink")) go(JSON.parse(tr.dataset.go)); });
