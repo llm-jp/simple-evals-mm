@@ -364,3 +364,8 @@ p.back a:hover { color: var(--text-primary); }
 .lb-top > .pick-wrap:first-child select.pick { margin-left: -12px; }
 /* the jobs table nested in a leaderboard row: its own padding, not the row table's */
 #lb table.prov th, #lb table.prov td { padding: 3px 10px 3px 0 !important; }
+
+/* chart legend (cost axis): billed / estimated / no price; left of the axis controls */
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-right: auto; font-size: 13px; color: var(--text-secondary); }
+.chart-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend .lg-band { display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: var(--surface-2); }

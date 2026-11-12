@@ -90,6 +90,7 @@
           <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
         </div>
         <div class="chart-foot">
+          <div class="chart-legend" id="chart-legend"></div>
           <div class="axis-controls" role="toolbar" aria-label="X axis">
             <span class="seg" data-key="x">
               <button data-v="cost" aria-pressed="true">Cost</button>
@@ -351,7 +352,7 @@
     const h = logoColor(m).replace("#", ""), r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 60 ? "var(--text-primary)" : logoColor(m);
   };
-  function marker(parent, cx, cy, m, { dashed = false } = {}) {
+  function marker(parent, cx, cy, m, { dashed = false, est = false } = {}) {
     const g = el("g", { transform: `translate(${cx} ${cy})` }, parent);
     const ring = { fill: "#ffffff", stroke: "var(--text-muted)", "stroke-width": 1.8 };
     if (dashed) ring["stroke-dasharray"] = "3 2";
@@ -359,6 +360,10 @@
     if (m.logo && (LOGOS.images || {})[m.logo]) el("image", { href: LOGOS.images[m.logo], x: -6.5, y: -6.5, width: 13, height: 13 }, g);
     else if (m.logo && LOGOS.logos[m.logo]) el("path", { d: LOGOS.logos[m.logo], transform: "translate(-6.5 -6.5) scale(0.5417)", fill: logoColor(m) }, g);
     else el("text", { "text-anchor": "middle", y: 4, "font-size": 11, "font-weight": 700, fill: logoColor(m) }, g).textContent = m.dev[0];
+    if (est) {  // estimated cost: a "≈" tag at the ring's upper right
+      el("circle", { cx: 9, cy: -9, r: 6, fill: "var(--bg)", stroke: "var(--text-muted)", "stroke-width": 1 }, g);
+      el("text", { x: 9, y: -6.2, "text-anchor": "middle", "font-size": 9, "font-weight": 700, fill: "var(--text-secondary)" }, g).textContent = "≈";
+    }
     return g;
   }
   const logoHTML = m => `<span class="logo" style="border-color:var(--border)">${m.logo && (LOGOS.images || {})[m.logo]
@@ -405,6 +410,10 @@
       return;
     }
     const noX = pts.filter(p => p.x == null), withX = pts.filter(p => p.x != null);
+    document.getElementById("chart-legend").innerHTML = state.x === "cost"
+      ? `<span><svg viewBox="-12 -12 24 24" width="18" height="18"><circle r="10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>billed cost</span>`
+        + (pts.some(p => p.d.cost_est) ? `<span><svg viewBox="-12 -16 28 28" width="20" height="20"><circle r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="-9" r="6" fill="var(--bg)" stroke="currentColor"/><text x="9" y="-6" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor">≈</text></svg>estimated (API price × our tokens)</span>` : "")
+        + (noX.length ? `<span><span class="lg-band"></span>no price</span>` : "") : "";
     const xs = withX.length ? withX.map(p => p.x) : [0.001, 0.01], ys = pts.map(p => p.y);
     const LOG = state.scale === "log";
     const x0 = LOG ? Math.min(...xs) / 1.8 : 0, x1 = LOG ? Math.max(...xs) * 1.8 : Math.max(...xs) * 1.08;
@@ -480,7 +489,7 @@
     }
     const gp = el("g", {}, svg);
     for (const p of pts) {
-      marker(gp, p.cx, p.cy, p.m, { dashed: p.effort !== "max" || p.x == null });
+      marker(gp, p.cx, p.cy, p.m, { dashed: p.effort !== "max" || p.x == null, est: state.x === "cost" && !!p.d.cost_est });
     }
     const NAME_CANDS = [[16, -8, "start"], [-16, -8, "end"], [16, 18, "start"], [-16, 18, "end"], [0, -18, "middle"], [0, 28, "middle"],
       [20, 4, "start"], [-20, 4, "end"], [0, -30, "middle"], [0, 40, "middle"], [30, -20, "start"], [-30, -20, "end"]];
