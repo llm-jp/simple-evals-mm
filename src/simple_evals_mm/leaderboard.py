@@ -304,7 +304,11 @@ def dataset_cell(view: JobView, name: str) -> dict:
         "score": _pct(s["reward"]), "std": _pct(s["std"]),
         "n_repeats": sum(1 for r in s["rewards"] if r is not None), "n": n,
         "tok": (sum(tokens) / len(tokens) / 1000) if tokens and all(x is not None for x in tokens) else None,  # K / answer
-        "cost": (sum(costs) / len(trials)) if costs and all(x is not None for x in costs) else None,  # USD / trial
+        # USD / trial over the trials whose cost is known: a provider sometimes returns no usage for a request (a few in
+        # tens of thousands); the cell is None only when most costs are unknown (a self-served model: none at all)
+        "cost": (sum(known) / len(known)) if (known := [x for x in costs if x is not None]) and len(known) >= 0.99 * len(costs)
+        else None,
+        "cost_missing": (len(costs) - len(known)) or None,
         "judge_cost": (s["judge_cost_usd"] / len(trials)) if s.get("judge_cost_usd") is not None and trials else None,
         "categories": {c: 100 * statistics.mean(v) for c, v in sorted(cats.items())} or None,
         "causes": dict(sorted(total.items())),
@@ -555,8 +559,12 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
                        for j in lv["jobs"].values() if j.get("version")})
     n_att = sorted({c["n_repeats"] for row in models_out for lv in (row.get("max"), row.get("low")) if lv
                     for c in lv["tasks"].values()})
+    # attempts per dataset: the most common count (AIME / IFBench run more; the table note names the exceptions)
+    counts = Counter(c["n_repeats"] for row in models_out for lv in (row.get("max"), row.get("low")) if lv
+                     for c in lv["tasks"].values())
     site = {**(spec.get("site") or {}), "version": versions[-1] if len(versions) == 1 else (", ".join(versions) or None),
-            "n_runs": n_att[-1] if n_att else (spec.get("site") or {}).get("n_runs", 3)}
+            "n_runs": counts.most_common(1)[0][0] if counts else (spec.get("site") or {}).get("n_runs", 3),
+            "n_runs_max": n_att[-1] if n_att else None}
     data = {"site": site, "updated": today or store_mod._local_now().date().isoformat(), "benchmarks": benches, "tasks": tasks_out,
             "categories": spec.get("categories") or [], "causes": {"zeroed": list(COUNTED_ZERO), "excluded": list(EXCLUDED)},
             "models": models_out}
@@ -586,7 +594,9 @@ def _version_urls(html: str, site_dir: str, names: tuple[str, ...]) -> str:
 def stamp_assets(site_dir: str) -> None:
     """Version the asset URLs in index.html and changelog.html (?v=<content hash>), so a browser that cached an older
     copy (GitHub Pages: max-age=600) cannot pair the new page with stale data or styles."""
-    pages = {"changelog.html": ("style.css", "changelog.js"), "index.html": ("style.css", "logos.js", "data.js")}
+    pages = {"changelog.html": ("style.css", "changelog.js"),
+             "index.html": ("style.css", "logos.js", "data.js", "assets/overview.svg"),
+             "analysis.html": ("style.css", "analysis.js")}
     for page, names in pages.items():
         p = os.path.join(site_dir, page)
         if not os.path.exists(p):
