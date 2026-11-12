@@ -172,6 +172,10 @@ table.tl .qimg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 
 }
 table.hm .c0 { min-width: 110px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 table.hm .c1 { min-width: 120px; white-space: nowrap; }
+/* rules between the labels and the cells: under the column names, after the Task ID column */
+table.hm thead th { box-shadow: inset 0 -1px 0 var(--border); }
+table.hm .c1 { box-shadow: inset -1px 0 0 var(--border); }
+table.hm thead th.c1 { box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border); }
 /* a heatmap wider than the page column (all effort levels) is centred on the window instead of the column */
 .hmwrap.bleed { width: 100vw; margin-left: calc(50% - 50vw); display: flex; justify-content: center; }
 /* phones / short screens: nothing sticky; the table scrolls sideways in its own box, the page does not */
