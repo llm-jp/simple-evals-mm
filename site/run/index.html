@@ -144,8 +144,9 @@ a.backlink { font-size: 14px; }
 .pw.open .pillbtn .chev { transform: rotate(180deg); }
 .pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
 .pw.open .pop { display: block; }
+.pv { display: inline-grid; text-align: left; } .pv > span { grid-area: 1 / 1; white-space: nowrap; } .pv > .ghost { visibility: hidden; }
 .hmleg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); margin-left: 6px; }
-.hmleg .bar { width: 90px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, hsl(0,70%,82%), hsl(60,70%,73%), hsl(120,70%,64%), hsl(120,70%,38%)); }
+.hmleg .bar { width: 90px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, hsl(214,70%,96%), hsl(214,70%,34%)); border: 1px solid var(--border); }
 .pop .grp { font-size: 12px; color: var(--text-secondary); padding: 8px 10px 4px; }
 .pop label { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; font-size: 14px; cursor: pointer; white-space: nowrap; }
 .pop label:hover { background: var(--surface-2); }
@@ -239,7 +240,10 @@ function pill(id, ic, label, value, options) {
   const flat = options.flatMap(o => o.items || [o]);
   const cur = (flat.find(([v]) => v === value) || flat[0] || ["", ""])[1];
   const item = ([v, l]) => `<label><input type="radio" name="${id}" value="${esc(v)}" ${v === value ? "checked" : ""}> ${esc(l)}</label>`;
-  return `<div class="pw" id="${id}"><button class="pillbtn" type="button" title="${esc(label)}" aria-label="${esc(label)}: ${esc(cur)}">${icon(ic)} ${esc(cur)} ${icon("chev", "chev")}</button><div class="pop">` +
+  // all labels stacked in one grid cell (only the current one visible): the button is as wide as its longest option,
+  // so the controls do not move when the selection changes
+  const val = `<span class="pv">${flat.map(([, l]) => `<span${l === cur ? "" : ' aria-hidden="true" class="ghost"'}>${esc(l)}</span>`).join("")}</span>`;
+  return `<div class="pw" id="${id}"><button class="pillbtn" type="button" title="${esc(label)}" aria-label="${esc(label)}: ${esc(cur)}">${icon(ic)} ${val} ${icon("chev", "chev")}</button><div class="pop">` +
     options.map(o => o.items ? `<div class="grp">${esc(o.group)}</div>` + o.items.map(item).join("") : item(o)).join("") + `</div></div>`;
 }
 function wirePill(id, onChange) {
@@ -255,12 +259,12 @@ const settingOptions = (d, all) => {
   return all ? [["all", "All models"], ...groups] : groups;
 };
 
-// ---- heatmap: tasks x settings, pass rate over the attempts (red 0 % -> green 100 %) ----
+// ---- heatmap: tasks x settings, pass rate over the attempts (light -> dark blue) ----
 function cellStyle(c) {
   if (!c || c[0] == null) return "background:var(--surface-2)";
-  // red (0 %) -> amber (50 %) -> green (100 %), light enough for the % text
-  const hue = Math.round(120 * c[0]);
-  return `background:hsl(${hue},70%,${c[0] === 1 ? 38 : 82 - 18 * c[0]}%);color:${c[0] === 1 ? "#fff" : "#0b0b0b"}`;
+  // one hue, darker = higher pass rate (0 % = almost white, 100 % = deep blue)
+  const L = Math.round(96 - 62 * c[0]);
+  return `background:hsl(214,70%,${L}%);color:${L < 60 ? "#fff" : "#0b0b0b"}`;
 }
 const FILT = [["all", "All"], ["none", "All incorrect"], ["every", "All correct"]];
 async function heatmap(p) {
@@ -285,9 +289,10 @@ async function heatmap(p) {
   if (sort === "hard") data.sort((a, b) => a.mean - b.mean); else if (sort === "easy") data.sort((a, b) => b.mean - a.mean);
   const pages = Math.max(1, Math.ceil(data.length / PAGE)), view = data.slice(page * PAGE, (page + 1) * PAGE);
   const keep = {view: "heatmap", d, sort, flt, cfg};
-  let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", cfg === "best" ? `Best effort per model (${cols.length})` : "Best effort per model"], ["all", cfg === "all" ? `All effort levels (${cols.length})` : "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", "Sort", sort, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]])}
+  let h = `<div class="ctl">${pill("ds", "db", "Dataset", d, [["all", "All datasets"], ...allDs().map(k => [k, IDX.datasets[k].label])])}${pill("cfg", "layers", "Settings", cfg, [["best", "Best effort per model"], ["all", "All effort levels"]])}${pill("flt", "filter", "Filter", flt, FILT)}${pill("sort", "sort", "Sort", sort, [["task", "Task order"], ["hard", "Hardest first"], ["easy", "Easiest first"]])}
     <span class="hmleg" title="Each cell: the share of the setting's attempts on the task that were correct">Pass rate <span class="bar"></span> 0 → 100%</span>
-    <span class="note">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks</span></div>
+</div>
+    <div class="note" style="margin:-4px 0 8px">${data.length.toLocaleString()} of ${total.toLocaleString()} tasks · ${cols.length} settings</div>
     <div style="overflow-x:auto"><table class="hm"><thead><tr><th class="l" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Dataset</th><th class="l" style="vertical-align:bottom;text-align:left;font-size:12px;color:var(--text-secondary)">Task ID</th>${cols.map(i => `<th class="col"><div>${esc(setName(i))}</div></th>`).join("")}</tr></thead><tbody>`;
   for (const r of view) {
     h += `<tr><td class="tid" style="color:var(--text-secondary)">${esc(IDX.datasets[r.d].label)}</td><td class="tid" title="${esc(r.t)}"><a href="#" ${goAttr({view: "task", d: r.d, t: r.t})}>${esc(r.t.length > 18 ? "…" + r.t.slice(-17) : r.t)}</a></td>` +
