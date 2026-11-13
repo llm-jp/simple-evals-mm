@@ -147,7 +147,7 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
   let applyPick = () => {};
   // hover card: organization, model (setting), index, 90% interval, release date
   const tip = document.getElementById("tr-tip");
-  function hover(g, s, extra) {
+  function hover(g, s, extra, byModel = true) {
     g.style.cursor = "default";
     g.addEventListener("mousemove", e => {
       tip.innerHTML = `<div class="tt-name">${esc(name(s))}</div><div class="tt-sub">${esc(s.dev || "")}</div>`
@@ -156,8 +156,10 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
         + `<div class="tt-row"><span>Released</span><b>${esc(s.released || "–")}</b></div>` + (extra || "");
       tip.style.opacity = 1; tip.style.left = Math.min(e.clientX + 14, innerWidth - 240) + "px"; tip.style.top = (e.clientY + 14 + scrollY) + "px";
     });
-    g.addEventListener("mouseenter", () => { hoverModel = s.model_key; applyPick(); });
-    g.addEventListener("mouseleave", () => { tip.style.opacity = 0; hoverModel = null; applyPick(); });
+    if (byModel) {  // the model's other points stay dark
+      g.addEventListener("mouseenter", () => { hoverModel = s.model_key; applyPick(); });
+      g.addEventListener("mouseleave", () => { tip.style.opacity = 0; hoverModel = null; applyPick(); });
+    } else g.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
   }
   // labels: the first free spot of right / left / above / below; none if every spot overlaps
   function labels(svg, pts, W, M, text) {
@@ -282,14 +284,17 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
         const sc = T.scores[k] || {}, label = blabel(k);
         for (const s of S.filter(s => sc[s.key] != null)) {
           const c = el("circle", {cx: sx(s.index), cy: sy(sc[s.key]), r: 4.5, fill: colorB(k), opacity: 0.8, stroke: "var(--bg)", "stroke-width": 1, "data-org": s.dev, "data-model": s.model_key, "data-b": k}, svg);
-          hover(c, s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`);
+          hover(c, s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`, false);
+          c.classList.add("bdot");
         }
       }
     }
     benchChips(); benchTable(); applyPick();
     // hovering a benchmark (its curve, name, dots or chip) fades the others
-    const focusB = k => svg.querySelectorAll("[data-b]").forEach(e => e.classList.toggle("bfade", k != null && e.dataset.b !== k));
-    svg.querySelectorAll("[data-b]").forEach(e => { e.addEventListener("mouseenter", () => focusB(e.dataset.b)); e.addEventListener("mouseleave", () => focusB(null)); });
+    // a dot: only that dot and its benchmark's curve and name stay dark
+    const focusB = (k, dot) => svg.querySelectorAll("[data-b]").forEach(e => e.classList.toggle("bfade",
+      k != null && (e.dataset.b !== k || (dot && e.classList.contains("bdot") && e !== dot))));
+    svg.querySelectorAll("[data-b]").forEach(e => { e.addEventListener("mouseenter", () => focusB(e.dataset.b, e.classList.contains("bdot") ? e : null)); e.addEventListener("mouseleave", () => focusB(null)); });
     document.querySelectorAll("#bchips .bchip[data-b]").forEach(c => { c.onmouseenter = () => pickedB.has(c.dataset.b) && focusB(c.dataset.b); c.onmouseleave = () => focusB(null); });
   }
   bench();
