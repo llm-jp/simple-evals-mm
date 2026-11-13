@@ -327,6 +327,18 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
     const focusB = (k, dot) => svg.querySelectorAll("[data-b]").forEach(e => e.classList.toggle("bfade",
       k != null && (e.dataset.b !== k || (dot && e.classList.contains("bdot") && e !== dot))));
     svg.querySelectorAll("[data-b]").forEach(e => { e.addEventListener("mouseenter", () => focusB(e.dataset.b, e.classList.contains("bdot") ? e : null)); e.addEventListener("mouseleave", () => focusB(null)); });
+    // a curve or its name: the benchmark's fitted formula in the hover card
+    svg.querySelectorAll(".bhit[data-b]").forEach(e => {
+      e.addEventListener("mousemove", ev => { const k = e.dataset.b, f = T.fits[k] || {}, b = T.benchmarks.find(x => x.key === k) || {};
+        tip.innerHTML = `<div class="tt-name">${esc(blabel(k))}</div><div class="tt-sub">${esc(b.category || "")}</div>`
+          + `<div class="tt-row"><span>Difficulty D</span><b>${f.D < ymin ? "< " + ymin + " (saturated)" : f.D.toFixed(1)}</b></div>`
+          + `<div class="tt-row"><span>Slope α</span><b>${f.alpha.toFixed(3)}</b></div>`
+          + `<div class="tt-row"><span>Guessing rate g</span><b>${f.guess ? (100 * f.guess).toFixed(0) + "%" : "0 (free-form)"}</b></div>`
+          + `<div class="tt-row"><span>Fit error</span><b>${f.rmse.toFixed(1)} pt</b></div>`
+          + `<div class="tt-sub" style="margin:6px 0 0">score = g + (1 − g) · σ(α · (x − D))</div>`;
+        tip.style.opacity = 1; tip.style.left = Math.min(ev.clientX + 14, innerWidth - 260) + "px"; tip.style.top = (ev.clientY + 14 + scrollY) + "px"; });
+      e.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+    });
   }
   bench();
 })();
