@@ -384,10 +384,24 @@ svg .faded { opacity: 0.12; transition: opacity .15s; }
 .card-tag.rwarn { color: #9a6700; }
 [data-theme-shown="dark"] .card-tag.rok { color: #3fb950; }
 [data-theme-shown="dark"] .card-tag.rwarn { color: #d29922; }
-table.parity-t { width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
-table.parity-t th, table.parity-t td { padding: 6px 12px 6px 0; text-align: left; white-space: nowrap; }
-table.parity-t .num { text-align: right; }
-table.parity-t td.why { white-space: normal; color: var(--text-secondary); min-width: 280px; }
-table.parity-t td .card-tag { margin-left: 0; }
-.parity-na { margin-top: 14px; }
-.parity-na summary { cursor: pointer; color: var(--text-secondary); font-size: 14px; }
+.parity-wrap { overflow-x: auto; margin-top: 8px; }
+table.parity-m { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+table.parity-m th, table.parity-m td { padding: 6px 6px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: top; }
+table.parity-m thead th { font-weight: 600; color: var(--text-secondary); vertical-align: bottom; width: 78px; font-size: 12px; line-height: 1.3; }
+table.parity-m th.pm-h .mname { display: flex; flex-direction: column; align-items: center; gap: 3px; white-space: normal; color: var(--text-primary); }
+table.parity-m th.pm-h .effort-tag { display: inline-block; margin-top: 3px; }
+table.parity-m .pt { text-align: left; white-space: nowrap; padding-right: 12px; position: sticky; left: 0; background: var(--bg); z-index: 1; font-weight: 500; }
+table.parity-m .psum { color: var(--text-secondary); white-space: nowrap; }
+table.parity-m td.pc b { display: block; font-weight: 600; white-space: nowrap; }
+table.parity-m td.pc b i { font-style: normal; font-weight: 400; }
+table.parity-m td.pc span { display: block; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+table.parity-m td.ok b i { color: #1a7f37; }
+table.parity-m td.warn { background: rgba(191, 135, 0, 0.10); }
+table.parity-m td.warn b i { color: #9a6700; }
+table.parity-m td.na b { color: var(--text-muted); font-weight: 400; }
+table.parity-m sup a { font-size: 10px; margin-left: 1px; }
+[data-theme-shown="dark"] table.parity-m td.ok b i { color: #3fb950; }
+[data-theme-shown="dark"] table.parity-m td.warn b i { color: #d29922; }
+.parity-notes { margin: 14px 0 0; padding-left: 20px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; max-width: 900px; }
+.parity-notes li { margin: 4px 0; }
+.parity-notes li:target { background: rgba(191, 135, 0, 0.10); }
