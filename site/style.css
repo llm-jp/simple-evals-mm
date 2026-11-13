@@ -377,3 +377,5 @@ p.back a:hover { color: var(--text-primary); }
 .org-btn[aria-pressed="true"] { border-color: var(--text-secondary); color: var(--text-primary); }
 .org-btn .logo { width: 18px; height: 18px; }
 svg .faded { opacity: 0.12; transition: opacity .15s; }
+.about-fig { margin: 18px 0 0; max-width: 820px; }
+.about-fig img { width: 100%; height: auto; display: block; }

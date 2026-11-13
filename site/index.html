@@ -5,14 +5,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>simple-evals-mm</title>
-<meta name="description" content="simple-evals-mm evaluates LLMs and VLMs on 50+ English and Japanese text and image benchmarks, with results that can be reproduced, audited and checked against model cards.">
+<meta name="description" content="Reproducible evaluation of LLMs and VLMs on English and Japanese text and image benchmarks.">
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32">
 <link rel="icon" href="assets/favicon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="assets/favicon-192.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="simple-evals-mm">
 <meta property="og:title" content="simple-evals-mm">
-<meta property="og:description" content="simple-evals-mm evaluates LLMs and VLMs on 50+ English and Japanese text and image benchmarks, with results that can be reproduced, audited and checked against model cards.">
+<meta property="og:description" content="Reproducible evaluation of LLMs and VLMs on English and Japanese text and image benchmarks.">
 <meta property="og:url" content="https://llm-jp.github.io/simple-evals-mm/">
 <meta property="og:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <meta property="og:image:width" content="1200">
@@ -20,7 +20,7 @@
 <meta property="og:image:alt" content="simple-evals-mm">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="simple-evals-mm">
-<meta name="twitter:description" content="simple-evals-mm evaluates LLMs and VLMs on 50+ English and Japanese text and image benchmarks, with results that can be reproduced, audited and checked against model cards.">
+<meta name="twitter:description" content="Reproducible evaluation of LLMs and VLMs on English and Japanese text and image benchmarks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
 <link rel="stylesheet" href="style.css?v=52decd454c">
@@ -50,7 +50,7 @@
 <main id="top">
   <div class="wrap hero">
     <h1>simple-evals-mm</h1>
-    <p class="tagline">simple-evals-mm evaluates LLMs and VLMs on 50+ English and Japanese text and image benchmarks, with results that can be reproduced, audited and checked against model cards.</p>
+    <p class="tagline">Reproducible evaluation of LLMs and VLMs on English and Japanese text and image benchmarks.</p>
   </div>
 
   <section id="leaderboard">
@@ -140,6 +140,7 @@
         <li><b>Fair and verified.</b> Each model runs at its model card's recommended settings rather than one setting for all, and our scores are checked against the numbers the model authors report. These checks also catch inference bugs: one on Gemma 4 image tasks was an SGLang kernel bug (CountBenchQA 70 → 97 with <a href="https://github.com/sgl-project/sglang/pull/47809" target="_blank" rel="noopener">our fix</a>).</li>
         <li><b>Analysis-ready.</b> Every trial is stored as a <a href="https://github.com/harbor-framework/harbor" target="_blank" rel="noopener">Harbor</a> / <a href="https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md" target="_blank" rel="noopener">ATIF</a> trajectory with its reasoning, tokens, cost and failure cause (e.g. cut off at the token limit), so the chart can plot score against cost and output tokens, and every answer can be read on the <a href="explore/">Explore</a> page.</li>
       </ul>
+      <figure class="about-fig"><img src="assets/resume.svg" width="960" height="380" alt="How a job resumes: the same settings continue it, changed settings are refused, and sem run --from starts a new job that reuses the still-valid trials"></figure>
     </div>
   </section>
 
