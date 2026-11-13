@@ -290,12 +290,11 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
       }
     }
     benchChips(); benchTable(); applyPick();
-    // hovering a benchmark (its curve, name, dots or chip) fades the others
+    // hovering a benchmark (its curve, name or dots) fades the others
     // a dot: only that dot and its benchmark's curve and name stay dark
     const focusB = (k, dot) => svg.querySelectorAll("[data-b]").forEach(e => e.classList.toggle("bfade",
       k != null && (e.dataset.b !== k || (dot && e.classList.contains("bdot") && e !== dot))));
     svg.querySelectorAll("[data-b]").forEach(e => { e.addEventListener("mouseenter", () => focusB(e.dataset.b, e.classList.contains("bdot") ? e : null)); e.addEventListener("mouseleave", () => focusB(null)); });
-    document.querySelectorAll("#bchips .bchip[data-b]").forEach(c => { c.onmouseenter = () => pickedB.has(c.dataset.b) && focusB(c.dataset.b); c.onmouseleave = () => focusB(null); });
   }
   bench();
 })();
