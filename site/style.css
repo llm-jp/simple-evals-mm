@@ -55,7 +55,7 @@ body {
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
-.wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+.wrap { max-width: 1024px; margin: 0 auto; padding: 0 24px; }
 
 /* header */
 header.site {
@@ -385,9 +385,9 @@ svg .faded { opacity: 0.12; transition: opacity .15s; }
 [data-theme-shown="dark"] .card-tag.rok { color: #3fb950; }
 [data-theme-shown="dark"] .card-tag.rwarn { color: #d29922; }
 .parity-wrap { overflow-x: auto; margin-top: 8px; }
-table.parity-m { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+table.parity-m { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 table.parity-m th, table.parity-m td { padding: 6px 6px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: top; }
-table.parity-m thead th { font-weight: 600; color: var(--text-secondary); vertical-align: bottom; width: 78px; font-size: 12px; line-height: 1.3; }
+table.parity-m thead th { font-weight: 600; color: var(--text-secondary); vertical-align: bottom; width: 72px; font-size: 12px; line-height: 1.3; }
 table.parity-m th.pm-h .mname { display: flex; flex-direction: column; align-items: center; gap: 3px; white-space: normal; color: var(--text-primary); }
 table.parity-m th.pm-h .effort-tag { display: inline-block; margin-top: 3px; }
 table.parity-m .pt { text-align: left; white-space: nowrap; padding-right: 12px; position: sticky; left: 0; background: var(--bg); z-index: 1; font-weight: 500; }
@@ -406,7 +406,5 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 .parity-notes li { margin: 4px 0; }
 .parity-notes li:target { background: rgba(191, 135, 0, 0.10); }
 
-/* one line length for all running text on every page (intro, About, table notes, footnotes, method text), so
-   paragraphs break at the same width; tables and charts use the full content width */
-:root { --measure: 820px; }
-.intro, .hero p.tagline, .about-list, .about-fig, p.note, .parity-notes, .method { max-width: var(--measure); }
+/* one column: text, tables and charts share the content width (976px), as on DeepSWE */
+.intro, .hero p.tagline, .about-list, .about-fig, p.note, .parity-notes, .method { max-width: none; }
