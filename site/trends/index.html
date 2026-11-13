@@ -47,6 +47,8 @@
 .org-btn:hover { background: var(--surface-2); }
 .org-btn[aria-pressed="true"] { border-color: var(--text-secondary); color: var(--text-primary); }
 .tr-chart .faded { opacity: 0.12; transition: opacity .15s; }
+.tr-chart .bfade { opacity: 0.12; transition: opacity .15s; }
+.tr-chart .bhit { cursor: default; }
 .tr-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
 .method { color: var(--text-secondary); font-size: 16px; line-height: 1.6; }
 .method code { font-size: 13px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
@@ -262,12 +264,14 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
     const keys = [...pickedB], ends = [];
     for (const k of keys) {
       const cur = (T.curves[k] || []).filter(([x]) => x >= ymin && x <= ymax); if (!cur.length) continue;
-      el("path", {d: cur.map(([x, y], i) => `${i ? "L" : "M"}${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(""), fill: "none", stroke: colorB(k), "stroke-width": 2.5}, svg);
+      const dpath = cur.map(([x, y], i) => `${i ? "L" : "M"}${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join("");
+      el("path", {d: dpath, fill: "none", stroke: colorB(k), "stroke-width": 2.5, "data-b": k}, svg);
+      el("path", {d: dpath, fill: "none", stroke: "transparent", "stroke-width": 14, "data-b": k, class: "bhit"}, svg);
       ends.push({k, y: sy(cur[cur.length - 1][1])});
     }
     // curve names at the right end, spread so they do not overlap
     ends.sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 14);
-    for (const e of ends) el("text", {x: W - M.r + 8, y: e.y + 4, fill: colorB(e.k), "font-weight": 600}, svg, blabel(e.k)).style.fill = colorB(e.k);
+    for (const e of ends) { const t = el("text", {x: W - M.r + 8, y: e.y + 4, fill: colorB(e.k), "font-weight": 600, "data-b": e.k, class: "bhit"}, svg, blabel(e.k)); t.style.fill = colorB(e.k); }
     if (keys.length === 1) {  // one benchmark: the models' actual scores as logo markers, with names where they fit
       const sc = T.scores[keys[0]] || {}, label = blabel(keys[0]);
       const pts = S.filter(s => sc[s.key] != null).map(s => ({s, x: sx(s.index), y: sy(sc[s.key])}));
@@ -277,12 +281,16 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
       for (const k of keys) {
         const sc = T.scores[k] || {}, label = blabel(k);
         for (const s of S.filter(s => sc[s.key] != null)) {
-          const c = el("circle", {cx: sx(s.index), cy: sy(sc[s.key]), r: 4.5, fill: colorB(k), opacity: 0.8, stroke: "var(--bg)", "stroke-width": 1, "data-org": s.dev, "data-model": s.model_key}, svg);
+          const c = el("circle", {cx: sx(s.index), cy: sy(sc[s.key]), r: 4.5, fill: colorB(k), opacity: 0.8, stroke: "var(--bg)", "stroke-width": 1, "data-org": s.dev, "data-model": s.model_key, "data-b": k}, svg);
           hover(c, s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`);
         }
       }
     }
     benchChips(); benchTable(); applyPick();
+    // hovering a benchmark (its curve, name, dots or chip) fades the others
+    const focusB = k => svg.querySelectorAll("[data-b]").forEach(e => e.classList.toggle("bfade", k != null && e.dataset.b !== k));
+    svg.querySelectorAll("[data-b]").forEach(e => { e.addEventListener("mouseenter", () => focusB(e.dataset.b)); e.addEventListener("mouseleave", () => focusB(null)); });
+    document.querySelectorAll("#bchips .bchip[data-b]").forEach(c => { c.onmouseenter = () => pickedB.has(c.dataset.b) && focusB(c.dataset.b); c.onmouseleave = () => focusB(null); });
   }
   bench();
 })();
