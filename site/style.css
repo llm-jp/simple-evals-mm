@@ -379,3 +379,15 @@ p.back a:hover { color: var(--text-primary); }
 svg .faded { opacity: 0.12; transition: opacity .15s; }
 .about-fig { margin: 18px 0 0; max-width: 820px; }
 .about-fig img { width: 100%; height: auto; display: block; }
+.card-tag { font-size: 12px; color: var(--text-muted); white-space: nowrap; margin-left: 6px; }
+.card-tag.rok { color: #1a7f37; }
+.card-tag.rwarn { color: #9a6700; }
+[data-theme-shown="dark"] .card-tag.rok { color: #3fb950; }
+[data-theme-shown="dark"] .card-tag.rwarn { color: #d29922; }
+table.parity-t { width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.parity-t th, table.parity-t td { padding: 6px 12px 6px 0; text-align: left; white-space: nowrap; }
+table.parity-t .num { text-align: right; }
+table.parity-t td.why { white-space: normal; color: var(--text-secondary); min-width: 280px; }
+table.parity-t td .card-tag { margin-left: 0; }
+.parity-na { margin-top: 14px; }
+.parity-na summary { cursor: pointer; color: var(--text-secondary); font-size: 14px; }

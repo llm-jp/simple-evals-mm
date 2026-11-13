@@ -651,7 +651,7 @@ def cmd_site(args) -> int:
         return 0
 
     try:
-        data, report = leaderboard.build(args.spec, jobs_dir=args.jobs_dir, repo=args.repo)
+        data, report = leaderboard.build(args.spec, jobs_dir=args.jobs_dir, repo=args.repo, references=args.references)
     except (leaderboard.SpecError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -769,6 +769,8 @@ def make_parser() -> argparse.ArgumentParser:
     p.add_argument("--repo", help="git checkout whose remote branches must contain the job commits (default: this one)")
     p.add_argument("--strict", action="store_true", help="exit 1 when any dataset is refused")
     p.add_argument("--no-stamp", action="store_true", help="do not version the asset URLs of the pages next to --out")
+    p.add_argument("--references", help="model-card scores compared on each model's highest setting (default: "
+                   "references/model_cards.yaml; '' for none)")
     from simple_evals_mm.serving import serve
 
     serve.add_parser(sub)

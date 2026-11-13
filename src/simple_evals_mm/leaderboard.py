@@ -465,9 +465,35 @@ def _common(values):
 
 
 # ---------------------------------------------------------------- build
-def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, today: str | None = None) -> tuple[dict, dict]:
-    """(data for data.js, report {"refused": [...], "shown": n, "warnings": [...]})."""
+PARITY_KEYS = ("card", "ours", "diff", "tol", "result", "reason", "submetric", "variant")
+
+
+def parity_cells(view: JobView, refs: dict, cache: dict) -> dict:
+    """{dataset: the job's comparison with its model card} (`sem job parity`), for the cells of a model's highest
+    effort setting: the card value, our score, the difference, the tolerance and ✓ / ⚠ (or n/a / setting differs with
+    the reason), plus the card's URL."""
+    if view.path not in cache:
+        from simple_evals_mm import parity
+
+        rep = parity.compare(view.store, refs)
+        cache[view.path] = {r["dataset"]: {**{k: r.get(k) for k in PARITY_KEYS if r.get(k) is not None},
+                                           "source": rep.get("source"), "card_name": rep.get("model_name")}
+                            for r in rep["rows"]}
+    return cache[view.path]
+
+
+def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, today: str | None = None,
+          references: str | None = None) -> tuple[dict, dict]:
+    """(data for data.js, report {"refused": [...], "shown": n, "warnings": [...]}). `references`: the model-card
+    scores (`sem job parity`); default the checkout's references/model_cards.yaml, "" for none."""
     spec = load_spec(spec_path)
+    refs = None
+    if references != "":
+        from simple_evals_mm import parity
+
+        path = references or parity.DEFAULT_REFERENCES
+        refs = parity.load_references(path) if os.path.exists(path) else None
+    parity_cache: dict = {}
     spec_dir = os.path.dirname(os.path.abspath(spec_path))
     jobs_dir = jobs_dir or os.path.normpath(os.path.join(spec_dir, spec.get("jobs_dir") or "jobs"))
     git = GitCheck(repo if repo is not None else (spec.get("repo") and os.path.join(spec_dir, spec["repo"]))
@@ -542,6 +568,15 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
         row = {k: m[k] for k in ("key", "name", "dev", "type") if k in m}
         row.update(logo=m.get("logo"), params_b=m.get("params_b"),
                    model=m.get("model") or _common(j["model"] for lv in levels for j in lv["jobs"].values()))
+        if refs is not None:  # the card comparison on the highest effort setting (cards report a model's best)
+            top, top_s = levels[-1], [s for s in m["settings"] if s["label"] == levels[-1]["label"]][0]
+            plan = {name: ref for name, ref in (top_s.get("datasets") or {}).items()}
+            for name, cell in top["tasks"].items():
+                ref = plan.get(name) or top_s.get("job")
+                if ref:
+                    pc = parity_cells(view(ref), refs, parity_cache).get(name)
+                    if pc:
+                        cell["parity"] = pc
         row["max"], row["maxLabel"] = levels[-1], levels[-1]["label"]
         if len(levels) > 1:
             row["low"], row["lowLabel"] = levels[0], levels[0]["label"]
