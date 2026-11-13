@@ -162,15 +162,19 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
     } else g.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
   }
   // labels: the first free spot of right / left / above / below; none if every spot overlaps
-  function labels(svg, pts, W, M, text) {
-    const taken = pts.map(p => ({x0: p.x - 12, x1: p.x + 12, y0: p.y - 12, y1: p.y + 12}));
+  // `only`: candidates in priority order (the other points still block their space), each model labelled once and
+  // at most `max` labels; `r`: the markers' radius
+  function labels(svg, pts, W, M, text, only, r = 12, max = Infinity) {
+    const taken = pts.map(p => ({x0: p.x - r, x1: p.x + r, y0: p.y - r, y1: p.y + r}));
     const hit = b => taken.some(o => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
-    for (const p of pts.slice().sort((a, b) => b.s.index - a.s.index)) {
+    const done = new Set();
+    for (const p of only || pts.slice().sort((a, b) => b.s.index - a.s.index)) {
+      if (only && (done.has(p.s.model_key) || done.size >= max)) continue;
       const t = text(p.s), w = t.length * 6.6 + 4;
       for (const [lx, ly, an] of [[p.x + 15, p.y + 4, "start"], [p.x - 15, p.y + 4, "end"], [p.x, p.y - 16, "middle"], [p.x, p.y + 25, "middle"], [p.x + 13, p.y - 13, "start"], [p.x - 13, p.y - 13, "end"], [p.x + 13, p.y + 21, "start"], [p.x - 13, p.y + 21, "end"]]) {
         const b0 = an === "start" ? lx : an === "end" ? lx - w : lx - w / 2, b = {x0: b0, x1: b0 + w, y0: ly - 11, y1: ly + 3};
         if (b.x0 < M.l || b.x1 > W - 4 || b.y0 < 2 || hit(b)) continue;
-        taken.push(b); el("text", {class: "lbl", x: lx, y: ly, "text-anchor": an, "data-org": p.s.dev, "data-model": p.s.model_key}, svg, t); break;
+        taken.push(b); done.add(p.s.model_key); el("text", {class: "lbl", x: lx, y: ly, "text-anchor": an, "data-org": p.s.dev, "data-model": p.s.model_key, ...(p.b ? {"data-b": p.b} : {})}, svg, t); break;
       }
     }
   }
@@ -280,6 +284,16 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
       for (const {s, x, y} of pts) hover(marker(svg, x, y, s, 8), s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`);
       labels(svg, pts, W - M.r + M.l, M, name);
     } else {  // several: every benchmark's actual scores as dots in its curve's colour
+      const all = [], named = [];
+      for (const k of keys) {
+        const sc = T.scores[k] || {}, ps = S.filter(s => sc[s.key] != null).map(s => ({s, b: k, x: sx(s.index), y: sy(sc[s.key]), v: sc[s.key]}));
+        all.push(...ps);
+        named.push(ps.slice().sort((a, b) => b.v - a.v));
+      }
+      // candidates round-robin over the benchmarks, best scores first; then the weakest settings
+      const order = [];
+      for (let i = 0; i < Math.max(0, ...named.map(x => x.length)); i++) for (const x of named) if (x[i]) order.push(x[i]);
+      named.length = 0; named.push(...order.slice(0, 4 * keys.length), ...all.slice().sort((a, b) => a.s.index - b.s.index).slice(0, keys.length));
       for (const k of keys) {
         const sc = T.scores[k] || {}, label = blabel(k);
         for (const s of S.filter(s => sc[s.key] != null)) {
@@ -288,6 +302,7 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
           c.classList.add("bdot");
         }
       }
+      labels(svg, all, W - M.r + 4, M, s => name(s), named, 6, 6);  // inside the plot (the curve names sit right of it)
     }
     benchChips(); benchTable(); applyPick();
     // hovering a benchmark (its curve, name or dots) fades the others
