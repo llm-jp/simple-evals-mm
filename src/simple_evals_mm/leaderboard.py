@@ -569,8 +569,8 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
         row.update(logo=m.get("logo"), params_b=m.get("params_b"),
                    model=m.get("model") or _common(j["model"] for lv in levels for j in lv["jobs"].values()))
         if refs is not None:  # the card comparison on the highest effort setting (cards report a model's best)
-            top, top_s = levels[-1], [s for s in m["settings"] if s["label"] == levels[-1]["label"]][0]
-            plan = {name: ref for name, ref in (top_s.get("datasets") or {}).items()}
+            top, top_s = levels[-1], next(s for s in m["settings"] if s["label"] == levels[-1]["label"])
+            plan = dict(top_s.get("datasets") or {})
             for name, cell in top["tasks"].items():
                 ref = plan.get(name) or top_s.get("job")
                 if ref:

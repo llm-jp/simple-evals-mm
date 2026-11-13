@@ -81,8 +81,8 @@ def lb(job_env, tmp_path, monkeypatch):
             json.dump(doc, f)  # JSON is YAML
         return p
 
-    def build(p):
-        return leaderboard.build(p, repo=s["repo"], today="2026-11-02")
+    def build(p, references=""):  # "" = no model cards (the checkout's references hold real models only)
+        return leaderboard.build(p, repo=s["repo"], today="2026-11-02", references=references)
 
     s.update(run_lb=run, spec=spec, build=build)
     return s
@@ -282,12 +282,19 @@ def test_data_js_has_the_keys_the_page_reads(lb):
     `c.x` and provenance `p.x` (inside settingsHTML) that site/index.html reads exists in the built data."""
     assert lb["run_lb"]("a", "-k", "2") == 0
     assert lb["run_lb"]("b", "-k", "2") == 0
-    data, report = lb["build"](lb["spec"]([{"label": "low", "job": "a"}, {"label": "high", "job": "b"}]))
+    refs = os.path.join(lb["jobs"], "model_cards.yaml")
+    with open(refs, "w") as f:
+        json.dump({"format": "sem-model-cards/1", "models": {"fake": {
+            "slugs": [SLUG], "source": "https://example.com/card", "scores": {"arith": {"value": 50.0}}}}}, f)
+    data, report = lb["build"](lb["spec"]([{"label": "low", "job": "a"}, {"label": "high", "job": "b"}]), references=refs)
     assert not report["refused"]
+    par = data["models"][0]["max"]["tasks"]["arith"]["parity"]  # the highest setting only
+    assert par["card"] == 50.0 and par["result"] in ("✓", "⚠") and par["source"] == "https://example.com/card"
+    assert "parity" not in data["models"][0]["low"]["tasks"]["arith"]
     with open(os.path.join(SITE, "index.html"), encoding="utf-8") as f:
         html = f.read()
     script = html[html.index("const D = window.LB;"):]
-    panel = script[script.index("function settingsHTML"):script.index("function renderTable")]
+    panel = script[script.index("function settingsHTML"):script.index("// the model card's value for a cell")]
     row, lvl = data["models"][0], data["models"][0]["max"]
     cell = lvl["tasks"]["arith"]
     job = next(iter(lvl["jobs"].values()))
@@ -306,6 +313,9 @@ def test_data_js_has_the_keys_the_page_reads(lb):
     check("j", job, text=panel)
     check("c", cell, text=panel)
     check("p", cell["prov"], text=panel)
+    parity_js = script[script.index("function parityTitle"):script.index("function renderTable")] \
+        + script[script.index("// Parity with model cards"):]
+    check("p", set(cell["parity"]) | {"diff", "tol", "reason", "submetric", "ours", "card_name"}, text=parity_js)
     check("ep", job["endpoint"], text=panel)
     assert {"zeroed", "excluded"} <= set(data["causes"])
 
