@@ -109,7 +109,7 @@ svg.chart { width: 100%; height: auto; display: block; font-family: inherit; }
 .gridline { stroke: var(--grid); stroke-width: 1; }
 .mlabel { fill: var(--text-primary); font-size: 12px; font-weight: 600; pointer-events: none; paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; }
 .elabel { fill: var(--text-muted); font-size: 10.5px; pointer-events: none; paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; }
-.note { font-size: 13px; color: var(--text-muted); margin: 8px 4px 0; }
+.note { font-size: 14px; color: var(--text-muted); margin: 8px 0 0; }
 .tooltip {
   position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
@@ -402,6 +402,11 @@ table.parity-m td.na b { color: var(--text-muted); font-weight: 400; }
 table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 [data-theme-shown="dark"] table.parity-m td.ok b i { color: #3fb950; }
 [data-theme-shown="dark"] table.parity-m td.warn b i { color: #d29922; }
-.parity-notes { margin: 14px 0 0; padding-left: 20px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; max-width: 900px; }
+.parity-notes { margin: 14px 0 0; padding-left: 20px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
 .parity-notes li { margin: 4px 0; }
 .parity-notes li:target { background: rgba(191, 135, 0, 0.10); }
+
+/* one line length for all running text on every page (intro, About, table notes, footnotes, method text), so
+   paragraphs break at the same width; tables and charts use the full content width */
+:root { --measure: 820px; }
+.intro, .hero p.tagline, .about-list, .about-fig, p.note, .parity-notes, .method { max-width: var(--measure); }
