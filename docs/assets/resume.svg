@@ -1,54 +1,105 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" width="960" height="380" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
-  <title>How a job resumes: the same settings continue it, changed settings are refused, and sem run --from starts a new job that reuses the still-valid trials</title>
-  <rect x="0.5" y="0.5" width="959" height="379" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="960" height="600" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <title>One job's life: a run stopped by a node failure resumes only with the same settings; a change that can alter its trials is refused and sem run (from) starts a new job; sem job parity compares the scores with the model card</title>
   <defs>
-    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0969da"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0969da"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#57606a"/></marker>
+    <g id="ok"><circle r="12" fill="#dafbe1" stroke="#1a7f37" stroke-width="3"/><path d="M-5,0 L-1.5,4 L5,-4" fill="none" stroke="#1a7f37" stroke-width="2.4"/></g>
+    <g id="no"><circle r="11" fill="#ffebe9" stroke="#cf222e" stroke-width="2"/><path d="M-4,-4 L4,4 M4,-4 L-4,4" stroke="#cf222e" stroke-width="2.2"/></g>
   </defs>
+  <rect x="0.5" y="0.5" width="959" height="599" rx="12" fill="#ffffff" stroke="#d0d7de"/>
 
-  <!-- job line -->
-  <text x="40" y="132" font-weight="700" fill="#24292f">job <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">opus55__max</tspan></text>
-  <line x1="60" y1="160" x2="900" y2="160" stroke="#57606a" stroke-width="3"/>
+  <!-- 1. the job's timeline -->
+  <text x="30" y="30" font-size="12" font-weight="700" fill="#57606a" letter-spacing="0.06em">1 · RESUME</text>
+  <text x="30" y="106" font-weight="700" fill="#24292f">job <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">qwen38-27b__xhigh</tspan></text>
 
-  <!-- refused attempts (branches that go nowhere) -->
-  <path d="M400,160 C400,110 420,80 450,62" fill="none" stroke="#cf222e" stroke-width="2" stroke-dasharray="5 4"/>
-  <g transform="translate(458 56)"><circle r="11" fill="#ffebe9" stroke="#cf222e" stroke-width="2"/><path d="M-4,-4 L4,4 M4,-4 L-4,4" stroke="#cf222e" stroke-width="2.2"/></g>
-  <text x="476" y="46" fill="#24292f">resume with <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">--max-output-tokens 65536</tspan></text>
-  <text x="476" y="64" fill="#cf222e">refused: the config differs</text>
+  <line x1="60" y1="130" x2="170" y2="130" stroke="#57606a" stroke-width="3"/>
+  <line x1="170" y1="130" x2="288" y2="130" stroke="#57606a" stroke-width="3" stroke-dasharray="3 6"/>
+  <line x1="288" y1="130" x2="800" y2="130" stroke="#57606a" stroke-width="3"/>
 
-  <path d="M640,160 C640,125 655,108 678,98" fill="none" stroke="#cf222e" stroke-width="2" stroke-dasharray="5 4"/>
-  <g transform="translate(686 96)"><circle r="11" fill="#ffebe9" stroke="#cf222e" stroke-width="2"/><path d="M-4,-4 L4,4 M4,-4 L-4,4" stroke="#cf222e" stroke-width="2.2"/></g>
-  <text x="704" y="92" fill="#24292f">the provider now serves fp8</text>
-  <text x="704" y="110" fill="#cf222e">refused: the endpoint differs</text>
+  <!-- refused resumes: dead ends above the line -->
+  <path d="M370,130 C370,95 385,74 410,64" fill="none" stroke="#cf222e" stroke-width="2" stroke-dasharray="5 4"/>
+  <use href="#no" x="418" y="60"/>
+  <text x="436" y="56" fill="#24292f">resume with <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">--max-output-tokens 65536</tspan></text>
+  <text x="436" y="74" fill="#cf222e">refused: the config differs</text>
 
-  <!-- sessions on the job line -->
-  <g transform="translate(110 160)"><circle r="12" fill="#ffffff" stroke="#57606a" stroke-width="3"/></g>
-  <text x="110" y="196" text-anchor="middle" font-weight="700" fill="#24292f">sem run</text>
-  <text x="110" y="214" text-anchor="middle" fill="#57606a">commit a1b2c3</text>
-  <text x="110" y="232" text-anchor="middle" fill="#57606a">300 / 594 trials, stopped</text>
+  <path d="M560,130 C560,112 570,104 588,100" fill="none" stroke="#cf222e" stroke-width="2" stroke-dasharray="5 4"/>
+  <use href="#no" x="596" y="98"/>
+  <text x="614" y="94" fill="#24292f">SGLang upgraded on the GPU node</text>
+  <text x="614" y="112" fill="#cf222e">refused: the server manifest differs</text>
 
-  <g transform="translate(320 160)"><circle r="12" fill="#dafbe1" stroke="#1a7f37" stroke-width="3"/><path d="M-5,0 L-1.5,4 L5,-4" fill="none" stroke="#1a7f37" stroke-width="2.4"/></g>
-  <text x="320" y="196" text-anchor="middle" font-weight="700" fill="#24292f">resume</text>
-  <text x="320" y="214" text-anchor="middle" fill="#57606a">same commit, config, data, endpoint</text>
-  <text x="320" y="232" text-anchor="middle" fill="#57606a">runs only the missing trials</text>
+  <!-- sessions -->
+  <circle cx="60" cy="130" r="12" fill="#ffffff" stroke="#57606a" stroke-width="3"/>
+  <text x="60" y="164" text-anchor="middle" font-weight="700" fill="#24292f">sem run</text>
+  <text x="60" y="182" text-anchor="middle" fill="#57606a">commit a1b2c3</text>
 
-  <g transform="translate(560 160)"><circle r="12" fill="#dafbe1" stroke="#1a7f37" stroke-width="3"/><path d="M-5,0 L-1.5,4 L5,-4" fill="none" stroke="#1a7f37" stroke-width="2.4"/></g>
-  <text x="560" y="196" text-anchor="middle" font-weight="700" fill="#24292f">resume at commit d4e5f6</text>
-  <text x="560" y="214" text-anchor="middle" fill="#57606a">the change cannot affect this job</text>
-  <text x="560" y="232" text-anchor="middle" fill="#57606a">(docs, another dataset): accepted</text>
+  <!-- the stop: a lightning bolt -->
+  <g transform="translate(170 130)"><circle r="14" fill="#fff8c5" stroke="#bf8700" stroke-width="2"/><path d="M2,-9 L-5,1 L0,1 L-2,9 L5,-1 L0,-1 Z" fill="#bf8700"/></g>
+  <text x="170" y="164" text-anchor="middle" font-weight="700" fill="#9a6700">stopped at 300 / 594</text>
+  <text x="170" y="182" text-anchor="middle" fill="#57606a">the node's walltime</text>
+  <text x="170" y="198" text-anchor="middle" fill="#57606a">ran out</text>
 
-  <g transform="translate(830 160)"><circle r="12" fill="#57606a"/></g>
-  <text x="830" y="196" text-anchor="middle" font-weight="700" fill="#24292f">594 / 594</text>
-  <text x="830" y="214" text-anchor="middle" fill="#57606a">verified; scores computed</text>
-  <text x="830" y="232" text-anchor="middle" fill="#57606a">from the trials</text>
+  <use href="#ok" x="300" y="130"/>
+  <text x="300" y="164" text-anchor="middle" font-weight="700" fill="#24292f">sem job resume</text>
+  <text x="300" y="182" text-anchor="middle" fill="#57606a">nothing changed:</text>
+  <text x="300" y="198" text-anchor="middle" fill="#57606a">runs the 294 missing</text>
 
-  <!-- a new job derived with sem run (from) -->
-  <path d="M705,160 L705,300" fill="none" stroke="#0969da" stroke-width="2.5" marker-end="url(#ar)"/>
-  <line x1="705" y1="316" x2="900" y2="316" stroke="#0969da" stroke-width="3"/>
-  <g transform="translate(705 316)"><circle r="12" fill="#ddf4ff" stroke="#0969da" stroke-width="3"/></g>
-  <text x="40" y="282" font-weight="700" fill="#24292f">commit e7f8a9 changes the GPQA prompt</text>
-  <text x="40" y="300" fill="#cf222e">resume refused: the stored GPQA trials would change</text>
-  <text x="40" y="320" fill="#57606a"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#0969da">sem run --from opus55__max</tspan> starts a new job:</text>
-  <text x="40" y="338" fill="#57606a">copies the other datasets' trials, reruns only GPQA</text>
-  <text x="725" y="302" fill="#24292f" font-weight="700">job <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">opus55__max__v2</tspan></text>
-  <text x="725" y="340" fill="#57606a">own config and lock, at e7f8a9</text>
+  <use href="#ok" x="470" y="130"/>
+  <text x="470" y="164" text-anchor="middle" font-weight="700" fill="#24292f">resume at d4e5f6</text>
+  <text x="470" y="182" text-anchor="middle" fill="#57606a">a docs-only commit</text>
+  <text x="470" y="198" text-anchor="middle" fill="#57606a">cannot affect it: accepted</text>
+
+  <circle cx="640" cy="130" r="12" fill="#57606a"/>
+  <text x="640" y="164" text-anchor="middle" font-weight="700" fill="#24292f">594 / 594</text>
+  <text x="640" y="182" text-anchor="middle" fill="#57606a">verified; scores</text>
+  <text x="640" y="198" text-anchor="middle" fill="#57606a">computed from trials</text>
+
+  <!-- a commit that changes this job's trials: refused, so a new job -->
+  <use href="#no" x="800" y="130"/>
+  <text x="820" y="160" font-weight="700" fill="#24292f">resume at e7f8a9</text>
+  <text x="820" y="178" fill="#57606a">it changes the</text>
+  <text x="820" y="194" fill="#57606a">GPQA prompt:</text>
+  <text x="820" y="210" fill="#cf222e">refused</text>
+  <path d="M800,142 L800,288" fill="none" stroke="#0969da" stroke-width="2.5" marker-end="url(#ab)"/>
+  <text x="814" y="240" fill="#0969da" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">sem run --from</text>
+  <text x="814" y="258" fill="#57606a">starts a new job</text>
+  <circle cx="800" cy="302" r="12" fill="#ddf4ff" stroke="#0969da" stroke-width="3"/>
+  <line x1="812" y1="302" x2="930" y2="302" stroke="#0969da" stroke-width="3"/>
+  <text x="820" y="330" font-weight="700" fill="#24292f">new job <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="400">…__v2</tspan></text>
+  <text x="820" y="348" fill="#57606a">copies the other</text>
+  <text x="820" y="364" fill="#57606a">datasets' trials,</text>
+  <text x="820" y="380" fill="#57606a">reruns only GPQA</text>
+
+  <!-- 2. parity with the model card -->
+  <line x1="30" y1="400" x2="930" y2="400" stroke="#d0d7de"/>
+  <text x="30" y="428" font-size="12" font-weight="700" fill="#57606a" letter-spacing="0.06em">2 · PARITY</text>
+  <path d="M640,214 L640,452" fill="none" stroke="#57606a" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ag)"/>
+
+  <!-- the model card -->
+  <rect x="40" y="456" width="230" height="100" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+  <path d="M56,470 h14 l6,6 v18 h-20 z" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
+  <text x="86" y="486" font-weight="700" fill="#24292f">Qwen3.8-27B model card</text>
+  <text x="56" y="516" fill="#57606a">GPQA Diamond</text><text x="254" y="516" text-anchor="end" fill="#24292f">89.2</text>
+  <text x="56" y="538" fill="#57606a">RealWorldQA</text><text x="254" y="538" text-anchor="end" fill="#24292f">85.9</text>
+
+  <!-- this job's scores -->
+  <rect x="550" y="456" width="200" height="100" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="566" y="486" font-weight="700" fill="#24292f">this job's scores</text>
+  <text x="566" y="516" fill="#57606a">GPQA Diamond</text><text x="734" y="516" text-anchor="end" fill="#24292f">90.4</text>
+  <text x="566" y="538" fill="#57606a">RealWorldQA</text><text x="734" y="538" text-anchor="end" fill="#24292f">83.2</text>
+
+  <!-- sem job parity in between -->
+  <path d="M270,506 L308,506" stroke="#57606a" stroke-width="1.5" marker-end="url(#ag)"/>
+  <path d="M550,506 L512,506" stroke="#57606a" stroke-width="1.5" marker-end="url(#ag)"/>
+  <rect x="310" y="444" width="200" height="124" rx="8" fill="#ffffff" stroke="#24292f" stroke-width="1.5"/>
+  <text x="410" y="466" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" fill="#24292f">sem job parity</text>
+  <line x1="322" y1="476" x2="498" y2="476" stroke="#d0d7de"/>
+  <text x="324" y="500" fill="#24292f">GPQA</text><text x="458" y="500" text-anchor="end" fill="#57606a">+1.2</text>
+  <use href="#ok" transform="translate(484 495) scale(0.7)"/>
+  <text x="324" y="530" fill="#24292f">RealWorldQA</text><text x="458" y="530" text-anchor="end" fill="#57606a">−2.7</text>
+  <g transform="translate(484 525)"><path d="M0,-9 L9,7 L-9,7 Z" fill="#fff8c5" stroke="#bf8700" stroke-width="1.6" stroke-linejoin="round"/><path d="M0,-3 v4 M0,4 v0.5" stroke="#9a6700" stroke-width="1.8" stroke-linecap="round"/></g>
+  <text x="410" y="556" text-anchor="middle" font-size="11.5" fill="#57606a">✓ within tolerance · ⚠ outside</text>
+  <text x="772" y="490" fill="#57606a">A ⚠ is looked into:</text>
+  <text x="772" y="508" fill="#57606a">the settings, the data,</text>
+  <text x="772" y="526" fill="#57606a">or a bug in inference</text>
+  <text x="772" y="544" fill="#57606a">(Gemma 4: an SGLang fix)</text>
 </svg>
