@@ -174,7 +174,10 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
       for (const [lx, ly, an] of [[p.x + 15, p.y + 4, "start"], [p.x - 15, p.y + 4, "end"], [p.x, p.y - 16, "middle"], [p.x, p.y + 25, "middle"], [p.x + 13, p.y - 13, "start"], [p.x - 13, p.y - 13, "end"], [p.x + 13, p.y + 21, "start"], [p.x - 13, p.y + 21, "end"]]) {
         const b0 = an === "start" ? lx : an === "end" ? lx - w : lx - w / 2, b = {x0: b0, x1: b0 + w, y0: ly - 11, y1: ly + 3};
         if (b.x0 < M.l || b.x1 > W - 4 || b.y0 < 2 || hit(b)) continue;
-        taken.push(b); done.add(p.s.model_key); el("text", {class: "lbl", x: lx, y: ly, "text-anchor": an, "data-org": p.s.dev, "data-model": p.s.model_key, ...(p.b ? {"data-b": p.b} : {})}, svg, t); break;
+        taken.push(b); done.add(p.s.model_key);
+        const tx = el("text", {class: "lbl", x: lx, y: ly, "text-anchor": an, "data-org": p.s.dev, "data-model": p.s.model_key, ...(p.b ? {"data-b": p.b} : {})}, svg, t);
+        if (p.b) tx.style.fill = colorB(p.b);  // a benchmark's point: named in its curve's colour
+        break;
       }
     }
   }
