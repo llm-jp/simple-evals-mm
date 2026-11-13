@@ -315,7 +315,8 @@ def test_data_js_has_the_keys_the_page_reads(lb):
     check("p", cell["prov"], text=panel)
     parity_js = script[script.index("function parityTitle"):script.index("function renderTable")] \
         + script[script.index("// Parity with model cards"):]
-    check("p", set(cell["parity"]) | {"diff", "tol", "reason", "submetric", "ours", "card_name", "note", "link"}  # optional keys, text=parity_js)
+    optional_p = {"diff", "tol", "reason", "submetric", "ours", "card_name", "note", "link"}  # absent when not applicable
+    check("p", set(cell["parity"]) | optional_p, text=parity_js)
     check("ep", job["endpoint"], text=panel)
     assert {"zeroed", "excluded"} <= set(data["causes"])
 
