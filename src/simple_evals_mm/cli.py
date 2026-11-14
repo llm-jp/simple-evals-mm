@@ -780,6 +780,10 @@ def cmd_site(args) -> int:
         return 2
     print(leaderboard.format_report(report))
     leaderboard.write_data_js(data, args.out)
+    if args.parity_md:
+        with open(args.parity_md, "w", encoding="utf-8") as f:
+            f.write(leaderboard.parity_markdown(data))
+        print(f"wrote {args.parity_md}")
     if not args.no_stamp:
         leaderboard.stamp_assets(os.path.dirname(os.path.abspath(args.out)))
     print(f"wrote {args.out}: {len(data['models'])} model row(s)")
@@ -940,6 +944,7 @@ def make_parser() -> argparse.ArgumentParser:
     p.add_argument("--repo", help="git checkout whose remote branches must contain the job commits (default: this one)")
     p.add_argument("--strict", action="store_true", help="exit 1 when any dataset is refused")
     p.add_argument("--no-stamp", action="store_true", help="do not version the asset URLs of the pages next to --out")
+    p.add_argument("--parity-md", help="also write the model-card comparison as Markdown (docs/parity.md)")
     p.add_argument("--references", help="model-card scores compared on each model's highest setting (default: "
                    "references/model_cards.yaml; '' for none)")
     from simple_evals_mm.serving import serve

@@ -377,3 +377,13 @@ def test_cost_estimate_for_a_model_without_billed_cost(lb):
     assert lvl["cost_estimate"] == est
     data, _ = s["build"](s["spec"]([{"label": "low", "job": "j"}]))  # no estimate: no cost
     assert data["models"][0]["max"]["tasks"]["arith"]["cost"] is None
+
+
+def test_parity_markdown_lists_cells_and_explains_the_others():
+    data = {"updated": "2026-11-14", "tasks": [{"key": "a", "label": "A"}, {"key": "b", "label": "B"}],
+            "models": [{"name": "M", "maxLabel": "max", "max": {"tasks": {
+                "a": {"score": 80.0, "parity": {"card": 81.0, "result": "✓"}},
+                "b": {"score": 50.0, "parity": {"card": 60.0, "result": "⚠", "note": "cause unknown"}}}}}]}
+    md = leaderboard.parity_markdown(data)
+    assert "**1 of 2**" in md and "| A | 80.0 / 81.0 ✓ |" in md and "| B | 50.0 / 60.0 ⚠ |" in md
+    assert "- **M (max), B** ⚠: cause unknown" in md
