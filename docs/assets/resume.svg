@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <title>A job resumes only when nothing that affects its results has changed; otherwise sem run (from) starts a new job. sem job parity compares the scores with the model card.</title>
+  <defs>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0969da"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#57606a"/></marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="959" height="439" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+
+  <!-- 1. resume -->
+  <text x="30" y="32" font-size="12" font-weight="700" fill="#57606a" letter-spacing="0.06em">1 · RESUME</text>
+  <text x="60" y="68" font-weight="700" fill="#24292f">job <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">qwen38-27b__xhigh</tspan></text>
+  <line x1="80" y1="92" x2="230" y2="92" stroke="#57606a" stroke-width="3"/>
+  <line x1="230" y1="92" x2="368" y2="92" stroke="#57606a" stroke-width="3" stroke-dasharray="3 6"/>
+  <line x1="368" y1="92" x2="560" y2="92" stroke="#57606a" stroke-width="3"/>
+  <line x1="560" y1="92" x2="748" y2="92" stroke="#57606a" stroke-width="3" stroke-dasharray="3 6"/>
+
+  <circle cx="80" cy="92" r="12" fill="#ffffff" stroke="#57606a" stroke-width="3"/>
+  <text x="80" y="126" text-anchor="middle" font-weight="700" fill="#24292f">sem run</text>
+
+  <g transform="translate(230 92)"><circle r="14" fill="#fff8c5" stroke="#bf8700" stroke-width="2"/><path d="M2,-9 L-5,1 L0,1 L-2,9 L5,-1 L0,-1 Z" fill="#bf8700"/></g>
+  <text x="230" y="126" text-anchor="middle" font-weight="700" fill="#9a6700">stopped at 300 / 594</text>
+  <text x="230" y="144" text-anchor="middle" fill="#57606a">the node's walltime ran out</text>
+
+  <g transform="translate(380 92)"><circle r="12" fill="#dafbe1" stroke="#1a7f37" stroke-width="3"/><path d="M-5,0 L-1.5,4 L5,-4" fill="none" stroke="#1a7f37" stroke-width="2.4"/></g>
+  <text x="380" y="126" text-anchor="middle" font-weight="700" fill="#24292f">sem job resume</text>
+  <text x="380" y="144" text-anchor="middle" fill="#57606a">nothing changed:</text>
+  <text x="380" y="160" text-anchor="middle" fill="#57606a">runs only the missing trials</text>
+
+  <circle cx="560" cy="92" r="12" fill="#57606a"/>
+  <text x="560" y="126" text-anchor="middle" font-weight="700" fill="#24292f">594 / 594</text>
+  <text x="560" y="144" text-anchor="middle" fill="#57606a">verified</text>
+
+  <g transform="translate(760 92)"><circle r="12" fill="#ffebe9" stroke="#cf222e" stroke-width="2"/><path d="M-4,-4 L4,4 M4,-4 L-4,4" stroke="#cf222e" stroke-width="2.2"/></g>
+  <text x="782" y="72" font-weight="700" fill="#24292f">resume after a change</text>
+  <text x="782" y="90" fill="#57606a">to the code it uses, the data,</text>
+  <text x="782" y="106" fill="#57606a">the settings or the endpoint</text>
+  <text x="782" y="124" fill="#cf222e">refused</text>
+
+  <path d="M760,104 L760,196" fill="none" stroke="#0969da" stroke-width="2.5" marker-end="url(#ab)"/>
+  <text x="772" y="160" fill="#0969da" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">sem run --from</text>
+  <circle cx="760" cy="210" r="12" fill="#ddf4ff" stroke="#0969da" stroke-width="3"/>
+  <line x1="772" y1="210" x2="920" y2="210" stroke="#0969da" stroke-width="3"/>
+  <text x="782" y="238" font-weight="700" fill="#24292f">a new job</text>
+  <text x="782" y="256" fill="#57606a">copies the still-valid trials,</text>
+  <text x="782" y="272" fill="#57606a">reruns the rest</text>
+
+  <!-- 2. parity -->
+  <line x1="30" y1="292" x2="930" y2="292" stroke="#d0d7de"/>
+  <text x="30" y="320" font-size="12" font-weight="700" fill="#57606a" letter-spacing="0.06em">2 · PARITY</text>
+  <path d="M560,156 L560,334" fill="none" stroke="#57606a" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ag)"/>
+
+  <rect x="40" y="338" width="230" height="78" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+  <path d="M56,352 h14 l6,6 v18 h-20 z" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
+  <text x="86" y="368" font-weight="700" fill="#24292f">model card</text>
+  <text x="56" y="400" fill="#57606a">GPQA Diamond</text><text x="254" y="400" text-anchor="end" fill="#24292f">89.2</text>
+
+  <rect x="470" y="338" width="200" height="78" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="486" y="368" font-weight="700" fill="#24292f">this job's score</text>
+  <text x="486" y="400" fill="#57606a">GPQA Diamond</text><text x="654" y="400" text-anchor="end" fill="#24292f">90.4</text>
+
+  <path d="M270,377 L298,377" stroke="#57606a" stroke-width="1.5" marker-end="url(#ag)"/>
+  <path d="M470,377 L442,377" stroke="#57606a" stroke-width="1.5" marker-end="url(#ag)"/>
+  <rect x="300" y="338" width="140" height="78" rx="8" fill="#ffffff" stroke="#24292f" stroke-width="1.5"/>
+  <text x="370" y="364" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" fill="#24292f">sem job parity</text>
+  <g transform="translate(338 392)"><circle r="9" fill="#dafbe1" stroke="#1a7f37" stroke-width="2"/><path d="M-4,0 L-1,3 L4,-3" fill="none" stroke="#1a7f37" stroke-width="2"/></g>
+  <text x="354" y="397" fill="#24292f">+1.2 within</text>
+
+  <text x="700" y="364" fill="#57606a">A gap outside the tolerance is</text>
+  <text x="700" y="382" fill="#57606a">looked into: for Gemma 4 it was</text>
+  <text x="700" y="400" fill="#57606a">an SGLang kernel bug</text>
+</svg>
