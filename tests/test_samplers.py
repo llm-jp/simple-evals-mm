@@ -637,8 +637,9 @@ def test_endpoint_unavailable_classification(clean_env, endpoints, monkeypatch, 
 
 def test_request_rejected_after_every_retry_errors(clean_env, endpoints, monkeypatch):
     """An API that answers every try of one request with an error (an upstream error inside a 200, or a 5xx), never a
-    rate limit or a timeout, rejects that request: request_rejected (counts as 0, not retried). One timeout or one
-    rate limit among the tries keeps it provider_failed (transient)."""
+    timeout, rejects that request: request_rejected (counts as 0, not retried). One timeout among the tries keeps it
+    provider_failed (transient); rate limits in between do not count (they come from the account's other requests, e.g.
+    jobs run in parallel), unless the rate-limit budget runs out first."""
     import httpx
     import openai
     from openai.types.chat import ChatCompletion
@@ -674,7 +675,12 @@ def test_request_rejected_after_every_retry_errors(clean_env, endpoints, monkeyp
         s([user("q")])
     assert e.value.cause == errors.PROVIDER_FAILED
     rate = openai.RateLimitError("Error code: 429", response=httpx.Response(429, request=req), body=None)
-    s._client = answering([upstream, rate, upstream, upstream, upstream])
+    s._client = answering([upstream, rate, upstream, rate, upstream, upstream])
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.cause == errors.REQUEST_REJECTED
+    s.spec.max_rate_limit_tries = 1
+    s._client = answering([upstream, rate, rate])
     with pytest.raises(errors.SamplerError) as e:
         s([user("q")])
     assert e.value.cause == errors.PROVIDER_FAILED
