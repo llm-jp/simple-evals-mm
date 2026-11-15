@@ -181,7 +181,10 @@ html, body { overflow-x: clip; }
 /* dataset cards: the description takes the free height, so the results of cards in a row line up */
 article.dscard .desc { flex-grow: 1; color: var(--text-secondary); font-size: 14.5px; margin: 10px 0 14px; }
 article.dscard { background: color-mix(in srgb, var(--surface-2) 65%, var(--bg)); padding: 20px 22px; transition: border-color .12s, box-shadow .12s; }
-article.dscard .dgo .btn.ghost { background: var(--bg); }
+article.dscard .dgo .btn.ghost { background: transparent; box-shadow: none; } article.dscard .dgo .btn.ghost:hover { background: var(--bg); }
+/* one tone per card: the stats sit on the card's tint, separated by rules only */
+article.dscard .dgrid3 { background: var(--border); border-color: var(--border); }
+article.dscard .dgrid3 .dc { background: color-mix(in srgb, var(--surface-2) 65%, var(--bg)); }
 article.dscard:hover { border-color: var(--text-muted); box-shadow: 0 2px 10px rgba(0,0,0,.06); }
 article.dscard h3 { font-size: 21px; font-weight: 700; margin: 0; letter-spacing: -0.015em; }
 article.dscard .dmeta { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin-top: 4px; }
