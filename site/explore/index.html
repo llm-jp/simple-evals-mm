@@ -355,6 +355,8 @@ function wireBack(fallback) { $("back").onclick = e => { e.preventDefault(); his
 function badge(x) { return !x ? `<span class="badge bx">–</span>` : x.r == null ? `<span class="badge bx">excluded</span>` : `<span class="badge ${x.r >= 0.5 ? "b1" : "b0"}">${(+x.r).toFixed(2)}</span>`; }
 async function init() {
   IDX = await getJSON(DATA + "index.json");
+  // benchmark names from the site (leaderboard.yaml), so a renamed label does not wait for the next Explore upload
+  if (IDX) for (const [k, v] of Object.entries(IDX.datasets || {})) if (META[k] && META[k].label) v.label = META[k].label;
 
   $("tabs").onclick = e => { const v = e.target.dataset.v; if (v) go(v === "benchmarks" ? {view: v} : {view: v, d: P().d}); };
   route();
