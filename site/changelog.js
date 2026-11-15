@@ -1,6 +1,7 @@
 // Leaderboard changelog, newest first, shown on changelog.html. Add an entry for every change visible on the
 // leaderboard: models or configurations added or removed, tasks added, scoring changes that move numbers, and
 // changes to what the site reports. Categories: Release, Models, Tasks, Scoring, Reporting.
+// `sem site changelog --since <last release> --write` drafts an entry from the data and the commits since then.
 // `draft: true`: not published yet; changelog.html shows drafts only with #drafts in the URL.
 const CHANGELOG = [
   {

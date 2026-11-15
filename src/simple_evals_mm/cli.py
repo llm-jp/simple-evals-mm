@@ -743,6 +743,18 @@ def cmd_datasets(args) -> int:
 def cmd_site(args) -> int:
     from simple_evals_mm import leaderboard
 
+    if args.site_cmd == "changelog":
+        from simple_evals_mm import changelog
+
+        items, commits = changelog.build(args.since, args.data)
+        js = changelog.entry(items, commits, version=args.version)
+        if args.write:
+            changelog.insert(args.changelog, js)
+            print(f"{args.changelog}: draft entry added ({len(items)} change(s), {len(commits)} commit(s)); open "
+                  "changelog.html#drafts to see it, add the reasons, then remove draft: true")
+        else:
+            print(js, end="")
+        return 0
     if args.site_cmd == "trends":
         from simple_evals_mm import capability
 
@@ -779,7 +791,18 @@ def cmd_site(args) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     print(leaderboard.format_report(report))
+    prev = None
+    if os.path.exists(args.out):  # the build being replaced: a leaderboard change wants a changelog entry
+        from simple_evals_mm import changelog
+
+        with open(args.out, encoding="utf-8") as f:
+            prev = changelog._load(f.read())
     leaderboard.write_data_js(data, args.out)
+    if prev is not None:
+        changes = [i for i in changelog.diff(prev, data) if i["category"] in ("Models", "Tasks", "Scoring")]
+        if changes:
+            print(f"changelog: {len(changes)} leaderboard change(s) since the previous build "
+                  "(sem site changelog --since <the last release> --write drafts an entry)")
     if args.parity_md:
         with open(args.parity_md, "w", encoding="utf-8") as f:
             f.write(leaderboard.parity_markdown(data))
@@ -917,6 +940,14 @@ def make_parser() -> argparse.ArgumentParser:
             p.add_argument("--max-download-mb", type=float, default=300,
                            help="locked source files up to this size are downloaded and hashed; bigger ones: HEAD size")
     site = sub.add_parser("site", help="leaderboard site").add_subparsers(dest="site_cmd", required=True)
+    pc = site.add_parser("changelog", help="a draft changelog entry from what changed since a git revision: settings / "
+                                           "benchmarks added or removed, Overall, moved scores, parity, output-changing "
+                                           "commits")
+    pc.add_argument("--since", required=True, help="git revision of the previous release (e.g. v0.5.5)")
+    pc.add_argument("--data", default="site/data.js", help="the current build (default site/data.js)")
+    pc.add_argument("--changelog", default="site/changelog.js")
+    pc.add_argument("--version", help="the release version for the entry")
+    pc.add_argument("--write", action="store_true", help="insert the draft into the changelog (default: print it)")
     pt = site.add_parser("trends", help="site/trends.js: the simple-evals-mm Index (item response theory over every question) "
                                          "of every leaderboard setting, from the Explore build (site/results)")
     pt.add_argument("spec", nargs="?", default="site/leaderboard.yaml")
