@@ -164,6 +164,12 @@ article.dscard .facts { margin-top: 0; }
 .spin-wrap { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; }
 .spin { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--text-secondary); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.imgwrap { position: relative; margin: 4px 0 10px; }
+.imgwrap img { display: block; max-width: 100%; max-height: 520px; border-radius: 10px; border: 1px solid var(--border); }
+.imgwrap > .spin-wrap { display: none; }
+.imgwrap.loading { min-height: 160px; border: 1px dashed var(--border); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.imgwrap.loading > .spin-wrap { display: inline-flex; }
+.imgwrap.loading img { position: absolute; opacity: 0; width: 1px; height: 1px; }  /* loads while hidden */
 .imgload { height: 160px; border: 1px dashed var(--border); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin: 4px 0 10px; }  /* the footer stays put while a view loads */
 #app > p.loading { padding: 24px 0; color: var(--text-muted); }
 .dgrid3 .dl { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }  /* one line: the values line up */
@@ -330,6 +336,8 @@ function route() {
 }
 // a small spinner with a message: shown while data loads, so a slow fetch does not look like a broken page
 const spinner = msg => `<span class="spin-wrap"><span class="spin" aria-hidden="true"></span>${esc(msg)}</span>`;
+// an image with a spinner behind it until it has loaded (dataset images can be large); a failed load shows the placeholder
+const imgTag = src => `<div class="imgwrap loading">${spinner("Loading the image…")}<img src="${esc(src)}" alt="" onload="this.parentNode.classList.remove('loading')" onerror="this.parentNode.outerHTML=window.__ph"></div>`;
 // start every request a task / trial page needs at once (getJSON caches the promises, so the page's own awaits reuse
 // them): called by the pages themselves, and on hover / focus of a link to one, so it is often loaded before the click
 function prefetch(o) {
@@ -493,7 +501,7 @@ function fillTaskImages(d, t) {
     let ims = r && r.j.rows && r.j.rows.length ? rowImages(r.j.rows[0].row).slice(0, n) : [];
     if (!ims.length) { box.innerHTML = Array.from({length: n}, () => placeholder(r && r.j.error ? "(the dataset viewer returned an error)" : "(no image in the dataset row)", r && r.link)).join(""); return; }
     window.__ph = placeholder("(the dataset viewer did not serve it)", r && r.link);
-    box.innerHTML = ims.map(src => `<img src="${esc(src)}" alt="" loading="lazy" style="max-width:100%;max-height:520px;border-radius:10px;border:1px solid var(--border);display:block;margin:4px 0 10px" onerror="this.outerHTML=window.__ph">`).join("");
+    box.innerHTML = ims.map(imgTag).join("");
   });
 }
 async function questionPanel(d, t) {
@@ -723,14 +731,15 @@ async function trial(p) {
     const why = IDX.datasets[d].mode ? null : (IDX.datasets[d].note || "no public viewer");
     const miss = (reason, link) => Array.from({length: n || 1}, () => placeholder(reason, link || IDX.datasets[d].url)).join("");
     if (why) { if (box && n) box.innerHTML = miss(`(${why})`); }
-    else fetchRow(d, t).then(r => {
+    else { if (box) box.innerHTML = Array.from({length: n || 1}, () => `<div class="imgload">${spinner("Loading the image from the Hugging Face dataset viewer…")}</div>`).join("");
+    fetchRow(d, t).then(r => {
       if (!box) return;
       let ims = r && r.j.rows && r.j.rows.length ? rowImages(r.j.rows[0].row) : [];
       if (n) ims = ims.slice(0, n);
       if (!ims.length) { if (n) box.innerHTML = miss(r && r.j.error ? "(the dataset viewer returned an error)" : "(no image in the dataset row)", r && r.link); return; }
       window.__ph = placeholder("(the dataset viewer did not serve it)", r && r.link);
-      box.innerHTML = ims.map(src => `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.outerHTML=window.__ph">`).join("");
-    });
+      box.innerHTML = ims.map(imgTag).join("");
+    }); }
   }
 }
 
