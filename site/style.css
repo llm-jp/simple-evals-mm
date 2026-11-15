@@ -341,11 +341,11 @@ p.back a:hover { color: var(--text-primary); }
 .cl-tag { display: inline-block; font-size: 12px; font-weight: 600; text-align: center; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-secondary); }
 .cl-tag[data-cat="Release"] { background: rgba(42, 120, 214, 0.14); color: var(--accent); }
 .cl-tag[data-cat="Models"] { background: rgba(46, 160, 67, 0.15); color: #2e8a43; }
-.cl-tag[data-cat="Tasks"] { background: rgba(130, 80, 223, 0.14); color: #7a4fd0; }
+.cl-tag[data-cat="Benchmarks"] { background: rgba(130, 80, 223, 0.14); color: #7a4fd0; }
 .cl-tag[data-cat="Scoring"] { background: rgba(219, 118, 20, 0.15); color: #b8620f; }
 .cl-tag[data-cat="Reporting"] { background: rgba(120, 120, 115, 0.16); color: var(--text-secondary); }
 :root[data-theme-shown="dark"] .cl-tag[data-cat="Models"] { color: #5cc177; }
-:root[data-theme-shown="dark"] .cl-tag[data-cat="Tasks"] { color: #a98bf0; }
+:root[data-theme-shown="dark"] .cl-tag[data-cat="Benchmarks"] { color: #a98bf0; }
 :root[data-theme-shown="dark"] .cl-tag[data-cat="Scoring"] { color: #eb9a4a; }
 @media (max-width: 640px) { .cl-items li { grid-template-columns: 1fr; gap: 3px; } .cl-tag { justify-self: start; } }
 
@@ -408,3 +408,5 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 
 /* one column: text, tables and charts share the content width (976px), as on DeepSWE */
 .intro, .hero p.tagline, .about-list, .about-fig, p.note, .parity-notes, .method { max-width: none; }
+
+#lb td .ci { font-size: 11.5px; color: var(--text-muted); font-weight: 400; white-space: nowrap; margin-top: 1px; }
