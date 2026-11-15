@@ -100,9 +100,13 @@ table.hm td.cell { width: 50px; min-width: 50px; max-width: 50px; height: 32px; 
 .hov { position: fixed; z-index: 50; pointer-events: none; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 10px 12px; font-size: 14px; min-width: 220px; display: none; }
 .hov b { display: block; margin-bottom: 4px; } .hov .r { display: flex; justify-content: space-between; gap: 18px; color: var(--text-secondary); } .hov .r span:last-child { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .chat { display: flex; flex-direction: column; gap: 14px; margin: 16px 0; }
-.msg { max-width: 88%; border-radius: 14px; padding: 12px 16px; font-size: 15.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
-.msg.user { align-self: flex-end; background: var(--surface-2); border: 1px solid var(--border); }
-.msg.asst { align-self: flex-start; background: var(--bg); border: 1px solid var(--border); }
+/* as ChatGPT / Claude: the question a right-aligned bubble (up to 75% of the column, its images above it), the answer
+   plain text over the full width (no bubble, so its width does not follow its length) */
+.msg { font-size: 15.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.msg.user { align-self: flex-end; max-width: 75%; background: var(--surface-2); border-radius: 18px; padding: 10px 16px; }
+.msg.asst { align-self: stretch; padding: 4px 2px; }
+.uimg { align-self: flex-end; max-width: 75%; }
+.uimg img, .uimg .imgwrap { margin-left: auto; }
 .msg .who { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; white-space: normal; }
 .msg img { max-width: 100%; max-height: 520px; border-radius: 10px; border: 1px solid var(--border); display: block; margin: 4px 0 10px; }
 .msg .sec { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); margin: 2px 0 6px; white-space: normal; }
@@ -709,7 +713,7 @@ async function trial(p) {
   if (tab === "trajectory") {
     const pr = (await prompts(d))[t];
     const userText = pr ? pr.replace(/\n\[\d+ image\(s\)\]$/, "") : null;
-    body = `<div class="chat"><div class="msg user"><div class="who">User</div><div id="uimg"></div>${userText != null ? esc(userText) : `<span class="note">The question is not shown: ${esc(IDX.datasets[d].note || "no public viewer")}.</span>`}</div>` +
+    body = `<div class="chat"><div id="uimg" class="uimg"></div><div class="msg user">${userText != null ? esc(userText) : `<span class="note">The question is not shown: ${esc(IDX.datasets[d].note || "no public viewer")}.</span>`}</div>` +
       `<div class="msg asst"><div class="who">${esc(setName(si))}</div>` + (IDX.datasets[d].text === false ? `<span class="note">The answer is not published for this benchmark (${esc(IDX.datasets[d].note || "not public")}): it would reveal the question and its reference answer. The scores, tokens and metrics are.</span></div></div>` :
       `<details class="think"><summary>${icon("chevR", "chev2")}${icon("bulb")} Reasoning${x && x.R ? `<span class="rtok">· ${tok(x.R)} tokens</span>` : ""}</summary><div class="tbody">${reas ? esc(reas) :
         x && x.R > 0 ? `Hidden by the provider (${tok(x.R)} reasoning tokens; the text is not returned).` : x && x.R === 0 ? "None (the model answered without reasoning)." : "Unavailable."}</div></details>` +
