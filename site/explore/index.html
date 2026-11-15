@@ -353,14 +353,19 @@ async function init() {
   $("tabs").onclick = e => { const v = e.target.dataset.v; if (v) go(v === "benchmarks" ? {view: v} : {view: v, d: P().d}); };
   route();
 }
+// a tab switch on the same trial page keeps the page as it is (no loading state, no jump to the top): only the tab's
+// content changes, as on DeepSWE
+let lastPage = null, tabSwitch = false;
 function route() {
   const p = P(), v = p.view === "datasets" ? "benchmarks" : (p.view || "benchmarks");  // view=datasets: older links
+  const page = JSON.stringify({...p, tab: undefined});
+  tabSwitch = v === "trial" && page === lastPage; lastPage = page;
   // the views fetch their data first: show that at once (an empty page with the footer pulled up looked broken)
-  $("app").innerHTML = `<p class="note loading">${spinner(`Loading${{tasks: " tasks", trials: " trials", trajectories: " trials", heatmap: " the heatmap", task: " the task", trial: " the trial"}[v] || ""}…`)}</p>`;
+  if (!tabSwitch) $("app").innerHTML = `<p class="note loading">${spinner(`Loading${{tasks: " tasks", trials: " trials", trajectories: " trials", heatmap: " the heatmap", task: " the task", trial: " the trial"}[v] || ""}…`)}</p>`;
   $("runhead").hidden = v === "task" || v === "trial";  // detail pages: only "Back"
   [...$("tabs").children].forEach(a => a.classList.toggle("on", a.dataset.v === (v === "trajectories" ? "trials" : v)));
   ({benchmarks: datasets, heatmap, tasks: tasklist, trials, trajectories: trials, trial, task}[v] || datasets)(p);
-  window.scrollTo(0, 0);
+  if (!tabSwitch) window.scrollTo(0, 0);
 }
 // a small spinner with a message: shown while data loads, so a slow fetch does not look like a broken page
 const spinner = msg => `<span class="spin-wrap"><span class="spin" aria-hidden="true"></span>${esc(msg)}</span>`;
@@ -736,7 +741,7 @@ async function metricsHTML(p, st, x) {
 async function trial(p) {
   const d = p.d, t = p.t, si = setIdx(p.s), k = +p.k, st = IDX.settings[si], tab = p.tab || "trajectory";
   prefetch({...p, view: "trial"});  // trials, answer text, metadata and the prompts in parallel
-  $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(ttitle(d, t))}</h2></div><div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k}</b>attempt</span></div><p class="note">Loading…</p>`;
+  if (!tabSwitch) $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(ttitle(d, t))}</h2></div><div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k}</b>attempt</span></div><p class="note">Loading…</p>`;
   wireBack({view: "task", d, t});
   const all = (await taskTrials(d, t)).sort((a, b) => a.S - b.S || a.k - b.k);
   const i = all.findIndex(x => x.S === si && x.k === k), x = all[i];
