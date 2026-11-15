@@ -335,7 +335,10 @@ const setIdx = k => IDX.settings.findIndex(s => s.key === k);
 // display order of settings: models in leaderboard order, the higher effort first (the spec lists the lower one first)
 const ORDER = () => { const out = [], by = {}; IDX.settings.forEach((s, i) => (by[s.model] = by[s.model] || []).push(i)); for (const m of [...new Set(IDX.settings.map(s => s.model))]) out.push(...by[m].slice().reverse()); return out; };
 const rank = i => ORDER().indexOf(i);
-const allDs = () => IDX.order.filter(d => IDX.settings.some(s => s.datasets.includes(d)));
+// benchmarks in the leaderboard's order: by category (data.js categories), then by name
+const catRank = d => { const c = ((window.LB || {}).categories || []).indexOf((META[d] || {}).category); return c < 0 ? 99 : c; };
+const allDs = () => IDX.order.filter(d => IDX.settings.some(s => s.datasets.includes(d)))
+  .sort((a, b) => catRank(a) - catRank(b) || IDX.datasets[a].label.localeCompare(IDX.datasets[b].label));
 const tname = (d, t) => `${d}_${t}`;
 const ttitle = (d, t) => `${IDX.datasets[d].label} (id=${t})`;
 // trial rows are split by task (the task / trial pages) and by setting (the Trials list): results.write_trial_rows
@@ -398,6 +401,7 @@ const goAttr = o => `data-go='${esc(JSON.stringify(o))}'`;
 
 // ---- icons (Lucide, ISC license) and pill controls ----
 const IC = {
+  list: `<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>`,
   chev: '<path d="m6 9 6 6 6-6"/>', chevR: '<path d="m9 18 6-6-6-6"/>', back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
   img: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
   layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
@@ -623,7 +627,7 @@ async function datasets(p) {
           <div class="dc"><div class="dl" title="Questions no model answered correctly">Solved by none</div><div class="dv">${st.n ? pct(st.none / st.n) : "–"}</div><div class="ds">of questions</div></div>
           ${st.best ? `<div class="dc dwide"><div class="dl">Top model</div><div class="dtv"><b>${st.best[0]}</b><span>${pct(st.best[1])}</span></div></div>` : ""}
         </div></div>
-      <div class="dgo"><a class="btn" href="#" ${goAttr({view: "tasks", d})}>Browse tasks →</a><a class="btn ghost" href="#" ${goAttr({view: "heatmap", d})}>${icon("grid")}Heatmap</a><a class="btn ghost" href="../#subject=${encodeURIComponent(d)}">${icon("bars")}Leaderboard</a></div>
+      <div class="dgo"><a class="btn" href="#" ${goAttr({view: "tasks", d})}>${icon("list")}Browse tasks</a><a class="btn ghost" href="#" ${goAttr({view: "heatmap", d})}>${icon("grid")}Heatmap</a><a class="btn ghost" href="../#subject=${encodeURIComponent(d)}">${icon("bars")}Leaderboard</a></div>
       <div class="facts">${dlink("Dataset", t.dataset)}${dlink("Paper", t.paper)}<span class="grading">Grading: <b>${esc(t.grading || "")}</b></span></div>
     </article>`;
   }
