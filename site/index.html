@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="Reproducible evaluation of LLMs and VLMs on English and Japanese text-only and multimodal benchmarks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=e6a0948542">
+<link rel="stylesheet" href="style.css?v=078daf09b6">
 </head>
 <body>
 
@@ -231,10 +231,27 @@
       }).join("");
   pick.innerHTML = OPTS;
   pick.addEventListener("change", () => { state.subject = pick.value; state.sortKey = null; render(); });
+  // shown as a button with a list under it (the native list differs by browser); the hidden <select> keeps the value
+  const dd = document.createElement("div"); dd.className = "dd";
+  dd.innerHTML = `<button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${esc(pick.getAttribute("aria-label") || "")}"><span class="dd-val"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="dd-pop" role="listbox"></div>`;
+  pick.hidden = true; pick.after(dd);
+  const ddBtn = dd.querySelector(".dd-btn"), ddPop = dd.querySelector(".dd-pop");
+  ddPop.innerHTML = [...pick.children].map(n => n.tagName === "OPTGROUP"
+    ? `<div class="dd-grp">${esc(n.label)}</div>` + [...n.children].map(o => `<button type="button" class="dd-opt" role="option" data-v="${esc(o.value)}">${esc(o.textContent)}</button>`).join("")
+    : `<button type="button" class="dd-opt" role="option" data-v="${esc(n.value)}">${esc(n.textContent)}</button>`).join("");
+  const ddClose = () => { dd.classList.remove("open"); ddBtn.setAttribute("aria-expanded", "false"); };
+  const ddSync = () => { const o = pick.options[pick.selectedIndex]; dd.querySelector(".dd-val").textContent = o ? o.textContent : "";
+    ddPop.querySelectorAll(".dd-opt").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === pick.value))); };
+  ddBtn.addEventListener("click", e => { e.stopPropagation(); const open = !dd.classList.contains("open"); dd.classList.toggle("open", open);
+    ddBtn.setAttribute("aria-expanded", String(open)); if (open) { const cur = ddPop.querySelector('[aria-selected="true"]'); if (cur) cur.scrollIntoView({ block: "nearest" }); } });
+  ddPop.addEventListener("click", e => { const b = e.target.closest(".dd-opt"); if (!b) return; pick.value = b.dataset.v; ddSync(); ddClose(); pick.dispatchEvent(new Event("change")); });
+  document.addEventListener("click", e => { if (!dd.contains(e.target)) ddClose(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") ddClose(); });
   function syncSegs() {
     document.querySelectorAll(".seg[data-key]").forEach(seg => seg.querySelectorAll("button").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.v === state[seg.dataset.key]))));
     pick.value = state.subject;
+    ddSync();
   }
   document.querySelectorAll(".seg[data-key]").forEach(seg => seg.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
