@@ -295,7 +295,15 @@ const rank = i => ORDER().indexOf(i);
 const allDs = () => IDX.order.filter(d => IDX.settings.some(s => s.datasets.includes(d)));
 const tname = (d, t) => `${d}_${t}`;
 const ttitle = (d, t) => `${IDX.datasets[d].label} (id=${t})`;
-const trialsOf = async d => ((await getJSON(DATA + `trials/${d}.json`)) || {rows: []}).rows;
+// trial rows are split by task (the task / trial pages) and by setting (the Trials list): results.write_trial_rows
+const rowsOf = async u => ((await getJSON(u)) || {rows: []}).rows;
+const taskTrials = async (d, t) => { const n = IDX.datasets[d].trial_shards;
+  return (n ? await rowsOf(DATA + `trials/${d}/t/${fnv1a(t) % n}.json`) : await rowsOf(DATA + `trials/${d}.json`)).filter(x => x.t === t); };
+const settingTrials = async (d, si) => IDX.datasets[d].trial_shards ? rowsOf(DATA + `trials/${d}/s/${si}.json`)
+  : (await rowsOf(DATA + `trials/${d}.json`)).filter(x => x.S === si);
+const allTrials = async d => IDX.datasets[d].trial_shards
+  ? (await Promise.all(IDX.settings.map((st, i) => st.datasets.includes(d) ? settingTrials(d, i) : []))).flat()
+  : rowsOf(DATA + `trials/${d}.json`);
 const answersOf = async d => ((await getJSON(DATA + `answers/${d}.json`)) || {}).answers || {};
 const prompts_cache = {};
 const prompts = async d => (prompts_cache[d] = ((await getJSON(DATA + `prompts/${d}.json`)) || {}).prompts || {});
@@ -481,7 +489,7 @@ function trialTable(rows, opts) {
 }
 async function task(p) {
   const d = p.d, t = p.t;
-  const rows = (await trialsOf(d)).filter(x => x.t === t);
+  const rows = await taskTrials(d, t);
   const by = {};
   rows.forEach(x => (by[x.S] = by[x.S] || []).push(x));
   const counted = rows.filter(x => x.r != null);
@@ -596,9 +604,12 @@ async function tasklist(p) {
 // ---- trials: every trial of a dataset, filtered by model, outcome and search ----
 const OUTCOMES = [["all", "All"], ["pass", "Correct"], ["fail", "Incorrect"], ["cut", "Cut off"], ["excl", "Excluded"]];
 async function trials(p) {
-  const d = p.d && allDs().includes(p.d) ? p.d : allDs()[0], s = p.s || "all", o = p.o || "all", page = +(p.page || 0);
+  const d = p.d && allDs().includes(p.d) ? p.d : allDs()[0], o = p.o || "all", page = +(p.page || 0);
+  // one model at a time by default (its own file); "all" loads every model's file
+  const first = ORDER().find(i => IDX.settings[i].datasets.includes(d)), s = p.s || (first != null ? IDX.settings[first].key : "all");
   const si = s === "all" ? -1 : setIdx(s);
-  const all = await trialsOf(d);
+  if (si < 0) $("app").innerHTML = `<p class="note loading">${spinner("Loading every model's trials…")}</p>`;
+  const all = si < 0 ? await allTrials(d) : await settingTrials(d, si);
   const view = all.filter(x => (si < 0 || x.S === si) && (o === "all" || (o === "pass" && ok(x)) || (o === "fail" && x.r != null && x.r < 0.5) || (o === "cut" && cut(x)) || (o === "excl" && x.r == null)) &&
     (!p.q || x.t === p.q)).sort((a, b) => a.S - b.S || a.t.localeCompare(b.t) || a.k - b.k);
   const pages = Math.max(1, Math.ceil(view.length / PAGE)), keep = {view: "trials", d, s, o, q: p.q};
@@ -662,7 +673,7 @@ async function trial(p) {
   const d = p.d, t = p.t, si = setIdx(p.s), k = +p.k, st = IDX.settings[si], tab = p.tab || "trajectory";
   $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(ttitle(d, t))}</h2></div><div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k}</b>attempt</span></div><p class="note">Loading…</p>`;
   wireBack({view: "task", d, t});
-  const all = (await trialsOf(d)).filter(x => x.t === t).sort((a, b) => a.S - b.S || a.k - b.k);
+  const all = (await taskTrials(d, t)).sort((a, b) => a.S - b.S || a.k - b.k);
   const i = all.findIndex(x => x.S === si && x.k === k), x = all[i];
   const [ans, reas, judge, xfull] = ((await shardOf("text", p.s, d, t)).text || {})[`${t}|${k}`] || [];
   const TABS = [["trajectory", "Trajectory"], ["verifier", "Verifier"], ["metrics", "Metrics"]];
