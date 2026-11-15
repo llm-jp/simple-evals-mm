@@ -651,10 +651,13 @@ class OpenAIChatSampler(Sampler):
                 print(f"[{s.provider}] {s.model}: {last} (attempt {trial}/{s.max_tries}, retry in {backoff}s)", flush=True)
             self.sleep(backoff)
         # a served engine that still refuses connections after every retry is down, not overloaded; an API that answered
-        # every try of this request with an error (never a rate limit or a timeout) rejects the request itself
+        # every error try of this request with an error (never a timeout) until the error retries ran out rejects the
+        # request itself. Rate limits in between say nothing about the request (they come from the account's other
+        # requests, e.g. jobs run in parallel) and have their own budget: only running out of that budget first keeps it
+        # provider_failed
         if served and refused_conn:
             cause = errors.ENDPOINT_UNAVAILABLE
-        elif not served and answered and rl == 0 and trial > s.max_tries:
+        elif not served and answered and trial > s.max_tries:
             cause = errors.REQUEST_REJECTED
         else:
             cause = errors.PROVIDER_FAILED
