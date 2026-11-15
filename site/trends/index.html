@@ -40,6 +40,7 @@
 .tr-chart { width: 100%; height: auto; display: block; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
 .tr-chart text { font-size: 12px; fill: var(--text-secondary); }
 .tr-chart .lbl { fill: var(--text-primary); font-size: 12px; font-weight: 600; }
+.tr-chart .lbl .eff { fill: var(--text-muted); font-family: var(--mono); font-weight: 400; font-size: 11px; }
 .tr-chart .grid { stroke: var(--border); }
 .tr-legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); margin: 8px 0 0; flex-wrap: wrap; }
 .tr-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -178,12 +179,13 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
     const done = new Set();
     for (const p of only || pts.slice().sort((a, b) => b.s.index - a.s.index)) {
       if (only && (done.has(p.s.model_key) || done.size >= max)) continue;
-      const t = text(p.s), w = t.length * 6.6 + 4;
+      const tv = text(p.s), [t, e] = Array.isArray(tv) ? tv : [tv, ""], w = (t.length + (e ? e.length + 1 : 0)) * 6.6 + 4;  // [name, effort]
       for (const [lx, ly, an] of [[p.x + 15, p.y + 4, "start"], [p.x - 15, p.y + 4, "end"], [p.x, p.y - 16, "middle"], [p.x, p.y + 25, "middle"], [p.x + 13, p.y - 13, "start"], [p.x - 13, p.y - 13, "end"], [p.x + 13, p.y + 21, "start"], [p.x - 13, p.y + 21, "end"]]) {
         const b0 = an === "start" ? lx : an === "end" ? lx - w : lx - w / 2, b = {x0: b0, x1: b0 + w, y0: ly - 11, y1: ly + 3};
         if (b.x0 < M.l || b.x1 > W - 4 || b.y0 < 2 || hit(b)) continue;
         taken.push(b); done.add(p.s.model_key);
-        const tx = el("text", {class: "lbl", x: lx, y: ly, "text-anchor": an, "data-org": p.s.dev, "data-model": p.s.model_key, ...(p.b ? {"data-b": p.b} : {})}, svg, t);
+        const tx = el("text", {class: "lbl", x: lx, y: ly, "text-anchor": an, "data-org": p.s.dev, "data-model": p.s.model_key, ...(p.b ? {"data-b": p.b} : {})}, svg, e ? t + " " : t);
+        if (e) el("tspan", {class: "eff"}, tx, e);
         if (p.b) tx.style.fill = colorB(p.b);  // a benchmark's point: named in its curve's colour
         break;
       }
@@ -236,7 +238,8 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
     for (let v = ymin; v <= ymax; v += 10) { el("line", {class: "grid", x1: sx(v), x2: sx(v), y1: M.t, y2: H - M.b}, svg); el("text", {x: sx(v), y: H - M.b + 18, "text-anchor": "middle"}, svg, v); }
     rows.forEach((s, i) => {
       const y = M.t + i * rh + rh / 2, c = colorOf(s);
-      el("text", {class: "lbl", x: M.l - 12, y: y + 4, "text-anchor": "end", "data-org": s.dev, "data-model": s.model_key}, svg, name(s));
+      const lt = el("text", {class: "lbl", x: M.l - 12, y: y + 4, "text-anchor": "end", "data-org": s.dev, "data-model": s.model_key}, svg, s.model + " ");
+      el("tspan", {class: "eff"}, lt, s.label);  // the effort in the muted monospace of the leaderboard's tag
       if (s.lo != null) el("line", {x1: sx(s.lo), x2: sx(s.hi), y1: y, y2: y, stroke: c, "stroke-width": 4, opacity: 0.3, "stroke-linecap": "round", "data-org": s.dev, "data-model": s.model_key}, svg);
       hover(marker(svg, sx(s.index), y, s, 9), s);
       el("text", {x: sx(s.index) + 14, y: y + 4, "data-org": s.dev, "data-model": s.model_key}, svg, s.index.toFixed(1));
@@ -298,7 +301,7 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
       const sc = T.scores[keys[0]] || {}, label = blabel(keys[0]);
       const pts = S.filter(s => sc[s.key] != null && shown(s)).map(s => ({s, x: sx(s.index), y: sy(sc[s.key])}));
       for (const {s, x, y} of pts) hover(marker(svg, x, y, s, 8), s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`);
-      labels(svg, pts, W - M.r + M.l, M, name);
+      labels(svg, pts, W - M.r + M.l, M, s => [s.model, s.label]);
     } else {  // several: every benchmark's actual scores as dots in its curve's colour
       const all = [], named = [];
       for (const k of keys) {
@@ -318,7 +321,7 @@ table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 
           c.classList.add("bdot");
         }
       }
-      labels(svg, all, W - M.r + 4, M, s => name(s), named, 6, 6);  // inside the plot (the curve names sit right of it)
+      labels(svg, all, W - M.r + 4, M, s => [s.model, s.label], named, 6, 6);  // inside the plot (the curve names sit right of it)
     }
     benchChips(); benchTable(); applyPick();
     // hovering a benchmark (its curve, name or dots) fades the others
