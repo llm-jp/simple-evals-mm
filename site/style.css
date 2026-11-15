@@ -127,7 +127,23 @@ svg.chart { width: 100%; height: auto; display: block; font-family: inherit; }
 .filter-wrap.right .panel { left: auto; right: 0; }
 .filter-btn { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
 .filter-btn:hover, .filter-btn[aria-expanded="true"] { background: var(--surface-2); border-color: var(--text-muted); }
-.panel { position: absolute; top: 40px; left: 0; z-index: 30; background: var(--surface-1); border: 0; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 10px; width: 340px; max-height: 470px; overflow-y: auto; }
+.filter-btn svg { transition: transform .15s; }
+.filter-btn[aria-expanded="true"] svg { transform: rotate(180deg); }  /* the arrow turns while the list is open */
+/* the score picker: a native <select> (kept hidden as the value) shown as a button and a list under it */
+.dd { position: relative; display: inline-block; max-width: 100%; }
+.dd-btn { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); font: inherit; font-size: 14px; padding: 6px 10px 6px 12px; border-radius: 8px; cursor: pointer; }
+.dd-btn:hover, .dd.open .dd-btn { background: var(--surface-2); border-color: var(--text-muted); }
+.dd-btn .dd-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-btn svg { width: 16px; height: 16px; flex: none; transition: transform .15s; }
+.dd.open .dd-btn svg { transform: rotate(180deg); }
+.dd-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 240px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
+.dd.open .dd-pop { display: block; }
+.dd-pop .dd-grp { font-size: 12px; color: var(--text-muted); padding: 8px 10px 4px; }
+.dd-pop .dd-opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; border: 0; background: none; color: var(--text-primary); font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.dd-pop .dd-opt:hover, .dd-pop .dd-opt:focus { background: var(--surface-2); outline: none; }
+.dd-pop .dd-opt[aria-selected="true"] { font-weight: 600; }
+.dd-pop .dd-opt[aria-selected="true"]::after { content: "✓"; color: var(--text-secondary); }
+.panel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; background: var(--surface-1); border: 0; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 10px; width: 340px; max-height: 470px; overflow-y: auto; }
 .panel .presets { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .panel .presets button { border: 1px solid var(--border); background: var(--surface-2); color: var(--text-secondary); font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; cursor: pointer; }
 .mrow { padding: 6px 6px 8px; border-radius: 8px; }
@@ -309,6 +325,7 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
   .lb-top .filter-wrap { position: static; }
   .lb-top .filter-wrap .panel { left: 0; right: 0; width: auto; top: calc(100% + 4px); }
   .lb-top select.pick { width: 100%; }
+  .lb-top .dd, .lb-top .dd-btn { width: 100%; } .lb-top .dd-btn { justify-content: space-between; }
   .lb-top .filter-wrap[data-filter="cfg"] { margin-left: auto; }
 }
 
