@@ -136,15 +136,14 @@ table.hm td.cell { width: 50px; min-width: 50px; max-width: 50px; height: 32px; 
 
 /* pill controls with popovers (as on speed1313.github.io) */
 .pw { position: relative; display: inline-block; }
-.pillbtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 15px; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
-.pillbtn:hover, .pw.open .pillbtn { background: var(--surface-2); }
+.pillbtn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); font: inherit; font-size: 15px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.pillbtn:hover, .pw.open .pillbtn { background: var(--surface-2); border-color: var(--text-muted); }
 .pillbtn .pl { color: var(--text-secondary); }
 .pillbtn svg, .ic { width: 16px; height: 16px; flex: none; }
 .pw.open .pillbtn .chev { transform: rotate(180deg); }
 .pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; max-height: 420px; overflow-y: auto; background: var(--surface-1); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.06); padding: 8px; display: none; }
 .pw.open .pop { display: block; }
 /* alignment: the first selector starts at the column's left edge; the page never scrolls sideways */
-.ctl > .pw:first-child { margin-left: -12px; }
 html, body { overflow-x: clip; }
 /* dataset cards: the description takes the free height, so the results of cards in a row line up */
 article.dscard .desc { flex-grow: 1; }
