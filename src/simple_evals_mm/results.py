@@ -424,6 +424,25 @@ def write_answers(out_dir: str, name: str, st: store_mod.JobStore) -> None:
     _write_doc(os.path.join(out_dir, "answers", f"{name}.json"), {"answers": answers(st, name)}, True)
 
 
+def write_trial_rows(out_dir: str, name: str, lrows: list[dict]) -> int:
+    """A dataset's light trial rows, written two ways so a page loads only what it shows: by task
+    (trials/<name>/t/<fnv1a(task) % n>.json, about SHARD_BYTES each: the task and trial pages) and by setting
+    (trials/<name>/s/<setting index>.json: the Trials list). Returns n."""
+    base = os.path.join(out_dir, "trials", name)
+    n = max(1, -(-len(json.dumps(lrows, ensure_ascii=False)) // SHARD_BYTES))
+    by_task: list[list] = [[] for _ in range(n)]
+    by_setting: dict[int, list] = {}
+    for r in lrows:
+        by_task[fnv1a(r["t"]) % n].append(r)
+        by_setting.setdefault(r["S"], []).append(r)
+    for sub, parts in (("t", dict(enumerate(by_task))), ("s", by_setting)):
+        os.makedirs(os.path.join(base, sub), exist_ok=True)
+        for i, rows in parts.items():
+            with open(os.path.join(base, sub, f"{i}.json"), "w", encoding="utf-8") as f:
+                json.dump({"canary": CANARY, "rows": rows}, f, ensure_ascii=False, separators=(",", ":"))
+    return n
+
+
 def write_matrix(out_dir: str, name: str, lrows: list[dict], keys: list[str]) -> None:
     os.makedirs(os.path.join(out_dir, "matrix"), exist_ok=True)
     with open(os.path.join(out_dir, "matrix", f"{name}.json"), "w", encoding="utf-8") as f:
@@ -473,10 +492,9 @@ def build(spec_path: str, out_dir: str, jobs_dir: str | None = None, check: bool
                          "shards": shards,
                          "config": setting_config(plan, jobs_dir, spec_dir, s.get("job"))})
     keys = [x["key"] for x in settings]
-    for name, lrows in light.items():  # per dataset: every trial (light) and the task x setting matrix
-        os.makedirs(os.path.join(out_dir, "trials"), exist_ok=True)
-        with open(os.path.join(out_dir, "trials", f"{name}.json"), "w", encoding="utf-8") as f:
-            json.dump({"canary": CANARY, "rows": lrows}, f, ensure_ascii=False, separators=(",", ":"))
+    trial_shards = {}
+    for name, lrows in light.items():  # per dataset: every trial (light), split two ways, and the task x setting matrix
+        trial_shards[name] = write_trial_rows(out_dir, name, lrows)
         write_matrix(out_dir, name, lrows, keys)
     for name, t in spec["tasks"].items():
         v = dict(VIEWER.get(name) or {"mode": None})
@@ -486,6 +504,8 @@ def build(spec_path: str, out_dir: str, jobs_dir: str | None = None, check: bool
             with open(os.path.join(out_dir, "rows", f"{name}.json"), "w", encoding="utf-8") as f:
                 json.dump({tid: i for i, tid in enumerate(maps[name])}, f, separators=(",", ":"))
         lock = (lb.datalock.entry(dataset_mod.split_ref(name)[0]) or {})
+        if name in trial_shards:
+            v["trial_shards"] = trial_shards[name]
         datasets[name] = {"label": t.get("label", name), "grading": t.get("grading"), "url": t.get("dataset"),
                           "revision": lock.get("revision"), "text": public_text(name), **v}
     index = {"canary": CANARY, "api": API, "settings": settings, "datasets": datasets,
