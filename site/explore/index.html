@@ -327,7 +327,20 @@ function route() {
 }
 // a small spinner with a message: shown while data loads, so a slow fetch does not look like a broken page
 const spinner = msg => `<span class="spin-wrap"><span class="spin" aria-hidden="true"></span>${esc(msg)}</span>`;
-const navLinks = () => $("app").querySelectorAll("[data-go]").forEach(a => a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go)); });
+// start every request a task / trial page needs at once (getJSON caches the promises, so the page's own awaits reuse
+// them): called by the pages themselves, and on hover / focus of a link to one, so it is often loaded before the click
+function prefetch(o) {
+  if (!o || !o.d || !o.t || !IDX.datasets[o.d] || (o.view !== "task" && o.view !== "trial")) return;
+  const ds = IDX.datasets[o.d];
+  taskTrials(o.d, o.t);
+  if (!ds.hide_prompt) { prompts(o.d); answersOf(o.d); }
+  if (o.view === "trial" && o.s) { if (ds.text !== false) shardOf("text", o.s, o.d, o.t); shardOf("meta", o.s, o.d, o.t); }
+}
+const navLinks = () => $("app").querySelectorAll("[data-go]").forEach(a => {
+  a.onclick = e => { e.preventDefault(); go(JSON.parse(a.dataset.go)); };
+  const pre = () => { try { prefetch(JSON.parse(a.dataset.go)); } catch (e) { /* not a page link */ } };
+  a.addEventListener("mouseenter", pre, {once: true}); a.addEventListener("focus", pre, {once: true});
+});
 const goAttr = o => `data-go='${esc(JSON.stringify(o))}'`;
 
 
@@ -489,6 +502,7 @@ function trialTable(rows, opts) {
 }
 async function task(p) {
   const d = p.d, t = p.t;
+  prefetch({view: "task", d, t});  // the trials and the question's files in parallel
   const rows = await taskTrials(d, t);
   const by = {};
   rows.forEach(x => (by[x.S] = by[x.S] || []).push(x));
@@ -671,6 +685,7 @@ async function metricsHTML(p, st, x) {
 }
 async function trial(p) {
   const d = p.d, t = p.t, si = setIdx(p.s), k = +p.k, st = IDX.settings[si], tab = p.tab || "trajectory";
+  prefetch({...p, view: "trial"});  // trials, answer text, metadata and the prompts in parallel
   $("app").innerHTML = back() + `<div class="trial-head"><h2>${esc(ttitle(d, t))}</h2></div><div class="stats"><span><b>${esc(setName(si))}</b>model (effort)</span><span><b>${k}</b>attempt</span></div><p class="note">Loading…</p>`;
   wireBack({view: "task", d, t});
   const all = (await taskTrials(d, t)).sort((a, b) => a.S - b.S || a.k - b.k);
