@@ -82,7 +82,6 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
       <p class="intro">Why not a plain mean? A question that every model solves, or none, says nothing about which model is stronger, yet it still counts in a mean, and as benchmarks saturate such questions squeeze the differences together. The Index weighs each question by how well it separates the models, so the questions that some models solve and others miss decide the order. A gap of 10 points means the same anywhere on the scale, also near the top where percentages bunch up, and every benchmark counts equally whatever its size. <a href="#method">How it is computed</a>.</p>
 
       <div class="tr-sec"><h3>simple-evals-mm Index over time</h3>
-        <p class="intro">Each model at its best effort level, by release date; bars are 90% intervals.</p>
         <svg class="tr-chart" id="c-time" viewBox="0 0 960 460" role="img" aria-label="simple-evals-mm Index by release date"></svg>
         <div class="tr-legend" id="tr-legend" title="Hover an organization to highlight it on every chart; click to keep it"></div></div>
 
@@ -227,6 +226,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     const d0 = new Date(t0); for (let d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 1)); d.getTime() < t1; d.setUTCMonth(d.getUTCMonth() + 1))
       el("text", {x: sx(d.getTime()), y: H - M.b + 20, "text-anchor": "middle"}, svg, d.toISOString().slice(0, 7));
     el("text", {x: 14, y: (M.t + H - M.b) / 2, transform: `rotate(-90 14 ${(M.t + H - M.b) / 2})`, "text-anchor": "middle"}, svg, "simple-evals-mm Index");
+    el("text", {x: (M.l + W - M.r) / 2, y: H - 6, "text-anchor": "middle"}, svg, "Release date");
     const pts = best.map(s => ({s, x: sx(Date.parse(s.released)), y: sy(s.index)}));
     for (const {s, x} of pts) if (s.lo != null) el("line", {x1: x, x2: x, y1: sy(s.lo), y2: sy(s.hi), stroke: colorOf(s), "stroke-width": 2, opacity: 0.45, "data-org": s.dev, "data-model": s.model_key}, svg);
     for (const {s, x, y} of pts) hover(marker(svg, x, y, s), s);
