@@ -42,7 +42,8 @@
 .tr-chart .lbl { fill: var(--text-primary); font-size: 12px; font-weight: 600; }
 .tr-chart .lbl .eff { fill: var(--text-muted); font-family: var(--mono); font-weight: 400; font-size: 11px; }
 .tr-chart .grid { stroke: var(--border); }
-.tr-legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); margin: 8px 0 0; flex-wrap: wrap; }
+.tr-legend-h { font-size: 12px; color: var(--text-muted); font-family: var(--mono); margin: 10px 0 0; }
+.tr-legend { display: flex; gap: 2px 10px; font-size: 13px; color: var(--text-secondary); margin: 8px 0 0; flex-wrap: wrap; }
 .tr-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .org-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; padding: 3px 8px 3px 4px; border-radius: 999px; cursor: pointer; }
 .org-btn:hover { background: var(--surface-2); }
@@ -59,7 +60,7 @@ table.bt { width: 100%; border-collapse: collapse; font-size: 14px; font-variant
 table.bt th, table.bt td { padding: 6px 10px; text-align: right; border-top: 1px solid var(--border); white-space: nowrap; }
 table.bt th { background: var(--surface-2); color: var(--text-secondary); font-size: 13px; }
 table.bt td.l, table.bt th.l { text-align: left; }
-.b-ctl { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; }
+.b-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; }
 .b-ctl .seg { margin-left: auto; }
 .b-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; font-size: 14px; cursor: pointer; }
 .b-row:hover { background: var(--surface-2); }
@@ -73,6 +74,11 @@ table.bt tr.brow { cursor: pointer; } table.bt tr.brow:hover { background: var(-
 table.bt .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; border: 1px solid var(--border); }
 math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; font-size: 1.08em; color: var(--text-primary); }
 .eqb { margin: 14px 0; overflow-x: auto; overflow-y: hidden; } .eqb math { font-size: 1.25em; }
+@media (max-width: 600px) { .tr-legend .org-btn { padding: 2px 4px; font-size: 12.5px; } .tr-legend .org-btn svg { width: 15px; height: 15px; } }
+.b-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12.5px; color: var(--text-secondary); margin: 6px 0 0; }
+.b-legend:empty { display: none; }
+.b-legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: 3px; }
+.b-ctl .filter-btn, .b-ctl .seg button { white-space: nowrap; }
 </style>
 <main id="top">
   <section id="trends">
@@ -83,7 +89,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
 
       <div class="tr-sec"><h3>simple-evals-mm Index over time</h3>
         <svg class="tr-chart" id="c-time" viewBox="0 0 960 460" role="img" aria-label="simple-evals-mm Index by release date"></svg>
-        <div class="tr-legend" id="tr-legend" title="Hover an organization to highlight it on every chart; click to keep it"></div></div>
+        <div class="tr-legend-h">Organization</div><div class="tr-legend" id="tr-legend" title="Hover an organization to highlight it on every chart; click to keep it"></div></div>
 
       <div class="tr-sec"><h3>Every setting</h3>
         <p class="intro">All effort levels, with 90% intervals (bootstrap over questions).</p>
@@ -96,6 +102,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
           <div class="seg" id="b-eff" role="group" aria-label="Settings shown"><button data-v="best" aria-pressed="true">Best</button><button data-v="all" aria-pressed="false">All effort levels</button></div>
         </div>
         <svg class="tr-chart" id="c-bench" viewBox="0 0 960 460" role="img" aria-label="Benchmark score against the simple-evals-mm Index"></svg>
+        <div class="b-legend" id="b-legend"></div>
         <details class="fit-details"><summary>The fitted formula for every benchmark</summary>
         <div class="method">
           <p>Each curve is summarized by one formula:</p>
@@ -108,7 +115,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
             <li><b>Fit error:</b> how far the formula is from the fitted curve (root mean square, in score points); small values mean the summary is faithful.</li>
           </ul>
         </div>
-        <div style="overflow-x:auto"><table class="rs bt compact" id="b-table"></table></div></details></div>
+        <div class="scroll-x" style="overflow-x:auto"><table class="rs bt compact" id="b-table"></table></div></details></div>
 
       <div class="tr-sec" id="method"><h3>How the simple-evals-mm Index is computed</h3>
         <div class="method">
@@ -216,39 +223,59 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
   document.getElementById("tr-legend").onmouseleave = () => { hovered = null; applyPick(); };
   const ymin = Math.floor((Math.min(...S.map(s => s.lo ?? s.index)) - 5) / 10) * 10, ymax = Math.ceil((Math.max(...S.map(s => s.hi ?? s.index)) + 5) / 10) * 10;
 
+  // charts are drawn at their container's width on phones (as Epoch AI's ECI: readable text, taller plots, fewer ticks
+  // and labels) and at the 960-wide layout, scaled, elsewhere; they are redrawn when the width class changes
+  const NARROW = 600, narrow = () => document.querySelector(".tr-chart").parentElement.clientWidth < NARROW;
+  const cw = svg => Math.max(300, Math.floor(svg.parentElement.clientWidth));
+  const clear = svg => { while (svg.firstChild) svg.removeChild(svg.firstChild); };
+  // touch screens send mouseenter on a tap but no mouseleave: a tap elsewhere clears the highlight and the hover card
+  document.addEventListener("touchstart", e => {
+    if (e.target.closest(".mk, .bdot, .bhit, .org-btn, .lbl")) return;
+    hoverModel = null; hovered = null; tip.style.opacity = 0;
+    document.querySelectorAll(".bfade").forEach(x => x.classList.remove("bfade")); applyPick();
+  }, {passive: true});
+
   // 1. over time: each model's best setting
-  (function () {
-    const svg = document.getElementById("c-time"), W = 960, H = 460, M = {l: 56, r: 24, t: 20, b: 44};
+  function drawTime() {
+    const svg = document.getElementById("c-time"); clear(svg);
+    const nw = narrow(), W = nw ? cw(svg) : 960, H = nw ? Math.round(W * 1.05) : 460, M = nw ? {l: 42, r: 12, t: 16, b: 44} : {l: 56, r: 24, t: 20, b: 44};
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     const best = Object.values(S.reduce((a, s) => { if (s.released && (!a[s.model_key] || s.index > a[s.model_key].index)) a[s.model_key] = s; return a; }, {}));
     const ts = best.map(s => Date.parse(s.released)), t0 = Math.min(...ts) - 20 * 864e5, t1 = Math.max(...ts) + 20 * 864e5;
     const sx = t => M.l + (t - t0) / (t1 - t0) * (W - M.l - M.r), sy = v => H - M.b - (v - ymin) / (ymax - ymin) * (H - M.t - M.b);
     for (let v = ymin; v <= ymax; v += 10) { el("line", {class: "grid", x1: M.l, x2: W - M.r, y1: sy(v), y2: sy(v)}, svg); el("text", {x: M.l - 8, y: sy(v) + 4, "text-anchor": "end"}, svg, v); }
-    const d0 = new Date(t0); for (let d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 1)); d.getTime() < t1; d.setUTCMonth(d.getUTCMonth() + 1))
+    const step = nw ? 3 : 1;  // months between ticks
+    const d0 = new Date(t0); for (let d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 1)); d.getTime() < t1; d.setUTCMonth(d.getUTCMonth() + step))
       el("text", {x: sx(d.getTime()), y: H - M.b + 20, "text-anchor": "middle"}, svg, d.toISOString().slice(0, 7));
-    el("text", {x: 14, y: (M.t + H - M.b) / 2, transform: `rotate(-90 14 ${(M.t + H - M.b) / 2})`, "text-anchor": "middle"}, svg, "simple-evals-mm Index");
+    const ay = nw ? 11 : 14;
+    el("text", {x: ay, y: (M.t + H - M.b) / 2, transform: `rotate(-90 ${ay} ${(M.t + H - M.b) / 2})`, "text-anchor": "middle"}, svg, "simple-evals-mm Index");
     el("text", {x: (M.l + W - M.r) / 2, y: H - 6, "text-anchor": "middle"}, svg, "Release date");
     const pts = best.map(s => ({s, x: sx(Date.parse(s.released)), y: sy(s.index)}));
     for (const {s, x} of pts) if (s.lo != null) el("line", {x1: x, x2: x, y1: sy(s.lo), y2: sy(s.hi), stroke: colorOf(s), "stroke-width": 2, opacity: 0.45, "data-org": s.dev, "data-model": s.model_key}, svg);
-    for (const {s, x, y} of pts) hover(marker(svg, x, y, s), s);
-    labels(svg, pts, W, M, s => s.model);
-  })();
+    for (const {s, x, y} of pts) hover(marker(svg, x, y, s, nw ? 9 : 11), s);
+    // phones: names for the leading models only (the rest on tap), as on Epoch AI's chart
+    labels(svg, pts, W, M, s => s.model, nw ? pts.slice().sort((a, b) => b.s.index - a.s.index) : null, nw ? 10 : 12, nw ? 7 : Infinity);
+  }
+  drawTime();
 
-  // 2. every setting, ranked (organization colours)
-  (function () {
-    const svg = document.getElementById("c-rank"), rows = S.slice().sort((a, b) => b.index - a.index);
-    const W = 960, M = {l: 270, r: 60, t: 12, b: 34}, rh = 26, H = M.t + M.b + rows.length * rh;
+  // 2. every setting, ranked (organization colours); phones: each name above its row, the plot over the full width
+  function drawRank() {
+    const svg = document.getElementById("c-rank"), rows = S.slice().sort((a, b) => b.index - a.index); clear(svg);
+    const nw = narrow(), W = nw ? cw(svg) : 960, M = nw ? {l: 12, r: 44, t: 8, b: 34} : {l: 270, r: 60, t: 12, b: 34}, rh = nw ? 38 : 26, H = M.t + M.b + rows.length * rh;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     const sx = v => M.l + (v - ymin) / (ymax - ymin) * (W - M.l - M.r);
-    for (let v = ymin; v <= ymax; v += 10) { el("line", {class: "grid", x1: sx(v), x2: sx(v), y1: M.t, y2: H - M.b}, svg); el("text", {x: sx(v), y: H - M.b + 18, "text-anchor": "middle"}, svg, v); }
+    for (let v = ymin; v <= ymax; v += 10) { el("line", {class: "grid", x1: sx(v), x2: sx(v), y1: M.t, y2: H - M.b}, svg); if (!nw || (v - ymin) % 20 === 0) el("text", {x: sx(v), y: H - M.b + 18, "text-anchor": "middle"}, svg, v); }
     rows.forEach((s, i) => {
-      const y = M.t + i * rh + rh / 2, c = colorOf(s);
-      const lt = el("text", {class: "lbl", x: M.l - 12, y: y + 4, "text-anchor": "end", "data-org": s.dev, "data-model": s.model_key}, svg, s.model + " ");
+      const y = M.t + i * rh + rh / 2 + (nw ? 7 : 0), c = colorOf(s);
+      const lt = el("text", nw ? {class: "lbl", x: M.l, y: y - 13, "text-anchor": "start", "data-org": s.dev, "data-model": s.model_key}
+                               : {class: "lbl", x: M.l - 12, y: y + 4, "text-anchor": "end", "data-org": s.dev, "data-model": s.model_key}, svg, s.model + " ");
       el("tspan", {class: "eff"}, lt, s.label);  // the effort in the muted monospace of the leaderboard's tag
       if (s.lo != null) el("line", {x1: sx(s.lo), x2: sx(s.hi), y1: y, y2: y, stroke: c, "stroke-width": 4, opacity: 0.3, "stroke-linecap": "round", "data-org": s.dev, "data-model": s.model_key}, svg);
-      hover(marker(svg, sx(s.index), y, s, 9), s);
-      el("text", {x: sx(s.index) + 14, y: y + 4, "data-org": s.dev, "data-model": s.model_key}, svg, s.index.toFixed(1));
+      hover(marker(svg, sx(s.index), y, s, nw ? 8 : 9), s);
+      el("text", {x: sx(s.index) + (nw ? 12 : 14), y: y + 4, "data-org": s.dev, "data-model": s.model_key}, svg, s.index.toFixed(1));
     });
-  })();
+  }
+  drawRank();
 
   // 3. benchmark curves (several at once) + the models' scores when one is picked; the fitted logistic per benchmark
   const BPAL = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#be185d", "#4d7c0f", "#7c2d12", "#1e3a8a"];
@@ -284,11 +311,12 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
   document.getElementById("b-eff").onclick = e => { const b = e.target.closest("button"); if (!b) return; effAll = b.dataset.v === "all";
     document.querySelectorAll("#b-eff button").forEach(x => x.setAttribute("aria-pressed", x === b)); bench(); };
   function bench() {
-    const svg = document.getElementById("c-bench"); while (svg.firstChild) svg.removeChild(svg.firstChild);
-    const W = 960, H = 460, M = {l: 56, r: 130, t: 20, b: 44};
+    const svg = document.getElementById("c-bench"); clear(svg);
+    const nw = narrow(), W = nw ? cw(svg) : 960, H = nw ? Math.round(W * 1.05) : 460, M = nw ? {l: 40, r: 12, t: 16, b: 44} : {l: 56, r: 150, t: 20, b: 44};
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     const sx = v => M.l + (v - ymin) / (ymax - ymin) * (W - M.l - M.r), sy = v => H - M.b - v / 100 * (H - M.t - M.b);
     for (let v = 0; v <= 100; v += 20) { el("line", {class: "grid", x1: M.l, x2: W - M.r, y1: sy(v), y2: sy(v)}, svg); el("text", {x: M.l - 8, y: sy(v) + 4, "text-anchor": "end"}, svg, v + "%"); }
-    for (let v = ymin; v <= ymax; v += 10) el("text", {x: sx(v), y: H - M.b + 20, "text-anchor": "middle"}, svg, v);
+    for (let v = ymin; v <= ymax; v += 10) if (!nw || (v - ymin) % 20 === 0) el("text", {x: sx(v), y: H - M.b + 20, "text-anchor": "middle"}, svg, v);
     el("text", {x: (M.l + W - M.r) / 2, y: H - 6, "text-anchor": "middle"}, svg, "simple-evals-mm Index");
     const keys = [...pickedB], ends = [];
     for (const k of keys) {
@@ -300,12 +328,14 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     }
     // curve names at the right end, spread so they do not overlap
     ends.sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 14);
-    for (const e of ends) { const t = el("text", {x: W - M.r + 8, y: e.y + 4, fill: colorB(e.k), "font-weight": 600, "data-b": e.k, class: "bhit"}, svg, blabel(e.k)); t.style.fill = colorB(e.k); }
+    // the curve names at the right end; phones: a colour legend under the chart instead (no room beside the plot)
+    if (!nw) for (const e of ends) { const t = el("text", {x: W - M.r + 8, y: e.y + 4, fill: colorB(e.k), "font-weight": 600, "data-b": e.k, class: "bhit"}, svg, blabel(e.k)); t.style.fill = colorB(e.k); }
+    document.getElementById("b-legend").innerHTML = nw ? ends.slice().sort((a, b) => a.y - b.y).map(e => `<span><i style="background:${colorB(e.k)}"></i>${esc(blabel(e.k))}</span>`).join("") : "";
     if (keys.length === 1) {  // one benchmark: the models' actual scores as logo markers, with names where they fit
       const sc = T.scores[keys[0]] || {}, label = blabel(keys[0]);
       const pts = S.filter(s => sc[s.key] != null && shown(s)).map(s => ({s, x: sx(s.index), y: sy(sc[s.key])}));
       for (const {s, x, y} of pts) hover(marker(svg, x, y, s, 8), s, `<div class="tt-row"><span>${esc(label)}</span><b>${sc[s.key].toFixed(1)}%</b></div>`);
-      labels(svg, pts, W - M.r + M.l, M, s => [s.model, s.label]);
+      labels(svg, pts, W - M.r + M.l, M, s => [s.model, s.label], nw ? pts.slice().sort((a, b) => b.s.index - a.s.index) : null, 8, nw ? 6 : Infinity);
     } else {  // several: every benchmark's actual scores as dots in its curve's colour
       const all = [], named = [];
       for (const k of keys) {
@@ -347,6 +377,10 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     });
   }
   bench();
+  // redraw when the width class changes (rotation, a resized window), or on phones when the width changes
+  let lastW = document.querySelector(".tr-chart").parentElement.clientWidth;
+  addEventListener("resize", () => { const w = document.querySelector(".tr-chart").parentElement.clientWidth;
+    if (w === lastW || (!narrow() && lastW >= NARROW)) { lastW = w; return; } lastW = w; drawTime(); drawRank(); bench(); });
 })();
 </script>
 <script src="../theme.js"></script>
