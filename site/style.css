@@ -497,3 +497,7 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 @media (min-width: 1800px) { .wrap { max-width: 1320px; } body { font-size: 17px; } }
 /* desktop: a shorter title block, so the leaderboard starts higher on the first screen */
 @media (min-width: 761px) { .hero { padding-top: 40px; padding-bottom: 8px; } .hero + section { padding-top: 24px; } }
+/* phones: the header hides while scrolling down (theme.js) */
+header.site { transition: transform .2s ease; }
+header.site.hdr-hidden { transform: translateY(-100%); }
+@media (prefers-reduced-motion: reduce) { header.site { transition: none; } }

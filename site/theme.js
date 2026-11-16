@@ -19,3 +19,25 @@
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", show);
   show();
 })();
+// Phones: the sticky header slides away while scrolling down and comes back on scrolling up (and near the top), so
+// it does not cover the page; a keyboard focus inside it brings it back.
+(function () {
+  const h = document.querySelector("header.site");
+  if (!h) return;
+  const narrow = matchMedia("(max-width: 760px)");
+  let lastY = scrollY, ticking = false;
+  addEventListener("scroll", () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const y = scrollY, d = y - lastY;
+      if (!narrow.matches || y < 64) h.classList.remove("hdr-hidden");
+      else if (d > 6) h.classList.add("hdr-hidden");
+      else if (d < -6) h.classList.remove("hdr-hidden");
+      if (Math.abs(d) > 6 || y < 64) lastY = y;
+      ticking = false;
+    });
+  }, {passive: true});
+  h.addEventListener("focusin", () => h.classList.remove("hdr-hidden"));
+  narrow.addEventListener("change", () => h.classList.remove("hdr-hidden"));
+})();
