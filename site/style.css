@@ -491,3 +491,9 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
   header.site .brand-wrap { margin-right: 6px; }
 }
 @media (max-width: 385px) { header.site .brand { display: none; } }
+/* large screens: the column grows with the window (a fixed 1,024 px column filled only half of a 1920-px screen);
+   the charts and tables follow the column, so they keep the text's width */
+@media (min-width: 1440px) { .wrap { max-width: 1200px; } }
+@media (min-width: 1800px) { .wrap { max-width: 1320px; } body { font-size: 17px; } }
+/* desktop: a shorter title block, so the leaderboard starts higher on the first screen */
+@media (min-width: 761px) { .hero { padding-top: 40px; padding-bottom: 8px; } .hero + section { padding-top: 24px; } }
