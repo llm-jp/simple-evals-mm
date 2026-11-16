@@ -455,13 +455,6 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 .lc-settings code { overflow-wrap: anywhere; word-break: break-all; }
 /* phones: the chart legend packs its entries (as on Epoch AI's chart) */
 @media (max-width: 600px) { .chart-legend { gap: 4px 10px; font-size: 12.5px; } }
-/* narrow phones: the brand, four links and the theme toggle fit 390 px */
-@media (max-width: 420px) {
-  header.site .wrap { padding: 0 10px; }
-  header.site .brand { font-size: 12px; letter-spacing: -0.03em; }
-  nav.links a { padding: 6px 3px; font-size: 12.5px; }
-  .theme-toggle { margin-left: 0; }
-}
 /* parity on phones: a list by model instead of the benchmarks x models table */
 .parity-list { display: none; }
 @media (max-width: 600px) {
@@ -483,14 +476,6 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
   header.site .org { display: inline-flex; } header.site .org img { height: 20px; width: 20px; border-radius: 5px; }
   header.site .brand-wrap { gap: 7px; }
 }
-/* small phones: "Code" becomes the GitHub mark (the text stays for screen readers), and below 385 px the title goes
-   (the logo stays; "Leaderboard" links to the home page) */
-@media (max-width: 400px) {
-  nav.links a[href^="https://github.com/"] { font-size: 0; width: 26px; height: 26px; padding: 0; margin: 0 2px; background: currentColor;
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z'/%3E%3C/svg%3E") center / 17px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z'/%3E%3C/svg%3E") center / 17px no-repeat; }
-  header.site .brand-wrap { margin-right: 6px; }
-}
-@media (max-width: 385px) { header.site .brand { display: none; } }
 /* large screens: the column grows with the window (a fixed 1,024 px column filled only half of a 1920-px screen);
    the charts and tables follow the column, so they keep the text's width */
 @media (min-width: 1440px) { .wrap { max-width: 1200px; } }
@@ -501,3 +486,20 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 header.site { transition: transform .2s ease; }
 header.site.hdr-hidden { transform: translateY(-100%); }
 @media (prefers-reduced-motion: reduce) { header.site { transition: none; } }
+/* phones: the links and the theme toggle move into a menu opened by the ☰ button (as on Epoch AI's site) */
+.menu-btn { display: none; border: 0; background: transparent; color: var(--text-primary); padding: 6px; margin-right: -6px; border-radius: 8px; cursor: pointer; }
+.menu-btn svg { width: 22px; height: 22px; display: block; }
+.menu-btn .ic-close { display: none; }
+@media (max-width: 600px) {
+  .menu-btn { display: inline-flex; }
+  header.site .wrap { position: relative; }
+  header.site nav.links { display: none; }
+  header.site.menu-open .menu-btn .ic-menu { display: none; }
+  header.site.menu-open .menu-btn .ic-close { display: block; }
+  header.site.menu-open nav.links { display: flex; flex-direction: column; align-items: stretch; gap: 0; position: absolute; top: 56px; left: 0; right: 0;
+    background: var(--bg); border-bottom: 1px solid var(--border); box-shadow: 0 10px 24px rgba(0,0,0,.08); padding: 6px 14px 10px; }
+  header.site.menu-open nav.links a { font-size: 16px; padding: 12px 6px; border-radius: 8px; border-bottom: 1px solid var(--border); }
+  header.site.menu-open nav.links a[aria-current="page"]::after { left: 6px; right: auto; width: 32px; bottom: 6px; }
+  header.site.menu-open .theme-toggle { align-self: flex-start; margin: 8px 0 0; }
+  header.site .brand { font-size: 15px; }
+}
