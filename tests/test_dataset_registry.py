@@ -73,7 +73,9 @@ def test_every_pin_has_a_known_upstream():
     for name in dataset_mod.DATASETS:
         ps = dataset_admin.pins(name)
         assert (ps == []) == (dataset_mod.get_dataset(name).revision is None), name
-        assert all(p["kind"] in ("hf", "jammeval", "git") and p["repo"] and p["revision"] for p in ps), (name, ps)
+        assert all(p["kind"] in ("hf", "jammeval", "git") and isinstance(p["repo"], str) and p["repo"] and p["revision"] for p in ps), (name, ps)
+        # a JAMMEval dataset is checked under its subset folder (not, e.g., the Dataset.subset method: issue #161)
+        assert all(p["repo"] == dataset_mod.get_dataset(name).jammeval_subset for p in ps if p["kind"] == "jammeval"), (name, ps)
     rows = dataset_admin.rows()
     assert {r["name"] for r in rows} == set(dataset_mod.DATASETS) and json.dumps(rows)
 
