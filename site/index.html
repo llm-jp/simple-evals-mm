@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="A reproducible, reliable evaluation framework for English and Japanese multimodal tasks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=785baeac92">
+<link rel="stylesheet" href="style.css?v=2b1bf42a08">
 </head>
 <body>
 
@@ -63,13 +63,17 @@
           <button class="filter-btn" aria-expanded="false" title="Benchmarks averaged into Overall">Benchmarks <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
           <div class="panel" hidden>
             <div class="presets">
-              <button data-preset="all">All</button><button data-preset="ja">Japanese</button><button data-preset="en">English</button>
+              <button data-preset="default" title="The benchmarks every model has">Default</button><button data-preset="all">All</button><button data-preset="ja">Japanese</button><button data-preset="en">English</button>
               <button data-preset="multimodal" title="Benchmarks with images in the input">Multimodal</button><button data-preset="text">Text only</button><button data-preset="none">None</button>
             </div>
             <div class="task-list"></div>
           </div>
         </div>
         <div class="meta" id="lb-meta">Loading results…</div>
+        <span class="seg" data-key="view" title="Best: each model at its higher-scoring effort level on this score (chart and table)">
+          <button data-v="best" aria-pressed="true">Best</button>
+          <button data-v="all" aria-pressed="false">All effort levels</button>
+        </span>
         <div class="filter-wrap right" data-filter="cfg">
           <button class="filter-btn" aria-expanded="false">Configs <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
           <div class="panel" hidden>
@@ -106,20 +110,6 @@
         </div>
       </div>
 
-      <div class="controls table-controls">
-        <span class="seg" data-key="view" title="Best: each model at its higher-scoring effort level on this score">
-          <button data-v="best" aria-pressed="true">Best</button>
-          <button data-v="all" aria-pressed="false">All effort levels</button>
-        </span>
-        <div class="filter-wrap right" data-filter="cfg"><button class="filter-btn" aria-expanded="false">Configs <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
-          <div class="panel" hidden>
-            <div class="presets">
-              <button data-preset="all">All</button><button data-preset="proprietary">Proprietary</button>
-              <button data-preset="open">Open-weight</button><button data-preset="small" title="Open-weight models with at most 100B total parameters">&le; 100B</button><button data-preset="none">None</button>
-            </div>
-            <div class="model-list"></div>
-          </div></div>
-      </div>
       <div class="table-wrap">
         <table class="lb" id="lb">
           <thead><tr></tr></thead>
@@ -174,7 +164,7 @@
 </footer>
 
 <script src="logos.js?v=95862aac74"></script>
-<script src="data.js?v=8857875fa2"></script>
+<script src="data.js?v=1f736512f9"></script>
 <script>
 (function () {
   const D = window.LB;
@@ -209,15 +199,17 @@
   const ALL_CFG = D.models.flatMap(m => CFGS(m).map(([c]) => m.key + ":" + c));
   ALL_CFG.forEach(c => state.cfg.add(c));
   const on = (m, c) => state.cfg.has(m.key + ":" + c);
-  // Overall = mean over the tasks picked in the Tasks panel (all by default; kept in the URL as #tasks=a,b,...)
+  // Overall = mean over the tasks picked in the Tasks panel (by default the spec's Overall tasks, which every model has;
+  // a benchmark some models lack, such as ScreenSpot-Pro, can be added; kept in the URL as #tasks=a,b,...)
   const ALL_TASKS = TASKS.map(t => t.key);
-  state.ovTasks = new Set(ALL_TASKS);
+  const OV_DEFAULT = ((TOTAL[0] || {}).tasks || ALL_TASKS).filter(k => ALL_TASKS.includes(k));
+  state.ovTasks = new Set(OV_DEFAULT);
   { const m = location.hash.match(/(?:^#|&)tasks=([^&]*)/); if (m) { const ks = decodeURIComponent(m[1]).split(",").filter(k => ALL_TASKS.includes(k)); if (ks.length) state.ovTasks = new Set(ks); } }
   const isOverall = () => TOTAL.some(b => "b:" + b.key === state.subject);
-  const ovPartial = () => state.ovTasks.size < ALL_TASKS.length;
+  const ovPartial = () => state.ovTasks.size !== OV_DEFAULT.length || OV_DEFAULT.some(k => !state.ovTasks.has(k));  // not the default set
   const scopeLabel = () => {
     const s = SCOPES.find(s => s.key === state.subject);
-    return isOverall() && ovPartial() ? `Overall (${state.ovTasks.size} of ${ALL_TASKS.length} benchmarks)` : s.label;
+    return isOverall() && ovPartial() ? `Overall (${state.ovTasks.size} benchmarks)` : s.label;
   };
 
   // ---- score pulldown + segmented controls ----
@@ -333,6 +325,7 @@
   });
   taskWrap.querySelector(".presets").addEventListener("click", e => {
     const pr = e.target.dataset.preset; if (!pr) return;
+    if (pr === "default") { state.ovTasks = new Set(OV_DEFAULT); tasksChanged(); return; }
     const keep = t => pr === "all" || (pr === "ja" && t.lang === "ja") || (pr === "en" && t.lang === "en")
       || (pr === "multimodal" && t.category !== "Text") || (pr === "text" && t.category === "Text");  // Text = the text-only tasks
     state.ovTasks = new Set(pr === "none" ? [] : TASKS.filter(keep).map(t => t.key));
@@ -359,8 +352,12 @@
   function points() {
     const pts = [];
     for (const m of D.models) {
-      if (m.low && on(m, "low") && has(m.low)) pts.push({ m, effort: "low", d: pickVal(m.low) });
-      if (on(m, "max") && has(m.max)) pts.push({ m, effort: "max", d: pickVal(m.max) });
+      const lv = [];
+      if (m.low && on(m, "low") && has(m.low)) lv.push({ m, effort: "low", d: pickVal(m.low) });
+      if (on(m, "max") && has(m.max)) lv.push({ m, effort: "max", d: pickVal(m.max) });
+      // Best (as in the table): only the higher-scoring effort level on the selected score
+      if (state.view === "best" && lv.length > 1) pts.push(lv[0].d.score >= lv[1].d.score ? lv[0] : lv[1]);
+      else pts.push(...lv);
     }
     return pts;
   }

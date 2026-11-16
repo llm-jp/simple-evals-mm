@@ -449,4 +449,6 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 
 /* one column: text, tables and charts share the content width (976px), as on DeepSWE */
 .intro, .hero p.tagline, .about-list, .about-fig, p.note, .parity-notes, .method { max-width: none; }
-
+/* the leaderboard's top bar: the score picker and the Best / All switch keep their width; the meta line shrinks */
+.lb-top .pick-wrap, .lb-top .seg { flex: none; }
+.lb-top .seg button { white-space: nowrap; }
