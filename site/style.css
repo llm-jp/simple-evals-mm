@@ -499,7 +499,7 @@ header.site.hdr-hidden { transform: translateY(-100%); }
   header.site.menu-open nav.links { display: flex; flex-direction: column; align-items: stretch; gap: 0; position: absolute; top: 56px; left: 0; right: 0;
     background: var(--bg); border-bottom: 1px solid var(--border); box-shadow: 0 10px 24px rgba(0,0,0,.08); padding: 6px 14px 10px; }
   header.site.menu-open nav.links a { font-size: 16px; padding: 12px 6px; border-radius: 8px; border-bottom: 1px solid var(--border); }
-  header.site.menu-open nav.links a[aria-current="page"]::after { left: 6px; right: auto; width: 32px; bottom: 6px; }
+  header.site.menu-open nav.links a[aria-current="page"]::after { left: 6px; right: auto; width: var(--uw, 32px); bottom: 6px; }  /* --uw: the text width (theme.js) */
   header.site.menu-open .theme-toggle { align-self: flex-start; margin: 8px 0 0; }
   header.site .brand { font-size: 15px; }
 }

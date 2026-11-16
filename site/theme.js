@@ -46,7 +46,11 @@
 (function () {
   const h = document.querySelector("header.site"), btn = document.getElementById("menu-btn");
   if (!h || !btn) return;
-  const set = open => { h.classList.toggle("menu-open", open); btn.setAttribute("aria-expanded", String(open)); btn.setAttribute("aria-label", open ? "Close menu" : "Menu"); };
+  const set = open => {
+    h.classList.toggle("menu-open", open); btn.setAttribute("aria-expanded", String(open)); btn.setAttribute("aria-label", open ? "Close menu" : "Menu");
+    const cur = open && h.querySelector('nav.links a[aria-current="page"]');
+    if (cur) { const r = document.createRange(); r.selectNodeContents(cur); cur.style.setProperty("--uw", r.getBoundingClientRect().width + "px"); }  // the underline spans the text
+  };
   btn.addEventListener("click", e => { e.stopPropagation(); set(!h.classList.contains("menu-open")); });
   h.querySelectorAll("nav.links a").forEach(a => a.addEventListener("click", () => set(false)));
   document.addEventListener("click", e => { if (!h.contains(e.target)) set(false); });
