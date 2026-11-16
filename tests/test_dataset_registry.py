@@ -127,3 +127,21 @@ def test_no_dataset_method_is_shadowed(name):
         if attr.startswith("__") or not callable(base):
             continue
         assert callable(getattr(cls, attr)), f"{name}: {cls.__name__}.{attr} hides Dataset.{attr}()"
+
+
+def test_datasets_check_card_only_change_is_current(monkeypatch):
+    """A newer Hugging Face commit that changes only the dataset card (README.md / .gitattributes) is not outdated;
+    one that changes a data file is (MECHA-ja-v2-mini's card-only commit in #161)."""
+    from simple_evals_mm import dataset_admin
+
+    monkeypatch.setattr(dataset_admin, "latest_hf", lambda repo, repo_type="dataset": "b" * 40)
+    monkeypatch.setattr(dataset_admin, "check_sources", lambda names: [])
+    trees = {"a" * 40: {"README.md": "r1", "data/test.parquet": "d1"}, "b" * 40: {"README.md": "r2", "data/test.parquet": "d1"}}
+    monkeypatch.setattr(dataset_admin, "_hf_tree", lambda repo, rev, repo_type="dataset": trees[rev])
+    name = next(n for n in dataset_mod.DATASETS if any(p["kind"] == "hf" for p in dataset_admin.pins(n)))
+    monkeypatch.setattr(dataset_admin, "pins", lambda n, ds=None: [{"kind": "hf", "repo": "org/x", "revision": "a" * 40}])
+    rows, rc = dataset_admin.check([name])
+    assert rc == 0 and rows[0]["status"] == "current" and "README.md" in rows[0]["note"], rows
+    trees["b" * 40]["data/test.parquet"] = "d2"
+    rows, rc = dataset_admin.check([name])
+    assert rc == 1 and rows[0]["status"] == "outdated", rows
