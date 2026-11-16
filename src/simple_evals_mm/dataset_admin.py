@@ -240,6 +240,24 @@ def _get_json(url: str, timeout: float = 30.0, headers: dict | None = None):
         return json.loads(r.read().decode("utf-8"))
 
 
+# files whose change does not touch the data: a newer commit that changes only these is not reported as outdated
+CARD_FILES = frozenset({"README.md", ".gitattributes"})
+
+
+def _hf_tree(repo: str, revision: str, repo_type: str = "dataset") -> dict[str, str]:
+    """{path: blob id} of every file in the repo at `revision`."""
+    from huggingface_hub import HfApi
+
+    return {f.path: f.blob_id for f in HfApi().list_repo_tree(repo, repo_type=repo_type, revision=revision, recursive=True)
+            if getattr(f, "blob_id", None)}
+
+
+def hf_changed_files(repo: str, old: str, new: str, repo_type: str = "dataset") -> list[str]:
+    """Paths added, removed or changed between two revisions of a Hugging Face repo."""
+    a, b = _hf_tree(repo, old, repo_type), _hf_tree(repo, new, repo_type)
+    return sorted(p for p in set(a) | set(b) if a.get(p) != b.get(p))
+
+
 def latest_hf(repo: str, repo_type: str = "dataset") -> str:
     from huggingface_hub import HfApi
 
@@ -319,6 +337,10 @@ def check(names: list[str] | None = None, lookup=None, sources_check=None) -> tu
                 elif p["kind"] == "hf":
                     latest = latest_hf(p["repo"], p.get("repo_type", "dataset"))
                     row.update(latest=latest, status="current" if latest == p["revision"] else "outdated")
+                    if row["status"] == "outdated":  # newer commits that change only the dataset card: still current
+                        changed = hf_changed_files(p["repo"], p["revision"], latest, p.get("repo_type", "dataset"))
+                        if changed and set(changed) <= CARD_FILES:
+                            row.update(status="current", note=f"newer commit(s) change only {', '.join(changed)}")
                 elif p["kind"] == "jammeval":
                     latest, newer = latest_jammeval(p["repo"], p["revision"])
                     row.update(latest=latest, status="outdated" if newer else "current")

@@ -1,8 +1,10 @@
 # Weekly check of the pinned dataset revisions and the locked unversioned source files (datasets.lock) against
 # upstream (`sem datasets check`), and of the small ungated text datasets against datasets.lock
 # (`sem datasets lock --check`): when something is outdated or differs, open (or update) the issue labelled
-# `dataset-update`. Needs no secrets beyond GITHUB_TOKEN; a gated Hugging Face
-# repository whose metadata needs HF_TOKEN is reported as "skipped" instead of failing the check.
+# `dataset-update`. The repository secret HF_TOKEN (a read-only Hugging Face token whose account has access to the
+# gated datasets, e.g. llm-jp/BusinessSlideVQA) lets the check read gated repositories; without it they are reported
+# as "skipped" instead of failing the check. Secrets are not passed to runs from forks; this workflow runs on a
+# schedule or by hand only.
 name: Dataset revisions check
 
 on:
@@ -22,6 +24,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen --no-dev
       - id: check
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set +e
           uv run --frozen sem datasets check > report.txt
