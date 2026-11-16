@@ -69,7 +69,7 @@ def pins(name: str, ds=None) -> list[dict]:
     if not rev:
         return []
     if rev == sources.JAMMEVAL_REVISION:
-        return [{"kind": "jammeval", "repo": getattr(ds, "subset", name), "revision": rev}]
+        return [{"kind": "jammeval", "repo": getattr(ds, "jammeval_subset", "") or name, "revision": rev}]
     if rev.startswith("git:"):
         return [{"kind": "git", "repo": GIT_REPOS[name], "revision": rev[4:]}]
     if "@" in rev:
