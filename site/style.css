@@ -452,3 +452,17 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 /* the leaderboard's top bar: the score picker and the Best / All switch keep their width; the meta line shrinks */
 .lb-top .pick-wrap, .lb-top .seg { flex: none; }
 .lb-top .seg button { white-space: nowrap; }
+/* phones: a scrolling box (provenance, parity, the trends fit table) scrolls inside the page instead of widening it;
+   grid / flex items default to min-width: auto (as wide as their content), so they get 0 */
+.prov-wrap, .parity-wrap, .scroll-x { max-width: 100%; }
+.lc-settings, .lc-settings dl.settings, .lc-settings dl.settings > *, .tr-sec, .fit-details, .method { min-width: 0; }
+.lc-settings code { overflow-wrap: anywhere; word-break: break-all; }
+/* phones: the chart legend packs its entries (as on Epoch AI's chart) */
+@media (max-width: 600px) { .chart-legend { gap: 4px 10px; font-size: 12.5px; } }
+/* narrow phones: the brand, four links and the theme toggle fit 390 px */
+@media (max-width: 420px) {
+  header.site .wrap { padding: 0 10px; }
+  header.site .brand { font-size: 12px; letter-spacing: -0.03em; }
+  nav.links a { padding: 6px 3px; font-size: 12.5px; }
+  .theme-toggle { margin-left: 0; }
+}

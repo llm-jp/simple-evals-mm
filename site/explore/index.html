@@ -219,7 +219,7 @@ article.dscard .facts { margin-top: 0; }
 .dgrid3 .ds { font-size: 12px; color: var(--text-muted); }
 .dgrid3 .dtv { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 15px; }
 .dgrid3 .dtv span { font-weight: 700; font-variant-numeric: tabular-nums; }
-.dgo { display: flex; gap: 8px; margin: 2px 0 10px; }
+.dgo { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 10px; }
 .dgo .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--text-primary); background: var(--text-primary); color: var(--bg); text-decoration: none; transition: background .12s, border-color .12s; }
 .dgo .btn:hover { opacity: .88; }
 /* secondary buttons: a card background, a visible border and an icon, so they read as buttons */
@@ -266,6 +266,9 @@ table.hm thead th.c1 { box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 
 .hmwrap.scrollx table.hm thead th { top: 0 !important; position: sticky; z-index: 2; background: var(--bg); }
 .hmwrap.scrollx table.hm .c0, .hmwrap.scrollx table.hm .c1 { position: sticky; z-index: 1; background: var(--bg); }
 .hmwrap.scrollx table.hm .c0 { left: 0; }
+/* the sticky columns also cover the 2 px cell spacing, so the cells scrolled beneath do not show through */
+.hmwrap.scrollx table.hm .c0 { box-shadow: -2px 0 0 var(--bg), 2px 0 0 var(--bg); }
+.hmwrap.scrollx table.hm td.c1 { box-shadow: inset -1px 0 0 var(--border), -2px 0 0 var(--bg), 2px 0 0 var(--bg); }
 .hmwrap.scrollx table.hm thead th.c0, .hmwrap.scrollx table.hm thead th.c1 { z-index: 3; }
 /* phones / short screens: the heatmap scrolls in its own area (column names and row labels stay) */
 @media (max-width: 899px), (max-height: 699px) {
@@ -295,6 +298,11 @@ table.hm thead th.c1 { box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 
   .dgrid3 .dwide { display: block; }
 }
 .cards > * { min-width: 0; }
+@media (max-width: 600px) {
+  table.rs .hs { display: none; }               /* the task page's settings table: setting, pass rate, attempts, cost */
+  .rtabs a { padding: 8px 10px; }               /* Benchmarks / Heatmap / Tasks / Trials fit the width */
+  .dgo .btn { padding: 6px 10px; }
+}
 </style>
 <main id="top">
   <section id="run">
@@ -578,12 +586,12 @@ async function task(p) {
   const lines = Object.keys(by).map(Number).sort((a, b) => rank(a) - rank(b)).map(si => {
     const xs = by[si].sort((a, b) => a.k - b.k), c = xs.filter(x => x.r != null), k = c.filter(ok).length;
     const att = xs.map(x => `<a href="#" class="${x.r == null ? "ax" : cut(x) ? "ac" : x.r >= 0.5 ? "a1" : "a0"}" title="attempt ${x.k}: ${x.r == null ? "excluded" : x.r.toFixed(2)}${x.c ? " · " + x.c : ""}" ${goAttr({view: "trial", d, t, s: IDX.settings[si].key, k: x.k, from: "heatmap"})}>${x.k}</a>`).join("");
-    return `<tr><td class="l">${setHTML(si)}</td><td>${c.length ? Math.round(100 * k / c.length) + "%" : "–"} <span class="note">(${k}/${c.length})</span></td><td class="l"><span class="att">${att}</span></td><td>${tok(Math.round(avg(xs, x => x.i) ?? 0) || null)}</td><td>${tok(Math.round(avg(xs, x => x.o) ?? 0) || null)}</td><td>${secs(avg(xs, x => x.s))}</td><td>${usd(avg(xs, x => x.$))}</td></tr>`;
+    return `<tr><td class="l">${setHTML(si)}</td><td>${c.length ? Math.round(100 * k / c.length) + "%" : "–"} <span class="note">(${k}/${c.length})</span></td><td class="l"><span class="att">${att}</span></td><td class="hs">${tok(Math.round(avg(xs, x => x.i) ?? 0) || null)}</td><td class="hs">${tok(Math.round(avg(xs, x => x.o) ?? 0) || null)}</td><td class="hs">${secs(avg(xs, x => x.s))}</td><td>${usd(avg(xs, x => x.$))}</td></tr>`;
   }).join("");
   const nset = Object.keys(by).length, prate = counted.length ? Math.round(100 * counted.filter(ok).length / counted.length) + "%" : "–";
   $("app").innerHTML = back() + `<div class="crumb">${esc(IDX.datasets[d].label)} / task / ${esc(t)}</div><h2 class="thead">${esc(ttitle(d, t))}</h2>
     <div class="sgrid">${[["pass rate", prate], ["trials", rows.length], ["settings", nset], ["avg cost", usd(avg(rows, x => x.$))]].map(([k, v]) => `<div><div class="ml">${k}</div><div class="sv">${v}</div></div>`).join("")}</div>
-    <div id="tpanel"><div class="rpanel"><h3>Task</h3>${spinner("Loading the question and its reference answer from Hugging Face…")}</div></div><div class="rpanel"><h3>Settings</h3><div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Setting</th><th>Pass rate</th><th class="l">Attempts (click to open)</th><th>Avg input tokens</th><th>Avg output tokens</th><th>Avg time</th><th>Avg cost</th></tr></thead><tbody>${lines}</tbody></table></div></div>`;
+    <div id="tpanel"><div class="rpanel"><h3>Task</h3>${spinner("Loading the question and its reference answer from Hugging Face…")}</div></div><div class="rpanel"><h3>Settings</h3><div style="overflow-x:auto"><table class="rs"><thead><tr><th class="l">Setting</th><th>Pass rate</th><th class="l">Attempts (click to open)</th><th class="hs">Avg input tokens</th><th class="hs">Avg output tokens</th><th class="hs">Avg time</th><th>Avg cost</th></tr></thead><tbody>${lines}</tbody></table></div></div>`;
   wireBack({view: "heatmap", d});
   navLinks();
   // the question and the images load after the page is drawn (the prompts file and the dataset viewer can take seconds)
