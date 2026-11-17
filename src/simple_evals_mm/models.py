@@ -189,7 +189,7 @@ def resolve_data_path(path: str) -> str:
     directory."""
     from simple_evals_mm import sources
 
-    return path if os.path.isabs(path) else os.path.join(sources.DATA_ROOT, path)
+    return sources.data_path(path)
 
 
 def file_sha256(path: str) -> str:
