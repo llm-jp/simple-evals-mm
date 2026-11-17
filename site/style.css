@@ -231,6 +231,14 @@ td.hl, th.hl { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .intro + .intro { margin-top: 8px; }
 
 pre.bib { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; font-size: 13px; overflow-x: auto; }
+.bib-box { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; max-width: 880px; }
+.bib-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px 8px 16px; background: var(--code-bg); border-bottom: 1px solid var(--border); }
+.bib-head > span { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.bib-copy { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; color: var(--bg); background: var(--text-primary); border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.bib-copy:hover { opacity: .85; }
+.bib-copy.done { background: var(--pass-fg); }
+.bib-copy svg { width: 15px; height: 15px; }
+.bib-box pre.bib { margin: 0; border: 0; border-radius: 0; background: var(--bg); padding: 16px 18px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2.2em; text-indent: -1.2em; }
 
 footer { border-top: 1px solid var(--border); padding: 28px 0 40px; color: var(--text-muted); font-size: 13px; margin-top: 24px; }
 footer a { color: var(--text-secondary); }

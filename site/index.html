@@ -159,12 +159,18 @@
   <section id="cite">
     <div class="wrap">
       <h2>Citation</h2>
-      <pre class="bib">@software{simple_evals_mm,
+      <p class="intro">If you use simple-evals-mm in your work, please cite it as:</p>
+      <div class="bib-box">
+        <div class="bib-head"><span>BibTeX</span><button type="button" class="bib-copy" id="bib-copy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          <span>Copy</span></button></div>
+        <pre class="bib" id="bib">@software{simple_evals_mm,
   author = {{simple-evals-mm contributors}},
   title = {{simple-evals-mm: A reproducible, reliable evaluation framework for English and Japanese multimodal tasks}},
   year = {2026},
   url = {https://github.com/llm-jp/simple-evals-mm}
 }</pre>
+      </div>
     </div>
   </section>
 </main>
@@ -866,5 +872,13 @@
 })();
 </script>
 <script src="theme.js"></script>
+<script>
+  document.getElementById("bib-copy").addEventListener("click", async e => {
+    const btn = e.currentTarget, label = btn.querySelector("span");
+    try { await navigator.clipboard.writeText(document.getElementById("bib").textContent); } catch (err) { return; }
+    label.textContent = "Copied"; btn.classList.add("done");
+    setTimeout(() => { label.textContent = "Copy"; btn.classList.remove("done"); }, 1500);
+  });
+</script>
 </body>
 </html>
