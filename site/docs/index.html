@@ -49,6 +49,11 @@
   <section id="docs">
     <div class="wrap docs-layout">
       <aside class="docs-nav" aria-label="Documentation">
+        <div class="docs-search">
+          <input id="docs-q" type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off">
+          <kbd>/</kbd>
+          <div class="docs-hits" id="docs-hits" hidden></div>
+        </div>
         <label class="docs-ver">Version <select id="docs-ver"></select></label>
         <details class="docs-menu" id="docs-menu" open>
           <summary id="docs-menu-label">Contents</summary>
@@ -84,6 +89,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/minisearch@7.1.2/dist/umd/index.min.js"></script>
 <script>
   // The docs are the Markdown files of the repository (docs/, README, CONTRIBUTING) at a version (a tag from
   // v0.6.0, or main), fetched from GitHub and rendered here: nothing is built or copied, so there is no stale copy.
@@ -306,6 +312,94 @@
     document.title = `${title ? title.textContent : "Docs"} · simple-evals-mm`;
     if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
   }
+
+  // ---- search: MiniSearch over the sections (## / ###) of every page in the sidebar, at the selected version; the
+  // pages are fetched the first time the box is used (about 30 small files) and indexed in the browser
+  let INDEX = null, INDEXING = null;
+  function sections(page, md) {
+    const title = (md.match(/^# (.+)$/m) || [, page])[1].trim();
+    const out = [];
+    let head = "", id = "", buf = [], fence = false, skip = false;
+    const flush = () => {
+      const text = buf.join(" ").replace(/`{1,3}|\*\*|__|\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\s+/g, " ").trim();
+      if (text || head) out.push({ id: `${page}#${id}`, page, anchor: id, title, heading: head, text });
+      buf = [];
+    };
+    for (const line of md.split("\n")) {
+      if (/^```/.test(line)) { fence = !fence; skip = fence && /^```mermaid/.test(line); continue; }
+      if (fence && skip) continue;  // diagrams are not text
+      const m = !fence && line.match(/^(#{1,3}) (.+)$/);
+      if (m) { flush(); head = m[1] === "#" ? "" : m[2].trim(); id = head ? slug(head) : ""; continue; }
+      buf.push(line.replace(/<[^>]+>/g, " ").replace(/^\s*\|?[-:| ]+\|?\s*$/, "").replace(/\|/g, " "));
+    }
+    flush();
+    return out;
+  }
+  async function buildIndex() {
+    const ref = state().ref;
+    if (!FLAT.length) await loadNav(ref);
+    const docs = (await Promise.all(FLAT.map(async x => {
+      try { const r = await fetch(RAW(ref, x.p)); return r.ok ? sections(x.p, await r.text()) : []; } catch (e) { return []; }
+    }))).flat();
+    const ms = new MiniSearch({ fields: ["title", "heading", "text"], storeFields: ["page", "anchor", "title", "heading", "text"],
+                                searchOptions: { boost: { title: 3, heading: 2 }, prefix: true, fuzzy: 0.15, combineWith: "AND" } });
+    ms.addAll(docs);
+    return ms;
+  }
+  function snippet(text, q) {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const low = text.toLowerCase();
+    const at = Math.max(0, Math.min(...words.map(w => { const i = low.indexOf(w); return i < 0 ? Infinity : i; })) - 40);
+    let s = (at > 0 ? "…" : "") + text.slice(Number.isFinite(at) ? at : 0, (Number.isFinite(at) ? at : 0) + 150);
+    s = esc(s);
+    for (const w of words) if (w.length > 1) s = s.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), m => `<mark>${m}</mark>`);
+    return s + "…";
+  }
+  async function search(q) {
+    const hits = document.getElementById("docs-hits");
+    if (!q.trim()) { hits.hidden = true; return; }
+    if (!INDEX) {
+      place(hits); hits.hidden = false; hits.innerHTML = '<div class="docs-hit-none">Indexing…</div>';
+      INDEX = await (INDEXING ||= buildIndex());
+    }
+    const ref = state().ref;
+    const res = INDEX.search(q).slice(0, 8);
+    place(hits);
+    hits.hidden = false;
+    hits.innerHTML = res.length ? res.map((r, i) => `<a class="docs-hit${i === 0 ? " sel" : ""}" href="${href(ref, r.page)}${r.anchor ? "#" + r.anchor : ""}">
+        <b>${esc(r.title)}${r.heading ? ` <span>› ${esc(r.heading)}</span>` : ""}</b><small>${snippet(r.text, q)}</small></a>`).join("")
+      : '<div class="docs-hit-none">No results</div>';
+  }
+  function place(hits) {  // fixed under the box (the sidebar scrolls and is narrower than the results)
+    const r = document.getElementById("docs-q").getBoundingClientRect();
+    hits.style.left = `${Math.max(8, Math.min(r.left, innerWidth - Math.min(560, innerWidth - 16) - 8))}px`;
+    hits.style.top = `${r.bottom + 6}px`;
+  }
+  window.addEventListener("resize", () => { const h = document.getElementById("docs-hits"); if (!h.hidden) place(h); });
+  window.addEventListener("scroll", () => { const h = document.getElementById("docs-hits"); if (!h.hidden) place(h); }, { passive: true });
+  const q = document.getElementById("docs-q");
+  q.addEventListener("input", () => search(q.value));
+  q.addEventListener("focus", () => { if (!INDEXING) INDEXING = buildIndex(); if (q.value) search(q.value); });
+  q.addEventListener("keydown", e => {
+    const items = [...document.querySelectorAll("#docs-hits .docs-hit")];
+    const i = items.findIndex(a => a.classList.contains("sel"));
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!items.length) return;
+      const j = (i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      items.forEach((a, k) => a.classList.toggle("sel", k === j));
+      items[j].scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter" && items.length) { e.preventDefault(); location.href = items[Math.max(i, 0)].href; }
+    else if (e.key === "Escape") { q.value = ""; search(""); q.blur(); }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "/" && document.activeElement !== q && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); }
+  });
+  document.addEventListener("click", e => { if (!e.target.closest(".docs-search")) document.getElementById("docs-hits").hidden = true; });
+  window.addEventListener("hashchange", () => {  // a result on the same page: scroll to it
+    const el = document.getElementById(decodeURIComponent(location.hash.slice(1))); if (el) el.scrollIntoView();
+    document.getElementById("docs-hits").hidden = true;
+  });
 
   versions().then(render);
 </script>

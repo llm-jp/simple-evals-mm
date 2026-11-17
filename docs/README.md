@@ -41,6 +41,7 @@ another version are in its tag on GitHub (`https://github.com/llm-jp/simple-eval
 - **Contributing**
   - [Contributing](../CONTRIBUTING.md)
   - [Versioning and releases](versioning.md)
+  - [Changelog](../CHANGELOG.md)
 - **Reference**
   - [Commands](cli.md)
   - [How reproducibility works](reference/reproducibility.md)
@@ -50,9 +51,8 @@ another version are in its tag on GitHub (`https://github.com/llm-jp/simple-eval
   - [Time and cost](cost.md)
   - [Parity table](parity.md)
 
-What changed: the [leaderboard changelog](https://llm-jp.github.io/simple-evals-mm/changelog.html) (scores, models,
-benchmarks) and the [GitHub releases](https://github.com/llm-jp/simple-evals-mm/releases) (the code, with the datasets
-each release changes).
+What changed: the [changelog](../CHANGELOG.md) (the code, per release), the [leaderboard changelog](https://llm-jp.github.io/simple-evals-mm/changelog.html) (scores, models,
+benchmarks) and the [GitHub releases](https://github.com/llm-jp/simple-evals-mm/releases).
 
 ## Acknowledgements
 

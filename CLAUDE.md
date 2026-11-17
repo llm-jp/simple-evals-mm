@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+(`AGENTS.md` is a symlink to this file, for other coding agents.)
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
@@ -93,6 +95,8 @@ Rules that keep jobs reproducible:
 
 ## Changing the code: what goes with it
 
+- **CHANGELOG.md**: a user-visible change (an option, a behaviour, a removed or renamed thing, a dataset) adds a line
+  under "Unreleased" in the same PR.
 - **Docs in the same PR.** A new or changed option, command, job file, failure cause or behaviour updates `docs/`
   (and README / CONTRIBUTING where they mention it). A new page is added to the Contents list of `docs/README.md`
   (it drives the site's sidebar). `tests/test_docs.py` parses every `sem ...` command in the docs, checks every
@@ -138,7 +142,7 @@ layout. CI (`.github/workflows/`): `test.yml` (ruff + the offline suite on every
   frozen (criteria in `docs/versioning.md`).
 - A version never decides comparability: `sem jobs compare` does, per dataset.
 - Release: the checklist in `docs/versioning.md` (offline tests, `scripts/release_check.sh`, `sem datasets diff
-  <previous tag> HEAD` for the notes), then an annotated tag `vX.Y.Z` on `main` and a GitHub release with the notes
+  <previous tag> HEAD` for the notes, "Unreleased" in CHANGELOG.md becomes the version), then an annotated tag `vX.Y.Z` on `main` and a GitHub release with the notes
   and the dataset table. Tag and release only when the maintainer says so. The site's changelog
   (`site/changelog.js`) is written by hand by the maintainers.
 
