@@ -120,8 +120,7 @@ Apache 2.0.
 
 ## Citation
 
-If you use simple-evals-mm in academic work, please cite it with the "Cite this repository" button on GitHub
-(`CITATION.cff`) or this BibTeX entry:
+If you use simple-evals-mm in academic work, please cite it:
 
 ```bibtex
 @software{simple_evals_mm,
