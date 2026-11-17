@@ -3,8 +3,9 @@
 Jobs made at different commits (versions) can be compared on a dataset when nothing that decides what the model was
 asked or how its answers were scored differs between them. Per dataset:
 
-  data          the tasks (datasets.lock tasks_sha256 recorded in each job's lock.json) and the dataset args: any
-                difference -> different
+  data          the tasks (datasets.lock tasks_sha256 recorded in each job's lock.json) and the dataset's resolved
+                settings (its config after defaults, without the allow_exec / unsafe_sandbox permissions; a default
+                and the same value given explicitly are equal): any difference -> different
   prompts       what the jobs actually sent, task by task: a fingerprint of every non-agent step of the trajectory
                 (system / user texts and the sha256 of each image; attempt 1) over the tasks the jobs share. A task
                 sent differently -> different. This is the evidence for the generation side whatever the commits:
@@ -143,10 +144,24 @@ def job_facts(st: store_mod.JobStore, name: str) -> dict:
             "generation_commits": sorted(commits), "verification_commit": meta.get("commit"),
             "judge": leaderboard.judge_identity(meta.get("judge")),
             "tasks_sha256": entry.get("tasks_sha256"), "n_tasks": entry.get("n_tasks"),
-            "args": (cfg.get("dataset_args") or {}).get(name) or {},
+            "args": resolved_config(entry, (cfg.get("dataset_args") or {}).get(name) or {}),
             "sampler_modules": provenance.sampler_modules(samp.get("provider"), samp.get("api_format"),
                                                           samp.get("provider")),
             "prompts": fps, "reward": summary.get("reward"), "std": summary.get("std"), "causes": causes}
+
+
+# config keys that only permit running (not what is run) or restate the given args
+PERMISSION_KEYS = {"args", "allow_exec", "unsafe_sandbox", "verifier"}
+
+
+def resolved_config(entry: dict, given: dict) -> dict:
+    """The dataset's settings after its defaults (lock.json datasets.<name>.config: e.g. LiveCodeBench's resolved
+    start / end), so a job that relied on a default and one that gave the same value explicitly compare equal; the
+    permission flags (allow_exec, unsafe_sandbox) are left out. Older locks without a config: the given args."""
+    conf = entry.get("config")
+    if not isinstance(conf, dict):
+        return {k: v for k, v in given.items() if k not in PERMISSION_KEYS}
+    return {k: v for k, v in conf.items() if k not in PERMISSION_KEYS}
 
 
 def _pkg(repo: str) -> str:
@@ -182,7 +197,7 @@ def classify(name: str, facts: list[dict], repo: str, golden: Golden, changed=No
         worse("different", "the tasks differ (datasets.lock tasks_sha256): " +
               ", ".join(f"{_short(f['job'])} {str(f['tasks_sha256'])[:8]} ({f['n_tasks']})" for f in facts))
     if len({json.dumps(f["args"], sort_keys=True) for f in facts}) > 1:
-        worse("different", "the dataset args differ: " + ", ".join(f"{_short(f['job'])} {f['args']}" for f in facts))
+        worse("different", "the dataset settings differ: " + ", ".join(f"{_short(f['job'])} {f['args']}" for f in facts))
 
     # prompts: what was sent, over the tasks every job has
     shared = set.intersection(*(set(f["prompts"]) for f in facts))

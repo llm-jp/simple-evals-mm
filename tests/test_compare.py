@@ -97,6 +97,16 @@ def test_another_judge_needs_a_regrade():
     assert r["status"] == "regrade" and "j1" in r["notes"][0] and "j2" in r["notes"][0]
 
 
+def test_settings_compare_after_defaults():
+    # a default and the same value given explicitly are equal; permissions do not count; an older lock: given args
+    conf = {"revision": "r", "start": "2025-02-01", "end": "2025-05-01"}
+    explicit = {"config": {**conf, "args": {"start": "2025-02-01", "end": "2025-05-01", "allow_exec": True},
+                           "allow_exec": True, "unsafe_sandbox": False, "verifier": "v(True)"}}
+    default = {"config": {**conf, "args": {"allow_exec": True}, "allow_exec": True, "unsafe_sandbox": True}}
+    assert compare.resolved_config(explicit, {}) == compare.resolved_config(default, {}) == conf
+    assert compare.resolved_config({}, {"split": "test", "allow_exec": True}) == {"split": "test"}
+
+
 def test_worst_status_wins_and_markdown():
     r = compare.classify("ds", [facts("A", judge={"model": "j1"}), facts("B", tasks="u", judge={"model": "j2"})], ".",
                          FakeGolden(), changed=changed_with({}))
