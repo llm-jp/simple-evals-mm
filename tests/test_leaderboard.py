@@ -387,3 +387,20 @@ def test_parity_markdown_lists_cells_and_explains_the_others():
     md = leaderboard.parity_markdown(data)
     assert "**1 of 2**" in md and "| A | 80.0 / 81.0 ✓ |" in md and "| B | 50.0 / 60.0 ⚠ |" in md
     assert "- **M (max), B** ⚠: cause unknown" in md
+
+
+def test_column_comparability_and_reviewed_findings(monkeypatch):
+    """Each column with jobs from more than one directory is checked with `sem jobs compare`; a finding the spec lists
+    under comparability_reviewed no longer counts, an open one sets the status."""
+    from simple_evals_mm import compare
+
+    notes = {"a": ["? generation c1 -> c2: the golden request body changed for chat: X", "  generation note"],
+             "b": ["✗ 1 of 2 tasks were sent different prompts (e.g. t)", "? something else"]}
+    monkeypatch.setattr(compare, "_all_at_once", lambda names: None)
+    monkeypatch.setattr(compare, "compare", lambda jobs, datasets, repo, changed: {
+        "datasets": {datasets[0]: {"status": "x", "notes": notes[datasets[0]]}}})
+    out = leaderboard.column_comparability({"a": ["j1", "j2"], "b": ["j1", "j3"], "c": ["j1"]},
+                                  [{"match": "request body changed for chat: X", "note": "same meaning"}], ".")
+    assert set(out) == {"a", "b"}  # one job: nothing to compare
+    assert out["a"] == {"status": "ok", "notes": [], "reviewed": [notes["a"][0]]}
+    assert out["b"]["status"] == "different" and out["b"]["notes"] == notes["b"]

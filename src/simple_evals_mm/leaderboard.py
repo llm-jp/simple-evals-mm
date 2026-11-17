@@ -487,9 +487,11 @@ def parity_cells(view: JobView, refs: dict, cache: dict) -> dict:
 
 
 def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, today: str | None = None,
-          references: str | None = None) -> tuple[dict, dict]:
-    """(data for data.js, report {"refused": [...], "shown": n, "warnings": [...]}). `references`: the model-card
-    scores (`sem job parity`); default the checkout's references/model_cards.yaml, "" for none."""
+          references: str | None = None, comparability: bool = True) -> tuple[dict, dict]:
+    """(data for data.js, report {"refused": [...], "shown": n, "warnings": [...], "comparability": {...}}).
+    `references`: the model-card scores (`sem job parity`); default the checkout's references/model_cards.yaml, ""
+    for none. `comparability`: check each dataset column's jobs with `sem jobs compare` (compare.py; cached), a
+    finding the spec lists under `comparability_reviewed` (a substring of its note) counts as reviewed."""
     spec = load_spec(spec_path)
     refs = None
     if references != "":
@@ -515,7 +517,8 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
             views[path] = JobView(path, git)
         return views[path]
 
-    report: dict = {"refused": [], "shown": 0, "warnings": []}
+    report: dict = {"refused": [], "shown": 0, "warnings": [], "comparability": {}}
+    columns: dict[str, list[str]] = {}  # dataset -> the job directories of its shown cells
     models_out = []
     for m in spec.get("models") or []:
         levels = []
@@ -549,6 +552,8 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
                                               "job": plan[name], "reasons": reasons})
                     continue
                 tasks[name] = cell
+                if v.path not in columns.setdefault(name, []):
+                    columns[name].append(v.path)
                 jid = v.lock.get("job_id")
                 if jid not in jobs:
                     jobs[jid] = job_provenance(v)
@@ -596,6 +601,13 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
         if len(shas) > 1:
             report["warnings"].append(f"{name}: {len(shas)} different task sets (tasks_sha256) across the rows")
 
+    if comparability:
+        report["comparability"] = column_comparability(columns, spec.get("comparability_reviewed") or [],
+                                                        git.repo or checks.repo_root())
+        for name, c in report["comparability"].items():
+            for n in c["notes"]:
+                report["warnings"].append(f"{name}: {n}")
+
     tasks_out = []
     for name, t in spec["tasks"].items():
         lk = datalock.entry(dataset_mod.split_ref(name)[0]) or {}
@@ -620,6 +632,25 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
         if spec.get(k):
             data[k] = spec[k]
     return data, report
+
+
+def column_comparability(columns: dict[str, list[str]], reviewed: list[dict], repo: str) -> dict:
+    """{dataset: {"status", "notes" (open findings), "reviewed" (findings the spec acknowledges)}} for each column with
+    jobs of more than one directory; a column whose findings are all reviewed is "ok"."""
+    from simple_evals_mm import compare
+
+    names = sorted(n for n, js in columns.items() if len(js) > 1)
+    changed = compare._all_at_once(names)
+    out = {}
+    for name in names:
+        d = compare.compare(columns[name], datasets=[name], repo=repo, changed=changed)["datasets"][name]
+        findings = [n for n in d["notes"] if not n.startswith(" ")]  # marked: ✗ / ? / ↻
+        done = [n for n in findings if any(r.get("match") and r["match"] in n for r in reviewed)]
+        open_ = [n for n in findings if n not in done]
+        of_mark = {m: st for st, m in compare.MARK.items()}
+        status = max((of_mark[n[0]] for n in open_), key=compare.RANK.__getitem__, default="ok")
+        out[name] = {"status": status, "notes": open_, "reviewed": done}
+    return out
 
 
 def parity_markdown(data: dict) -> str:
@@ -701,4 +732,11 @@ def format_report(report: dict) -> str:
     for r in report["refused"]:
         lines.append(f"  refused {r['model']} ({r['setting']}) {r['dataset']} [job {r['job']}]: " + "; ".join(r["reasons"]))
     lines += [f"  warning: {w}" for w in report["warnings"]]
+    comp = report.get("comparability") or {}
+    if comp:
+        counts = Counter(c["status"] for c in comp.values())
+        n_rev = sum(1 for c in comp.values() if c["reviewed"])
+        lines.append(f"[site] comparability of the {len(comp)} multi-job column(s): "
+                     + ", ".join(f"{k} {v}" for k, v in sorted(counts.items()))
+                     + (f" ({n_rev} with reviewed findings)" if n_rev else ""))
     return "\n".join(lines)

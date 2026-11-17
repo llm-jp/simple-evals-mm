@@ -796,7 +796,8 @@ def cmd_site(args) -> int:
         return 0
 
     try:
-        data, report = leaderboard.build(args.spec, jobs_dir=args.jobs_dir, repo=args.repo, references=args.references)
+        data, report = leaderboard.build(args.spec, jobs_dir=args.jobs_dir, repo=args.repo, references=args.references,
+                                         comparability=not args.no_compare)
     except (leaderboard.SpecError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -809,7 +810,8 @@ def cmd_site(args) -> int:
     if not args.no_stamp:
         leaderboard.stamp_assets(os.path.dirname(os.path.abspath(args.out)))
     print(f"wrote {args.out}: {len(data['models'])} model row(s)")
-    return 1 if args.strict and report["refused"] else 0
+    different = [n for n, c in report.get("comparability", {}).items() if c["status"] == "different"]
+    return 1 if args.strict and (report["refused"] or different) else 0
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -973,7 +975,10 @@ def make_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--out", default="site/data.js")
     p.add_argument("--jobs-dir", help="directory job names resolve in (default: the spec's jobs_dir)")
     p.add_argument("--repo", help="git checkout whose remote branches must contain the job commits (default: this one)")
-    p.add_argument("--strict", action="store_true", help="exit 1 when any dataset is refused")
+    p.add_argument("--strict", action="store_true", help="exit 1 when any dataset is refused or a column's jobs are "
+                   "not comparable (sem jobs compare: different tasks, settings or prompts)")
+    p.add_argument("--no-compare", action="store_true", help="skip the per-column comparability check (sem jobs compare, "
+                   "cached under ~/.cache/simple-evals-mm/compare)")
     p.add_argument("--no-stamp", action="store_true", help="do not version the asset URLs of the pages next to --out")
     p.add_argument("--parity-md", help="also write the model-card comparison as Markdown (docs/parity.md)")
     p.add_argument("--references", help="model-card scores compared on each model's highest setting (default: "
