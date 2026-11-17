@@ -683,6 +683,12 @@ def cmd_models(args) -> int:
 def cmd_datasets(args) -> int:
     from simple_evals_mm import dataset_admin
 
+    if args.datasets_cmd == "diff":
+        from simple_evals_mm import compare
+
+        rep = compare.dataset_changes(args.a, args.b, repo=args.repo, names=args.dataset or None)
+        print(json.dumps(rep, indent=1) if args.json else compare.changes_markdown(rep))
+        return 0
     names = args.dataset or None
     if names:  # download / lock also take an entry key `name[key=value]` (a data arg such as mathvision's split)
         bad = sorted(n for n in names if dataset_mod.parse_lock_key(n)[0] not in dataset_mod.DATASETS
@@ -796,7 +802,8 @@ def cmd_site(args) -> int:
         return 0
 
     try:
-        data, report = leaderboard.build(args.spec, jobs_dir=args.jobs_dir, repo=args.repo, references=args.references)
+        data, report = leaderboard.build(args.spec, jobs_dir=args.jobs_dir, repo=args.repo, references=args.references,
+                                         comparability=not args.no_compare)
     except (leaderboard.SpecError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -809,7 +816,8 @@ def cmd_site(args) -> int:
     if not args.no_stamp:
         leaderboard.stamp_assets(os.path.dirname(os.path.abspath(args.out)))
     print(f"wrote {args.out}: {len(data['models'])} model row(s)")
-    return 1 if args.strict and report["refused"] else 0
+    different = [n for n, c in report.get("comparability", {}).items() if c["status"] == "different"]
+    return 1 if args.strict and (report["refused"] or different) else 0
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -920,6 +928,8 @@ def make_parser() -> argparse.ArgumentParser:
                                  "outdated, 2 if lookups failed")),
                       ("lint", ("check the tasks themselves: empty prompts / answers, option problems, the answer in "
                                 "the prompt, duplicate tasks, oversized images; exit 1 on an error")),
+                      ("diff", ("which datasets changed between two commits / tags and how (new, tasks, prompts, "
+                                "rewards, code only): the table for the release notes")),
                       ("analyze", ("questions worth a look from the results of several jobs: every job wrong, saturated, "
                                    "inverted (stronger jobs do worse), provider errors in 2+ jobs"))):
         p = ds.add_parser(name, help=hlp)
@@ -932,6 +942,10 @@ def make_parser() -> argparse.ArgumentParser:
         if name == "lock":
             p.add_argument("--check", action="store_true", help="compare with the committed lock; exit 1 on a difference")
             p.add_argument("--shared", action="store_true", help="with -d: also the _shared artifacts (nltk, evaluator image)")
+        if name == "diff":
+            p.add_argument("a", help="older commit or tag (e.g. v0.5.8)")
+            p.add_argument("b", nargs="?", default="HEAD", help="newer commit or tag (default HEAD)")
+            p.add_argument("--repo", help="git checkout holding both commits (default: this package's checkout)")
         if name == "analyze":
             p.add_argument("job", nargs="*", help="job names or directories (default: every job of the jobs dir)")
             p.add_argument("-o", "--jobs-dir")
@@ -973,7 +987,10 @@ def make_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--out", default="site/data.js")
     p.add_argument("--jobs-dir", help="directory job names resolve in (default: the spec's jobs_dir)")
     p.add_argument("--repo", help="git checkout whose remote branches must contain the job commits (default: this one)")
-    p.add_argument("--strict", action="store_true", help="exit 1 when any dataset is refused")
+    p.add_argument("--strict", action="store_true", help="exit 1 when any dataset is refused or a column's jobs are "
+                   "not comparable (sem jobs compare: different tasks, settings or prompts)")
+    p.add_argument("--no-compare", action="store_true", help="skip the per-column comparability check (sem jobs compare, "
+                   "cached under ~/.cache/simple-evals-mm/compare)")
     p.add_argument("--no-stamp", action="store_true", help="do not version the asset URLs of the pages next to --out")
     p.add_argument("--parity-md", help="also write the model-card comparison as Markdown (docs/parity.md)")
     p.add_argument("--references", help="model-card scores compared on each model's highest setting (default: "
