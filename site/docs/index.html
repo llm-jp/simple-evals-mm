@@ -50,24 +50,47 @@
     <div class="wrap docs-layout">
       <aside class="docs-nav" aria-label="Documentation">
         <label class="docs-ver">Version <select id="docs-ver"></select></label>
-        <nav id="docs-toc"></nav>
+        <details class="docs-menu" id="docs-menu" open>
+          <summary id="docs-menu-label">Contents</summary>
+          <nav id="docs-toc"></nav>
+        </details>
       </aside>
-      <article class="docs-body" id="docs-body"><p class="docs-status">Loading…</p></article>
+      <article class="docs-main">
+        <div class="docs-head">
+          <div class="docs-crumb" id="docs-crumb"></div>
+          <div class="docs-actions">
+            <button type="button" class="docs-btn" id="copy-page" title="Copy this page as Markdown (for an LLM or a note)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              <span>Copy page</span></button>
+            <a class="docs-btn" id="view-md" target="_blank" rel="noopener" title="The Markdown source on GitHub">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>
+              <span>View source</span></a>
+          </div>
+        </div>
+        <div class="docs-body" id="docs-body"><p class="docs-status">Loading…</p></div>
+        <nav class="docs-pager" id="docs-pager" aria-label="Previous and next page"></nav>
+        <div class="docs-foot" id="docs-foot"></div>
+      </article>
+      <aside class="docs-otp" aria-label="On this page">
+        <div class="docs-otp-title">On this page</div>
+        <nav id="docs-otp"></nav>
+      </aside>
     </div>
   </section>
 </main>
 <footer>
-  <div class="wrap">© 2026 <a href="https://llm-jp.nii.ac.jp/en/home-en/" target="_blank" rel="noopener">LLM-jp</a> · the source of these pages is <a href="https://github.com/llm-jp/simple-evals-mm/tree/main/docs" target="_blank" rel="noopener">docs/</a> in the repository</div>
+  <div class="wrap">© 2026 <a href="https://llm-jp.nii.ac.jp/en/home-en/" target="_blank" rel="noopener">LLM-jp</a> · these pages render <a href="https://github.com/llm-jp/simple-evals-mm/tree/main/docs" target="_blank" rel="noopener">docs/</a> of the repository at the selected version</div>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/highlight.min.js"></script>
 <script>
-  // The docs are the Markdown files of the repository (docs/, README, CONTRIBUTING) at a version (a tag, or main),
-  // fetched from GitHub and rendered here: nothing is built or copied, so the site never holds a stale copy.
+  // The docs are the Markdown files of the repository (docs/, README, CONTRIBUTING) at a version (a tag from
+  // v0.6.0, or main), fetched from GitHub and rendered here: nothing is built or copied, so there is no stale copy.
   const REPO = "llm-jp/simple-evals-mm";
   const RAW = (ref, path) => `https://raw.githubusercontent.com/${REPO}/${ref}/${path}`;
   const BLOB = (ref, path) => `https://github.com/${REPO}/blob/${ref}/${path}`;
-  const FIRST_VERSION = [0, 6, 0];  // the first release with these docs
+  const FIRST_VERSION = [0, 6, 0];  // the first release with these docs (keep DEFAULT_REF below at least this)
   const PAGES = [
     ["Start", [["docs/README.md", "Overview"], ["docs/getting-started.md", "Getting started"], ["docs/concepts.md", "Concepts"]]],
     ["Guides", [["docs/guides/api-models.md", "API models"], ["docs/guides/local-models.md", "Local models (vLLM / SGLang)"],
@@ -77,21 +100,24 @@
                    ["docs/troubleshooting.md", "Troubleshooting"], ["docs/versioning.md", "Versioning"],
                    ["docs/cost.md", "Time and cost"], ["docs/parity.md", "Parity with model cards"]]],
   ];
+  const FLAT = PAGES.flatMap(([group, items]) => items.map(([p, label]) => ({ p, label, group })));
+  const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+  const ICON_DONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   // GitHub's heading anchors: lower case, punctuation dropped, spaces to hyphens
-  const slug = s => s.toLowerCase().trim().replace(/<[^>]+>/g, "").replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
+  const slug = s => s.toLowerCase().trim().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
   const params = () => new URLSearchParams(location.search);
-  let DEFAULT_REF = "main";  // the newest release tag with these docs once there is one (versions())
+  // the newest release tag (versions(): the GitHub tag list); FIRST_VERSION when the list cannot be read (rate limit)
+  let DEFAULT_REF = "v0.6.0";
   const num = t => (String(t).match(/^v(\d+)\.(\d+)\.(\d+)$/) || []).slice(1).map(Number);
   const newer = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
-  // only main and the release tags from FIRST_VERSION have these docs: anything else (an older tag, a branch) is
+  // only main and the release tags from FIRST_VERSION have these docs: another ref (an older tag, a branch) is
   // replaced by the default and said so
   const allowed = ref => ref === "main" || (num(ref).length === 3 && newer(num(ref), FIRST_VERSION) >= 0);
   const state = () => {
     const asked = params().get("v");
     return { ref: asked && allowed(asked) ? asked : DEFAULT_REF, asked, page: params().get("p") || "docs/README.md" };
   };
-
   function resolve(base, rel) {  // a repository path relative to the page's directory
     const parts = base.split("/").slice(0, -1);
     for (const seg of rel.split("/")) {
@@ -101,10 +127,21 @@
   }
   const href = (ref, page) => `?${new URLSearchParams({ ...(ref !== DEFAULT_REF ? { v: ref } : {}), p: page })}`;
 
-  function toc(ref, page) {
+  async function copy(text, btn, label) {
+    try { await navigator.clipboard.writeText(text); } catch (e) { return; }
+    const old = btn.innerHTML;
+    btn.innerHTML = ICON_DONE + (label ? `<span>${label}</span>` : "");
+    btn.classList.add("done");
+    setTimeout(() => { btn.innerHTML = old; btn.classList.remove("done"); }, 1400);
+  }
+
+  function sidebar(ref, page) {
     document.getElementById("docs-toc").innerHTML = PAGES.map(([group, items]) =>
       `<div class="docs-group">${esc(group)}</div>` + items.map(([p, label]) =>
         `<a href="${href(ref, p)}"${p === page ? ' aria-current="page"' : ""}>${esc(label)}</a>`).join("")).join("");
+    const cur = FLAT.find(x => x.p === page);
+    document.getElementById("docs-menu-label").textContent = cur ? `${cur.group} · ${cur.label}` : "Contents";
+    if (matchMedia("(max-width: 760px)").matches) document.getElementById("docs-menu").open = false;
   }
 
   async function versions() {
@@ -113,9 +150,10 @@
     try {
       const r = await fetch(`https://api.github.com/repos/${REPO}/tags?per_page=100`);
       if (r.ok) tags = (await r.json()).map(t => t.name);
-    } catch (e) { /* offline or rate-limited: main only */ }
-    tags = tags.filter(t => num(t).length === 3 && newer(num(t), FIRST_VERSION) >= 0).sort((a, b) => newer(num(b), num(a)));
-    if (tags.length) DEFAULT_REF = tags[0];
+    } catch (e) { /* offline or rate-limited: main and the asked tag only */ }
+    tags = tags.filter(t => allowed(t) && t !== "main").sort((a, b) => newer(num(b), num(a)));
+    if (!tags.length) tags = [DEFAULT_REF];
+    DEFAULT_REF = tags[0];
     const ref = state().ref;
     const opts = [...tags, "main"];
     if (!opts.includes(ref)) opts.unshift(ref);  // an allowed tag the tag list did not return (rate limit)
@@ -123,9 +161,88 @@
     sel.onchange = () => { location.search = href(sel.value, state().page).slice(1); };
   }
 
+  function decorate(body, ref, page) {
+    // headings: ids as on GitHub (deduplicated), a hover link
+    const seen = {};
+    for (const h of body.querySelectorAll("h1, h2, h3, h4")) {
+      let id = slug(h.textContent);
+      if (seen[id] !== undefined) id = `${id}-${++seen[id]}`; else seen[id] = 0;
+      h.id = id;
+      if (h.tagName !== "H1") h.insertAdjacentHTML("beforeend", ` <a class="docs-anchor" href="#${id}" aria-label="Link to this section">#</a>`);
+    }
+    // repository links: Markdown pages stay here, other files open on GitHub
+    for (const a of body.querySelectorAll("a[href]")) {
+      const raw = a.getAttribute("href");
+      if (a.classList.contains("docs-anchor") || raw.startsWith("#")) continue;
+      if (/^(https?:|mailto:)/.test(raw)) { a.target = "_blank"; a.rel = "noopener"; continue; }
+      const [path, anchor] = raw.split("#");
+      const target = resolve(page, path);
+      a.href = target.endsWith(".md") ? href(ref, target) + (anchor ? `#${anchor}` : "") : BLOB(ref, target);
+    }
+    for (const img of body.querySelectorAll("img[src]")) {
+      const src = img.getAttribute("src");
+      if (!/^(https?:|data:)/.test(src)) img.src = RAW(ref, resolve(page, src));
+    }
+    // code: highlighting and a copy button (the text as written: comments are harmless in a shell)
+    for (const code of body.querySelectorAll("pre > code")) {
+      const lang = (code.className.match(/language-(\w+)/) || [])[1];
+      if (lang === "mermaid") continue;
+      const text = code.textContent;
+      if (window.hljs) {
+        if (lang && hljs.getLanguage(lang)) hljs.highlightElement(code);
+        else code.classList.add("hljs");
+      }
+      const pre = code.parentElement;
+      const wrap = document.createElement("div");
+      wrap.className = "docs-code";
+      pre.replaceWith(wrap);
+      wrap.appendChild(pre);
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "docs-copy"; btn.title = "Copy"; btn.setAttribute("aria-label", "Copy code");
+      btn.innerHTML = ICON_COPY;
+      btn.onclick = () => copy(text.replace(/\n$/, ""), btn);
+      wrap.appendChild(btn);
+    }
+    for (const t of body.querySelectorAll("table")) {  // wide tables scroll inside their box
+      const w = document.createElement("div");
+      w.className = "docs-table";
+      t.replaceWith(w);
+      w.appendChild(t);
+    }
+  }
+
+  function onThisPage(body) {
+    const hs = [...body.querySelectorAll("h2, h3")];
+    const otp = document.getElementById("docs-otp");
+    otp.parentElement.hidden = hs.length < 2;
+    otp.innerHTML = hs.map(h => `<a href="#${h.id}" class="lvl-${h.tagName[1]}">${esc(h.textContent.replace(/\s*#$/, ""))}</a>`).join("");
+    const links = [...otp.querySelectorAll("a")];
+    const spy = () => {  // the last heading above the top third of the window
+      let cur = 0;
+      hs.forEach((h, i) => { if (h.getBoundingClientRect().top < innerHeight / 3) cur = i; });
+      links.forEach((a, i) => a.classList.toggle("active", i === cur));
+    };
+    window.onscroll = spy;
+    spy();
+  }
+
+  function pager(ref, page) {
+    const i = FLAT.findIndex(x => x.p === page);
+    const prev = i > 0 ? FLAT[i - 1] : null, next = i >= 0 && i < FLAT.length - 1 ? FLAT[i + 1] : null;
+    const card = (x, dir) => x ? `<a class="docs-pg ${dir}" href="${href(ref, x.p)}"><span>${dir === "prev" ? "Previous" : "Next"}</span><b>${esc(x.label)}</b></a>` : "<span></span>";
+    document.getElementById("docs-pager").innerHTML = card(prev, "prev") + card(next, "next");
+  }
+
   async function render() {
     const { ref, asked, page } = state();
-    toc(ref, page);
+    sidebar(ref, page);
+    const cur = FLAT.find(x => x.p === page);
+    document.getElementById("docs-crumb").textContent = cur ? cur.group : "";
+    document.getElementById("view-md").href = BLOB(ref, page);
+    document.getElementById("docs-foot").innerHTML =
+      `<a href="https://github.com/${REPO}/edit/main/${esc(page)}" target="_blank" rel="noopener">Suggest an edit</a>` +
+      `<a href="https://github.com/${REPO}/issues/new?title=${encodeURIComponent("Docs: " + page)}" target="_blank" rel="noopener">Raise an issue</a>`;
+    pager(ref, page);
     const body = document.getElementById("docs-body");
     const note = asked && asked !== ref
       ? `<p class="docs-status">Docs exist from v${FIRST_VERSION.join(".")} on; “${esc(asked)}” is shown as ${esc(ref)}.</p>` : "";
@@ -135,22 +252,12 @@
       if (!r.ok) throw new Error(`${r.status}`);
       md = await r.text();
     } catch (e) {
-      body.innerHTML = note + `<p class="docs-status">${esc(page)} is not in ${esc(ref)} (${esc(e.message)}). <a href="${href("main", "docs/README.md")}">Open the latest docs</a>.</p>`;
+      body.innerHTML = note + `<p class="docs-status">${esc(page)} is not in ${esc(ref)} (${esc(e.message)}). <a href="${href(DEFAULT_REF, "docs/README.md")}">Open the docs of ${esc(DEFAULT_REF)}</a>.</p>`;
       return;
     }
+    document.getElementById("copy-page").onclick = e => copy(md, e.currentTarget, "Copied");
     body.innerHTML = note + marked.parse(md, { gfm: true });
-    for (const h of body.querySelectorAll("h1, h2, h3, h4")) h.id = slug(h.textContent);
-    for (const a of body.querySelectorAll("a[href]")) {  // repository links: Markdown pages here, other files on GitHub
-      const raw = a.getAttribute("href");
-      if (/^(https?:|mailto:|#)/.test(raw)) { if (/^https?:/.test(raw)) { a.target = "_blank"; a.rel = "noopener"; } continue; }
-      const [path, anchor] = raw.split("#");
-      const target = resolve(page, path);
-      a.href = target.endsWith(".md") ? href(ref, target) + (anchor ? `#${anchor}` : "") : BLOB(ref, target);
-    }
-    for (const img of body.querySelectorAll("img[src]")) {
-      const src = img.getAttribute("src");
-      if (!/^(https?:|data:)/.test(src)) img.src = RAW(ref, resolve(page, src));
-    }
+    decorate(body, ref, page);
     const diagrams = body.querySelectorAll("code.language-mermaid");
     if (diagrams.length) {
       const { default: mermaid } = await import("https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs");
@@ -165,6 +272,7 @@
       }
       await mermaid.run({ querySelector: ".docs-body .mermaid" });
     }
+    onThisPage(body);
     const title = body.querySelector("h1");
     document.title = `${title ? title.textContent : "Docs"} · simple-evals-mm`;
     if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
