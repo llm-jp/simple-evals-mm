@@ -56,5 +56,5 @@ and reuses the trials that are still valid.
 2. `bash scripts/release_check.sh` (every dataset end to end with the scripted provider, `datasets lock --check`, the
    leaderboard datasets' live smoke tests).
 3. `uv run --frozen sem datasets diff <previous tag> HEAD` for the release notes; decide the bump with the table
-   above.
+   above. In `CHANGELOG.md`, turn "Unreleased" into the version with its date and the dataset table.
 4. Tag on `main` (`git tag -a vX.Y.Z -m "..."`, push), then a GitHub release with the notes and the dataset table.

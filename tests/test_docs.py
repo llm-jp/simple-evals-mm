@@ -11,7 +11,7 @@ from simple_evals_mm import cli
 from simple_evals_mm import dataset as dataset_mod
 
 ROOT = Path(__file__).resolve().parent.parent
-DOCS = [ROOT / "README.md", ROOT / "CONTRIBUTING.md",
+DOCS = [ROOT / "README.md", ROOT / "CONTRIBUTING.md", ROOT / "CHANGELOG.md",
         *sorted((ROOT / "docs").rglob("*.md"))]
 
 
