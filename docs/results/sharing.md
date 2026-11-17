@@ -20,7 +20,7 @@ uv run --frozen sem jobs compare jobs/ours__high jobs/theirs__high
 ```
 
 The table shows each dataset's score per job and whether the jobs can be compared on it, even when they were made
-with different versions ([Comparing results](../concepts.md#comparing-results)). What to do with each mark:
+with different versions ([Compare results](compare.md)). What to do with each mark:
 
 - **✓**: compare.
 - **↻** (the scoring differs: another judge, or a verifier fix in between): regrade the older job at the newer

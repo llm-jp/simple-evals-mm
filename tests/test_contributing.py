@@ -1,4 +1,4 @@
-"""The dataset template of CONTRIBUTING.md runs: it loads a tiny in-memory source, renders its prompt and verifies."""
+"""The dataset template of docs/datasets/adding-a-dataset.md runs: it loads a tiny in-memory source, renders its prompt and verifies."""
 
 import re
 import types
@@ -11,13 +11,13 @@ from simple_evals_mm import dataset as dataset_mod
 from simple_evals_mm import sources
 from tests.fakes import FakeSampler, trial
 
-DOC = Path(__file__).parent.parent / "CONTRIBUTING.md"
+DOC = Path(__file__).parent.parent / "docs" / "datasets" / "adding-a-dataset.md"
 
 
 def _template() -> types.ModuleType:
     src = next(b for b in re.findall(r"```python\n(.*?)```", DOC.read_text(), re.DOTALL) if "class MyTask(Dataset)" in b)
     mod = types.ModuleType("mytask")
-    exec(compile(src, "CONTRIBUTING.md", "exec"), mod.__dict__)  # noqa: S102 - our own documentation
+    exec(compile(src, "adding-a-dataset.md", "exec"), mod.__dict__)  # noqa: S102 - our own documentation
     return mod
 
 
