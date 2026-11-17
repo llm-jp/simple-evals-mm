@@ -83,7 +83,7 @@ Re-running with the same `--job-name` resumes the job; `sem job resume -p jobs/N
 
 - [Getting started](docs/getting-started.md) · [Concepts](docs/concepts.md) (jobs, failures, reproducibility, [comparing results](docs/concepts.md#comparing-results))
 - Guides: [API models](docs/guides/api-models.md) · [Local models (vLLM / SGLang)](docs/guides/local-models.md) · [Sharing and merging results](docs/guides/sharing.md) · [Analysis](docs/guides/analysis.md)
-- [Versioning](docs/versioning.md) · [Commands](docs/cli.md) · [Dataset setup](docs/task_setup.md)
+- [Versioning](docs/versioning.md) · [Commands](docs/cli.md) · [Configuration](docs/configuration.md) · [Dataset setup](docs/task_setup.md) · [Troubleshooting](docs/troubleshooting.md)
 
 ### Job layout
 
@@ -123,6 +123,13 @@ The site's Explore pages publish model answers and reasoning for the public benc
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a dataset and a model preset.
+
+## Acknowledgements
+
+The design follows [Harbor](https://harborframework.com/) (job / dataset / task / trial / verifier terms, the
+[ATIF](https://docs.harborframework.com/agents/atif) trajectory format, error classification, regrading; `sem jobs export`
+writes Harbor's job layout for its viewer). The option-letter prompts and MCQ answer extraction come from
+[openai/simple-evals](https://github.com/openai/simple-evals).
 
 ## License
 

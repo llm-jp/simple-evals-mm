@@ -20,7 +20,7 @@ def _commands(path: Path) -> list[str]:
     out = []
     for block in re.findall(r"```(?:bash|sh)\n(.*?)```", path.read_text(encoding="utf-8"), re.DOTALL):
         for line in block.replace("\\\n", " ").splitlines():
-            line = line.split(" #", 1)[0].strip()
+            line = re.split(r" #| [12]?> ", line, maxsplit=1)[0].strip()  # comments, shell redirects
             m = re.match(r"^(?:uv run --frozen(?: --extra [\w-]+)? )?sem (.*)$", line)
             if m and " | " not in m.group(1):  # `datasets list | download | check` lists alternatives
                 out.append(m.group(1))
