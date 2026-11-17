@@ -144,3 +144,34 @@ def test_is_ancestor_and_diff_files(repo):
     with pytest.raises(ValueError):
         provenance.is_ancestor("0" * 40, c2, repo=str(repo))
     assert provenance.diff_files("diff --git a/src/x.py b/src/x.py\n--- a/src/x.py\n") == {"src/x.py"}
+
+
+def test_reports_are_neutral_and_only_the_cli_imports_them():
+    # a site / report change (leaderboard.py, results.py, ...) cannot change a trial: it is NEUTRAL, so a resume or
+    # `sem run --from` across it is not refused as an unknown change. That holds only while no trial-side module
+    # imports a report: checked here over the package sources.
+    import ast
+    import os
+    from pathlib import Path
+
+    pkg = os.path.dirname(provenance.__file__)
+    assert set(provenance.REPORTS) <= set(provenance.NEUTRAL)
+    for name in provenance.REPORTS:
+        assert os.path.isfile(os.path.join(pkg, f"{name}.py")), name
+    allowed = {"cli", "parity", *provenance.REPORTS}  # the CLI and the reports themselves
+    for root, _, files in os.walk(pkg):
+        for f in files:
+            if not f.endswith(".py"):
+                continue
+            mod = os.path.relpath(os.path.join(root, f), pkg)[:-3].replace(os.sep, ".")
+            if mod in allowed:
+                continue
+            tree = ast.parse(Path(root, f).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                names = []
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module] + [f"{node.module}.{a.name}" for a in node.names]
+                elif isinstance(node, ast.Import):
+                    names = [a.name for a in node.names]
+                for n in names:
+                    assert n.removeprefix("simple_evals_mm.") not in provenance.REPORTS, f"{mod} imports {n}"

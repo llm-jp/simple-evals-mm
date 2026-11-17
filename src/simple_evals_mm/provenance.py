@@ -18,7 +18,7 @@ compare jobs across commits, `changed_datasets(commit_a, commit_b, datasets)` so
 
 NEUTRAL files cannot change a trial: the job store, the CLI (its config is compared on resume), the start checks,
 derive / provenance / runner orchestration (the trial itself is built in trial.py), datalock / dataset_admin (the lock
-entries are compared instead), parity, `sem serve` and its manifest / stack / patches (the server manifest digest is
+entries are compared instead), parity and the other reports (REPORTS), `sem serve` and its manifest / stack / patches (the server manifest digest is
 compared), and the model presets (a preset change matters only when this model's resolved settings change, which the
 settings comparison and the generation_lock catch). Files outside the package (tests, docs, scripts, site, pbs) are
 never compared; uv.lock is covered by the lock check.
@@ -53,8 +53,11 @@ FAKE_SAMPLER = ("samplers.fake",)
 # the OpenAI-compatible HF server (serving/hf_server.py): a chat job's served engine unless a sglang / vLLM manifest
 # pins another engine
 HF_SERVER = ("serving.hf_server", "serving.hf_backends")
+# the reports (site build, results / analysis pages, capability index, data lint, publish, watch, estimate, Harbor
+# export): only the CLI imports them (tests/test_provenance.py checks it), they read finished jobs
+REPORTS = ("leaderboard", "results", "analysis", "capability", "quality", "publish", "watch", "estimate", "harbor_export")
 NEUTRAL = ("store", "cli", "checks", "derive", "provenance", "runner", "datalock", "dataset_admin", "parity",
-           "serving", "serving.serve", "serving.manifest", "serving.stack", "samplers.presets")
+           "serving", "serving.serve", "serving.manifest", "serving.stack", "samplers.presets", *REPORTS)
 NEUTRAL_PREFIXES = ("serving/patches/",)
 NEUTRAL_FILES = ("py.typed",)
 
