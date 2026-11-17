@@ -64,3 +64,18 @@ def test_relative_links_exist(doc):
             continue
         path = (doc.parent / target.split("#", 1)[0]).resolve()
         assert path.exists(), f"{doc.relative_to(ROOT)}: link to {target} (no such file)"
+
+
+def test_the_citation_is_the_same_everywhere():
+    """CITATION.cff's preferred citation (GitHub's "Cite this repository"), the README's BibTeX and the site's."""
+    import yaml
+
+    cff = yaml.safe_load((ROOT / "CITATION.cff").read_text(encoding="utf-8"))
+    pref = cff["preferred-citation"]
+    assert cff["title"] == pref["title"] and cff["authors"] == pref["authors"]
+    bib = re.search(r"```bibtex\n(@software\{simple_evals_mm,.*?)\n```", (ROOT / "README.md").read_text(encoding="utf-8"), re.DOTALL)
+    assert bib, "README: the @software{simple_evals_mm, ...} entry"
+    entry = bib.group(1)
+    assert f"title = {{{{{pref['title']}}}}}" in entry and f"{{{{{pref['authors'][0]['name']}}}}}" in entry
+    assert f"url = {{{pref['url']}}}" in entry and f"year = {{{pref['year']}}}" in entry
+    assert entry in (ROOT / "site" / "index.html").read_text(encoding="utf-8")

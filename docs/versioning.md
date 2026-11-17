@@ -57,4 +57,5 @@ and reuses the trials that are still valid.
    leaderboard datasets' live smoke tests).
 3. `uv run --frozen sem datasets diff <previous tag> HEAD` for the release notes; decide the bump with the table
    above.
-4. Tag on `main` (`git tag -a vX.Y.Z -m "..."`, push), then a GitHub release with the notes and the dataset table.
+4. Update `version` and `date-released` in `CITATION.cff` (the preferred citation stays as it is).
+5. Tag on `main` (`git tag -a vX.Y.Z -m "..."`, push), then a GitHub release with the notes and the dataset table.
