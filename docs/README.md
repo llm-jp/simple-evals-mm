@@ -19,6 +19,7 @@ another version are in its tag on GitHub (`https://github.com/llm-jp/simple-eval
   - [Overview](datasets/overview.md)
   - [Setup](task_setup.md)
   - [Data locks and snapshots](datasets/data-locks.md)
+  - [Protocol notes](datasets/protocol-notes.md)
   - [Adding a dataset](datasets/adding-a-dataset.md)
 - **Models**
   - [Overview](models/overview.md)
@@ -42,13 +43,16 @@ another version are in its tag on GitHub (`https://github.com/llm-jp/simple-eval
   - [Versioning and releases](versioning.md)
 - **Reference**
   - [Commands](cli.md)
+  - [How reproducibility works](reference/reproducibility.md)
+  - [Inference settings](reference/inference-settings.md)
+  - [Serving internals](reference/serving.md)
   - [Troubleshooting](troubleshooting.md)
   - [Time and cost](cost.md)
   - [Parity table](parity.md)
 
 What changed: the [leaderboard changelog](https://llm-jp.github.io/simple-evals-mm/changelog.html) (scores, models,
 benchmarks) and the [GitHub releases](https://github.com/llm-jp/simple-evals-mm/releases) (the code, with the datasets
-each release changes). The reasoning behind the design: [design/v0.5.md](design/v0.5.md).
+each release changes).
 
 ## Acknowledgements
 

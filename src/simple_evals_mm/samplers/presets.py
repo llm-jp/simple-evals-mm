@@ -1,4 +1,4 @@
-"""Model presets: DATA, not classes (docs/design/v0.5.md). One entry per model (exact slug), built from a named family:
+"""Model presets: DATA, not classes (docs/reference/inference-settings.md). One entry per model (exact slug), built from a named family:
 
   max_output_tokens   NOT a preset field. It is the maximum number of generated tokens INCLUDING the reasoning /
                   thinking tokens, for every backend; the request carries it in the API's own field: chat `max_tokens` /

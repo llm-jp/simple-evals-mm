@@ -40,6 +40,9 @@ verifies the files' hashes. Generation and verification are separate: `--generat
 No environment variable changes prompts, sampling or rewards: everything that does is a CLI option or job config
 value, recorded in the job.
 
+The precise rules (every field a job records, what a resume compares, how jobs across commits relate, the
+failure causes): [How reproducibility works](reference/reproducibility.md).
+
 ## Where to next
 
 | Topic | Page |

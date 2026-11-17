@@ -1,7 +1,7 @@
 # Contributing
 
-Read [docs/design/v0.5.md](docs/design/v0.5.md) first: it explains what a job records and why. The user docs are in
-[docs/](docs/README.md).
+Read [Concepts](docs/concepts.md) and [How reproducibility works](docs/reference/reproducibility.md) first: they
+explain what a job records and why. The user docs are in [docs/](docs/README.md).
 
 ## Development setup
 
@@ -24,6 +24,46 @@ Rules that keep jobs reproducible (they are checked by the tests): everything th
 a job config value, a `--model-arg` or a `--dataset-arg`, never an environment variable; a dataset pins its revision
 and its data (`datasets.lock`); a change to a prompt, a request body or a reward shows up as a diff of
 `tests/golden/`, reviewed before `--update-golden`. The full list is in `CLAUDE.md`.
+
+## Tests
+
+One test file per module, offline with shared fakes (`tests/fakes.py`: a scripted sampler, a toy dataset, the
+`job_env` fixture that runs `sem` on a temporary jobs dir):
+
+| file | covers |
+|---|---|
+| test_atif.py | trajectory round trip, validator |
+| test_errors.py | error-policy table and classification |
+| test_job.py | run, resume after interruption, refusals, regrade, `job check`, job lock, preflight, retry config, trial locks, dry run; resume across commits in a temporary git repository (NEUTRAL commit kept in place with sessions / generation_commit, verification-only change regrades, generation / sampler / unknown change refused, another format's sampler allowed, non-ancestor refused, backstop) |
+| test_provenance.py | changed_datasets: import closures, package data, lazy imports, NEUTRAL / unknown files, the job's sampler modules, datasets.lock entries by content, is_ancestor |
+| test_checks.py | clean tree, uv.lock check |
+| test_samplers.py | slugs, key / base-url resolution, presets, provider pin |
+| test_verifiers.py | verifiers, MCQ letter extraction |
+| test_datasets_mcq.py / _judge.py / _rules.py | per dataset family on tiny in-memory sources: prompts, ids, judge prompts and rewards against golden snapshots (tests/golden/), the scoring functions, the sandbox |
+| test_dataset_registry.py | the contract every registered dataset meets (offline); `-m network`: each dataset's real data loads and one task verifies |
+| test_datasets.py | per-dataset behaviour: prompts, multi-turn, task ids |
+| test_serve.py | `sem serve`: RECORD check of a fake engine venv, edited files refused, patches (in place and overlay), chat template always passed, probe, fatal probe change after a restart, client verification, manifest digest in lock / resume |
+| test_hf_server.py | hf_server: request fields applied / unknown refused, GenerationConfig, penalties, seed, identity endpoints (fake backend) |
+| test_derive.py | `--from`: reuse / regrade (judge changed, verifier file changed across commits) / rerun (settings, task content, generation files, this job's sampler, unknown files; another format's sampler and NEUTRAL files reuse); mixed-commit source trials classified per generation_commit; generation_commit of older trials |
+| test_dataset_refs.py | `-d name@ref`: accepted / refused refs, lock and config, resume |
+| test_fake_provider.py | the scripted test-only provider `fake/` (samplers/fake.py): absent unless enabled, deterministic answers, judge formats, a job through the real runner / verifiers / `--from` with cut-off, refused, unicode and retried trials |
+| test_real_trials.py | ~20 trimmed real trial lines + their verifier rows (tests/golden/real_trials/, from the Qwen3.5-9B job): read back line by line (U+2028), `derive.plan` (reuse / regrade / rerun), re-verification with a judge replaying the stored replies reproduces the stored rewards, nothing secret or machine-local |
+| test_parity.py | `sem job parity`: model matching, setting mismatch, tolerance from n (cap), variance flag, non-binary fallback, n/a, --strict |
+| test_datalock.py | datasets.lock: source files on download / use, the task digest after load (refusal, `--allow-data-mismatch` record, refs), `sem datasets lock [--check]`, the upstream check, vendored nltk data (fake dir), the contract that the committed lock covers every registered dataset |
+| test_leaderboard.py | `sem site build` on fake jobs: metrics and provenance of a clean job, each refusal reason, a row combining two jobs, the keys site/index.html reads |
+
+Golden snapshots (tests/golden/*.json) are compact: long judge templates are stored once by sha256 and the per-task
+values filled in. `pytest --update-golden` rewrites the snapshots a run
+touches after an intended change; the diff of tests/golden/ is the review. Live tests (`-m network`, `-m api`) stay
+opt-in.
+
+The fakes cannot find bugs that only real data shows (a JAMMEval class attribute `subset` once shadowed
+`Dataset.subset()` so every real job crashed at load; trial files read with `str.splitlines()` broke on U+2028 in model
+output). Two checks cover that: `tests/test_real_trials.py` in CI (real trial lines), and before a release
+`scripts/release_check.sh` ([Before a release](#before-a-release)): every registered dataset with the scripted provider
+`fake/scripted` + `fake/judge` (registered only with `SEM_FAKE_PROVIDER=1`, so never in a real job) through run, a
+forced interruption, resume, show, regrade, check and `--from` (0 RERUN), then `sem datasets lock --check` and the
+network tests of the leaderboard datasets.
 
 ## Before opening a pull request
 

@@ -1,7 +1,7 @@
 """Model slugs, presets and key / base-url resolution.
 
 A model is named `PROVIDER/MODEL` (`openrouter/qwen/qwen3.8-27b`, `openai/gpt-5.1-2025-11-13`,
-`sglang/Qwen/Qwen3.8-27B`). Resolution (docs/design/v0.5.md):
+`sglang/Qwen/Qwen3.8-27B`). Resolution (docs/reference/inference-settings.md):
 
   API key   --api-key-name VAR  >  the preset's variable  >  the provider's (<PROVIDER>_API_KEY; Azure
             AZURE_OPENAI_KEY, the GPT-5 deployments AZURE_OPENAI_KEY_GPT5)   (served engines: optional)

@@ -1,4 +1,4 @@
-"""Start checks of `sem run` (docs/design/v0.5.md "Reproducibility"):
+"""Start checks of `sem run` (docs/reference/reproducibility.md):
 
   * clean tree: `git status --porcelain --untracked-files=all` of the package's repository is empty and no ignored
     (hence invisible) `.py` file sits under the package; `--allow-dirty` records the diff and marks the job dirty;

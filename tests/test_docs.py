@@ -12,7 +12,7 @@ from simple_evals_mm import dataset as dataset_mod
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = [ROOT / "README.md", ROOT / "CONTRIBUTING.md",
-        *sorted(p for p in (ROOT / "docs").rglob("*.md") if "design" not in p.parts)]
+        *sorted((ROOT / "docs").rglob("*.md"))]
 
 
 def _commands(path: Path) -> list[str]:

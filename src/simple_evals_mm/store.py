@@ -1,4 +1,4 @@
-"""Job files (docs/design/v0.5.md "Files"). Only `sem run` / `sem job resume` (trials) and
+"""Job files (docs/reference/reproducibility.md "Job files"). Only `sem run` / `sem job resume` (trials) and
 `sem job regrade` (verifier results) write here.
 
     <jobs_dir>/<job>/config.json                          requested JobConfig (CLI + YAML, resolved defaults)
