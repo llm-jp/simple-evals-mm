@@ -64,6 +64,12 @@
   <div class="wrap hero">
     <h1>simple-evals-mm</h1>
     <p class="tagline">A reproducible, reliable evaluation framework for English and Japanese multimodal tasks.</p>
+    <a class="hero-new" id="hero-new" href="changelog.html" hidden></a>
+    <div class="hero-cta">
+      <a class="cta primary" href="docs/">Docs</a>
+      <a class="cta" href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> GitHub</a>
+      <a class="cta" href="explore/">Explore</a>
+    </div>
   </div>
 
   <section id="leaderboard">
@@ -123,6 +129,7 @@
         </div>
       </div>
 
+      <div class="controls table-top"><div class="pick-wrap" id="table-pick"></div></div>
       <div class="table-wrap">
         <table class="lb" id="lb">
           <thead><tr></tr></thead>
@@ -240,21 +247,30 @@
       }).join("");
   pick.innerHTML = OPTS;
   pick.addEventListener("change", () => { state.subject = pick.value; state.sortKey = null; render(); });
-  // shown as a button with a list under it (the native list differs by browser); the hidden <select> keeps the value
-  const dd = document.createElement("div"); dd.className = "dd";
-  dd.innerHTML = `<button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${esc(pick.getAttribute("aria-label") || "")}"><span class="dd-val"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="dd-pop" role="listbox"></div>`;
-  pick.hidden = true; pick.after(dd);
-  const ddBtn = dd.querySelector(".dd-btn"), ddPop = dd.querySelector(".dd-pop");
-  ddPop.innerHTML = [...pick.children].map(n => n.tagName === "OPTGROUP"
-    ? `<div class="dd-grp">${esc(n.label)}</div>` + [...n.children].map(o => `<button type="button" class="dd-opt" role="option" data-v="${esc(o.value)}">${esc(o.textContent)}</button>`).join("")
-    : `<button type="button" class="dd-opt" role="option" data-v="${esc(n.value)}">${esc(n.textContent)}</button>`).join("");
-  const ddClose = () => { dd.classList.remove("open"); ddBtn.setAttribute("aria-expanded", "false"); };
-  const ddSync = () => { const o = pick.options[pick.selectedIndex]; dd.querySelector(".dd-val").textContent = o ? o.textContent : "";
-    ddPop.querySelectorAll(".dd-opt").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === pick.value))); };
-  ddBtn.addEventListener("click", e => { e.stopPropagation(); const open = !dd.classList.contains("open"); dd.classList.toggle("open", open);
-    ddBtn.setAttribute("aria-expanded", String(open)); if (open) { const cur = ddPop.querySelector('[aria-selected="true"]'); if (cur) cur.scrollIntoView({ block: "nearest" }); } });
-  ddPop.addEventListener("click", e => { const b = e.target.closest(".dd-opt"); if (!b) return; pick.value = b.dataset.v; ddSync(); ddClose(); pick.dispatchEvent(new Event("change")); });
-  document.addEventListener("click", e => { if (!dd.contains(e.target)) ddClose(); });
+  // shown as a button with a list under it (the native list differs by browser); the hidden <select> keeps the value.
+  // Two instances, above the chart and above the table: both set the one score, both show it
+  const dds = [];
+  function mountDD(place) {
+    const dd = document.createElement("div"); dd.className = "dd";
+    dd.innerHTML = `<button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${esc(pick.getAttribute("aria-label") || "")}"><span class="dd-val"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="dd-pop" role="listbox"></div>`;
+    place(dd);
+    const ddBtn = dd.querySelector(".dd-btn"), ddPop = dd.querySelector(".dd-pop");
+    ddPop.innerHTML = [...pick.children].map(n => n.tagName === "OPTGROUP"
+      ? `<div class="dd-grp">${esc(n.label)}</div>` + [...n.children].map(o => `<button type="button" class="dd-opt" role="option" data-v="${esc(o.value)}">${esc(o.textContent)}</button>`).join("")
+      : `<button type="button" class="dd-opt" role="option" data-v="${esc(n.value)}">${esc(n.textContent)}</button>`).join("");
+    ddBtn.addEventListener("click", e => { e.stopPropagation(); const open = !dd.classList.contains("open"); ddClose(); dd.classList.toggle("open", open);
+      ddBtn.setAttribute("aria-expanded", String(open)); if (open) { const cur = ddPop.querySelector('[aria-selected="true"]'); if (cur) cur.scrollIntoView({ block: "nearest" }); } });
+    ddPop.addEventListener("click", e => { const b = e.target.closest(".dd-opt"); if (!b) return; pick.value = b.dataset.v; ddSync(); ddClose(); pick.dispatchEvent(new Event("change")); });
+    dds.push(dd);
+  }
+  const ddClose = () => dds.forEach(dd => { dd.classList.remove("open"); dd.querySelector(".dd-btn").setAttribute("aria-expanded", "false"); });
+  const ddSync = () => { const o = pick.options[pick.selectedIndex];
+    dds.forEach(dd => { dd.querySelector(".dd-val").textContent = o ? o.textContent : "";
+      dd.querySelectorAll(".dd-opt").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === pick.value))); }); };
+  pick.hidden = true;
+  mountDD(dd => pick.after(dd));
+  mountDD(dd => document.getElementById("table-pick").appendChild(dd));
+  document.addEventListener("click", e => { if (!dds.some(dd => dd.contains(e.target))) ddClose(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") ddClose(); });
   function syncSegs() {
     document.querySelectorAll(".seg[data-key]").forEach(seg => seg.querySelectorAll("button").forEach(b =>
@@ -872,7 +888,16 @@
 })();
 </script>
 <script src="theme.js"></script>
+<script src="changelog.js"></script>
 <script>
+  {  // the hero's NEW badge: the latest published changelog entry
+    const e = (typeof CHANGELOG !== "undefined" ? CHANGELOG : []).find(x => !x.draft), a = document.getElementById("hero-new");
+    if (e && a) {
+      const when = new Date(e.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      a.innerHTML = `<b>NEW</b> · ${e.version ? "v" + e.version : when} <span>Read what changed →</span>`;
+      a.href = `changelog.html#${e.date}`; a.hidden = false;
+    }
+  }
   document.getElementById("bib-copy").addEventListener("click", async e => {
     const btn = e.currentTarget, label = btn.querySelector("span");
     try { await navigator.clipboard.writeText(document.getElementById("bib").textContent); } catch (err) { return; }

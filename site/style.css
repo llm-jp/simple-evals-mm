@@ -107,6 +107,16 @@ nav.links a[aria-current="page"]::after { content: ""; position: absolute; left:
 .hero { padding-top: 56px; padding-bottom: 24px; }
 .hero h1 { font-size: 48px; line-height: 1.05; margin: 0 0 12px; letter-spacing: -0.03em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .hero p.tagline { font-size: 20px; color: var(--text-secondary); margin: 0; max-width: 820px; text-wrap: balance; }
+.hero-new { display: inline-flex; gap: 6px; align-items: center; margin-top: 16px; padding: 4px 12px; font-family: var(--mono); font-size: 12.5px; color: var(--text-secondary); text-decoration: none; border: 1px solid var(--border); border-radius: 999px; background: var(--code-bg); }
+.hero-new b { color: var(--text-primary); }
+.hero-new span { color: var(--text-muted); }
+.hero-new:hover span { color: var(--text-primary); }
+.hero-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.cta { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; font-size: 14px; font-weight: 600; color: var(--text-primary); text-decoration: none; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); }
+.cta:hover { border-color: var(--text-muted); }
+.cta.primary { color: var(--bg); background: var(--text-primary); border-color: var(--text-primary); }
+.cta.primary:hover { opacity: .88; }
+.controls.table-top { margin: 22px 0 10px; }
 .eyebrow { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin: 0 0 6px; }
 
 section { padding: 36px 0; }
@@ -584,6 +594,7 @@ header.site.hdr-hidden { transform: translateY(-100%); }
 .docs-search input { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; color: var(--text-primary); background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 7px 34px 7px 11px; }
 .docs-search input:focus { outline: none; border-color: var(--text-muted); }
 .docs-search input:focus + kbd, .docs-search input:not(:placeholder-shown) + kbd { display: none; }
+.docs-search input:focus, .docs-search input:not(:placeholder-shown) { padding-right: 10px; }
 .docs-search kbd { position: absolute; right: 9px; top: 7px; font-family: var(--mono); font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
 .docs-hits { position: fixed; z-index: 50; width: min(560px, calc(100vw - 16px)); max-height: 60vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .12); padding: 6px; }
 .docs-hit { display: block; padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--text-primary); }
