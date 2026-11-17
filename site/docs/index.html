@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs · simple-evals-mm</title>
+<meta name="description" content="simple-evals-mm documentation: getting started, concepts, guides for API and local models, sharing and analysing results, versioning.">
+<link rel="icon" href="../assets/favicon-32.png" sizes="32x32">
+<link rel="icon" href="../assets/favicon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="../assets/favicon-192.png">
+<script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t;</script>
+<link rel="stylesheet" href="../style.css">
+<!-- Google Analytics (the same GA4 property as speed1313.github.io) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-7X0Q0NSDB9"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag() { dataLayer.push(arguments); }  // gtag.js reads Arguments objects from dataLayer, not arrays
+  gtag("js", new Date());
+  gtag("config", "G-7X0Q0NSDB9");
+</script>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <div class="brand-wrap">
+      <a class="org" href="https://llm-jp.nii.ac.jp/en/home-en/" target="_blank" rel="noopener" title="LLM-jp"><img src="../assets/llm-jp-logo.png" alt="LLM-jp"></a>
+      <span class="divider" aria-hidden="true"></span>
+      <a class="brand" href="../">simple-evals-mm</a>
+    </div>
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav">
+      <svg class="ic-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      <svg class="ic-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <nav class="links" id="site-nav" aria-label="Site">
+      <a href="../#leaderboard">Leaderboard</a>
+      <a href="../explore/">Explore</a>
+      <a href="../trends/">Trends</a>
+      <a aria-current="page" href="./">Docs</a>
+      <a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">Code</a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Theme: system" title="Theme: system">
+        <svg class="ic-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="ic-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section id="docs">
+    <div class="wrap docs-layout">
+      <aside class="docs-nav" aria-label="Documentation">
+        <label class="docs-ver">Version <select id="docs-ver"></select></label>
+        <nav id="docs-toc"></nav>
+      </aside>
+      <article class="docs-body" id="docs-body"><p class="docs-status">Loading…</p></article>
+    </div>
+  </section>
+</main>
+<footer>
+  <div class="wrap">© 2026 <a href="https://llm-jp.nii.ac.jp/en/home-en/" target="_blank" rel="noopener">LLM-jp</a> · the source of these pages is <a href="https://github.com/llm-jp/simple-evals-mm/tree/main/docs" target="_blank" rel="noopener">docs/</a> in the repository</div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
+<script>
+  // The docs are the Markdown files of the repository (docs/, README, CONTRIBUTING) at a version (a tag, or main),
+  // fetched from GitHub and rendered here: nothing is built or copied, so the site never holds a stale copy.
+  const REPO = "llm-jp/simple-evals-mm";
+  const RAW = (ref, path) => `https://raw.githubusercontent.com/${REPO}/${ref}/${path}`;
+  const BLOB = (ref, path) => `https://github.com/${REPO}/blob/${ref}/${path}`;
+  const FIRST_VERSION = [0, 6, 0];  // the first release with these docs
+  const PAGES = [
+    ["Start", [["docs/README.md", "Overview"], ["docs/getting-started.md", "Getting started"], ["docs/concepts.md", "Concepts"]]],
+    ["Guides", [["docs/guides/api-models.md", "API models"], ["docs/guides/local-models.md", "Local models (vLLM / SGLang)"],
+                ["docs/guides/sharing.md", "Sharing and merging"], ["docs/guides/analysis.md", "Analysis"],
+                ["CONTRIBUTING.md", "Adding a benchmark or model"]]],
+    ["Reference", [["docs/cli.md", "Commands"], ["docs/configuration.md", "Configuration"], ["docs/task_setup.md", "Dataset setup"],
+                   ["docs/troubleshooting.md", "Troubleshooting"], ["docs/versioning.md", "Versioning"],
+                   ["docs/cost.md", "Time and cost"], ["docs/parity.md", "Parity with model cards"]]],
+  ];
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  // GitHub's heading anchors: lower case, punctuation dropped, spaces to hyphens
+  const slug = s => s.toLowerCase().trim().replace(/<[^>]+>/g, "").replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
+  const params = () => new URLSearchParams(location.search);
+  let DEFAULT_REF = "main";  // the newest release tag with these docs once there is one (versions())
+  const num = t => (String(t).match(/^v(\d+)\.(\d+)\.(\d+)$/) || []).slice(1).map(Number);
+  const newer = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+  // only main and the release tags from FIRST_VERSION have these docs: anything else (an older tag, a branch) is
+  // replaced by the default and said so
+  const allowed = ref => ref === "main" || (num(ref).length === 3 && newer(num(ref), FIRST_VERSION) >= 0);
+  const state = () => {
+    const asked = params().get("v");
+    return { ref: asked && allowed(asked) ? asked : DEFAULT_REF, asked, page: params().get("p") || "docs/README.md" };
+  };
+
+  function resolve(base, rel) {  // a repository path relative to the page's directory
+    const parts = base.split("/").slice(0, -1);
+    for (const seg of rel.split("/")) {
+      if (seg === "..") parts.pop(); else if (seg && seg !== ".") parts.push(seg);
+    }
+    return parts.join("/");
+  }
+  const href = (ref, page) => `?${new URLSearchParams({ ...(ref !== DEFAULT_REF ? { v: ref } : {}), p: page })}`;
+
+  function toc(ref, page) {
+    document.getElementById("docs-toc").innerHTML = PAGES.map(([group, items]) =>
+      `<div class="docs-group">${esc(group)}</div>` + items.map(([p, label]) =>
+        `<a href="${href(ref, p)}"${p === page ? ' aria-current="page"' : ""}>${esc(label)}</a>`).join("")).join("");
+  }
+
+  async function versions() {
+    const sel = document.getElementById("docs-ver");
+    let tags = [];
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/tags?per_page=100`);
+      if (r.ok) tags = (await r.json()).map(t => t.name);
+    } catch (e) { /* offline or rate-limited: main only */ }
+    tags = tags.filter(t => num(t).length === 3 && newer(num(t), FIRST_VERSION) >= 0).sort((a, b) => newer(num(b), num(a)));
+    if (tags.length) DEFAULT_REF = tags[0];
+    const ref = state().ref;
+    const opts = [...tags, "main"];
+    if (!opts.includes(ref)) opts.unshift(ref);  // an allowed tag the tag list did not return (rate limit)
+    sel.innerHTML = opts.map(v => `<option value="${esc(v)}"${v === ref ? " selected" : ""}>${v === "main" ? "main (unreleased)" : esc(v) + (v === tags[0] ? " (latest)" : "")}</option>`).join("");
+    sel.onchange = () => { location.search = href(sel.value, state().page).slice(1); };
+  }
+
+  async function render() {
+    const { ref, asked, page } = state();
+    toc(ref, page);
+    const body = document.getElementById("docs-body");
+    const note = asked && asked !== ref
+      ? `<p class="docs-status">Docs exist from v${FIRST_VERSION.join(".")} on; “${esc(asked)}” is shown as ${esc(ref)}.</p>` : "";
+    let md;
+    try {
+      const r = await fetch(RAW(ref, page));
+      if (!r.ok) throw new Error(`${r.status}`);
+      md = await r.text();
+    } catch (e) {
+      body.innerHTML = note + `<p class="docs-status">${esc(page)} is not in ${esc(ref)} (${esc(e.message)}). <a href="${href("main", "docs/README.md")}">Open the latest docs</a>.</p>`;
+      return;
+    }
+    body.innerHTML = note + marked.parse(md, { gfm: true });
+    for (const h of body.querySelectorAll("h1, h2, h3, h4")) h.id = slug(h.textContent);
+    for (const a of body.querySelectorAll("a[href]")) {  // repository links: Markdown pages here, other files on GitHub
+      const raw = a.getAttribute("href");
+      if (/^(https?:|mailto:|#)/.test(raw)) { if (/^https?:/.test(raw)) { a.target = "_blank"; a.rel = "noopener"; } continue; }
+      const [path, anchor] = raw.split("#");
+      const target = resolve(page, path);
+      a.href = target.endsWith(".md") ? href(ref, target) + (anchor ? `#${anchor}` : "") : BLOB(ref, target);
+    }
+    for (const img of body.querySelectorAll("img[src]")) {
+      const src = img.getAttribute("src");
+      if (!/^(https?:|data:)/.test(src)) img.src = RAW(ref, resolve(page, src));
+    }
+    const diagrams = body.querySelectorAll("code.language-mermaid");
+    if (diagrams.length) {
+      const { default: mermaid } = await import("https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs");
+      const dark = document.documentElement.dataset.theme === "dark"
+        || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+      mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral" });
+      for (const code of diagrams) {
+        const div = document.createElement("div");
+        div.className = "mermaid";
+        div.textContent = code.textContent;
+        code.parentElement.replaceWith(div);
+      }
+      await mermaid.run({ querySelector: ".docs-body .mermaid" });
+    }
+    const title = body.querySelector("h1");
+    document.title = `${title ? title.textContent : "Docs"} · simple-evals-mm`;
+    if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+  }
+
+  versions().then(render);
+</script>
+<script src="../theme.js"></script>
+</body>
+</html>
