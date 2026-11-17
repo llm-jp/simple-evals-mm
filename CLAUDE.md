@@ -8,8 +8,8 @@ simple-evals-mm evaluates LLMs and VLMs on ~50 English and Japanese datasets (te
 (alias `simple-evals-mm`); terms follow Harbor (job / dataset / task / trial, agent, verifier / reward).
 
 The user documentation is `docs/` (index and table of contents: `docs/README.md`; the site's Docs page renders it at
-each release tag). Read `docs/concepts.md`, `docs/jobs/` and `docs/datasets/data-locks.md` before changing the job
-files, locks or CLI; `docs/design/v0.5.md` holds the original v0.5 design notes.
+each release tag). Read `docs/concepts.md` and `docs/reference/` (reproducibility, inference settings, serving) before changing
+the job files, locks or CLI; per-dataset protocol decisions are in `docs/datasets/protocol-notes.md`.
 
 ## Commands
 

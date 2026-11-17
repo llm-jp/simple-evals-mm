@@ -112,7 +112,7 @@ A cut-off answer, a refused request and an input longer than the context score 0
 | Endpoint | the OpenRouter endpoint (provider, quantization) or the `sem serve` manifest (engine, patches, model files, chat template) | refused |
 | Verifier | deterministic checkers, sandboxed code, the judge; recorded in a verifier lock | a new verification (`sem job regrade`) |
 
-Scores are never stored: they are recomputed from the trials, and `sem job check` verifies the files. `sem site build` shows only clean, pushed, fully verified jobs, and each cell links back to its job and the command that reproduces it. Details: [docs/design/v0.5.md](docs/design/v0.5.md).
+Scores are never stored: they are recomputed from the trials, and `sem job check` verifies the files. `sem site build` shows only clean, pushed, fully verified jobs, and each cell links back to its job and the command that reproduces it. Details: [How reproducibility works](docs/reference/reproducibility.md).
 
 ### Parity with model cards
 

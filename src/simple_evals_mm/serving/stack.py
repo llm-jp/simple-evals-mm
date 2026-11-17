@@ -1,4 +1,4 @@
-"""What a served model runs on, as `sem serve` records it in the server manifest (docs/design/v0.5.md "Serving").
+"""What a served model runs on, as `sem serve` records it in the server manifest (docs/reference/serving.md).
 
     engine_identity(engine, venv, patches)   engine version and a content hash of its installed files, verified against
                                               the wheel RECORD; an edited file is refused unless a requested patch

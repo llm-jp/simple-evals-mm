@@ -24,7 +24,7 @@ A job is a name under jobs_dir, or a path (with a "/"; relative to the spec file
 build checks the job (`sem job check` plus the rules below) and refuses the dataset with the reason when one fails;
 refused datasets are not shown (the page lists them in the row's details) and the build reports them.
 
-Refusal rules (docs/design/v0.5.md "Reproducibility", leaderboard; plus the publish gate: a dataset with an excluded
+Refusal rules (docs/results/sharing.md "What the leaderboard accepts"; plus the publish gate: a dataset with an excluded
 trial, i.e. a transient failure such as provider_failed / judge_failed, is refused until it is retried):
   - job: not found; `sem job check` problems (trial / verifier file hashes); dirty (lock.json code.dirty or a dirty
     session); its commit not on origin (`git branch -r --contains COMMIT` in --repo; a commit git does not know:

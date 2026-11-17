@@ -51,7 +51,7 @@ def lock_config(config: dict | None) -> dict | None:
 
 
 class Sampler:
-    """Settings resolution (docs/design/v0.5.md "Inference settings"): every sampling field, the effort and
+    """Settings resolution (docs/reference/inference-settings.md): every sampling field, the effort and
     max_output_tokens get a value and a source at prepare():
       1. CLI / config (--temperature, --model-arg, ...)            "cli"
       2. the preset                                                "preset:<name>"

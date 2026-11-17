@@ -1,4 +1,4 @@
-"""Server manifests (`sem serve`, docs/design/v0.5.md "Serving"): what serves a model, written by the server side
+"""Server manifests (`sem serve`, docs/reference/serving.md): what serves a model, written by the server side
 and checked by `sem run --server MANIFEST`.
 
     {"format": "sem-server/1",

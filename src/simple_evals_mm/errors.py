@@ -1,4 +1,4 @@
-"""Error policy (docs/design/v0.5.md, after Harbor's error classification): one table maps a failure cause to
+"""Error policy (docs/jobs/failures.md, after Harbor's error classification): one table maps a failure cause to
 whether it is retried and whether the trial counts in the score. Everything else (agent, runner, aggregation)
 looks the cause up here instead of re-deciding.
 """
