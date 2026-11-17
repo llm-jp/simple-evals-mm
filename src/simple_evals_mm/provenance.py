@@ -225,6 +225,12 @@ def changed_datasets(commit_a: str, commit_b: str, datasets: list[str], repo: st
     gen_rest = closure([*GENERATION, *sampler_modules], neutral | other_samplers | explicit_ver) - explicit
     ver_rest = closure(VERIFICATION, neutral | other_samplers | explicit_gen) - explicit - gen_rest
     other_tasks = {f for f in all_files if rel(f).startswith("tasks/")}
+    # package data a dataset module names (jfinbench_rubrics.json next to the package root): that dataset's file,
+    # not an unknown change for the others
+    task_srcs = [src for t in trees for f in t.files if rel(f).startswith("tasks/") and f.endswith(".py")
+                 and (src := t.source(f))]
+    other_tasks |= {f for f in pkg_diff if not f.endswith(".py") and f != lock_path
+                    and any(os.path.basename(f) in src for src in task_srcs)}
     locks = [_json(t.source(lock_path)) for t in trees] if lock_path in pkg_diff else None
     out = {}
     for name in datasets:

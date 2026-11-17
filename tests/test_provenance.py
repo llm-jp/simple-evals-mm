@@ -175,3 +175,13 @@ def test_reports_are_neutral_and_only_the_cli_imports_them():
                     names = [a.name for a in node.names]
                 for n in names:
                     assert n.removeprefix("simple_evals_mm.") not in provenance.REPORTS, f"{mod} imports {n}"
+
+
+def test_package_data_a_dataset_names_is_not_unknown_for_the_others(repo):
+    repo, _ = repo
+    c2 = _commit(repo, {f"{PKG}/rubrics.json": "{}\n", f"{PKG}/tasks/b.py": (repo / PKG / "tasks/b.py").read_text()
+                        + "R = 'rubrics.json'\n"})
+    c3 = _commit(repo, {f"{PKG}/rubrics.json": '{"x": 1}\n'})
+    out = provenance.changed_datasets(c2, c3, ["a", "b"], **_kw(repo))
+    assert out["b"]["dataset"] == [f"{PKG}/rubrics.json"]  # b names it: b's own file
+    assert not out["a"]["changed"]  # not an unknown change for a

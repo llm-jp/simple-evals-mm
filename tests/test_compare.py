@@ -114,3 +114,46 @@ def test_worst_status_wins_and_markdown():
     rep = {"jobs": ["/jobs/A", "/jobs/B"], "datasets": {"ds": {**r, "jobs": {"/jobs/A": facts("A"), "/jobs/B": facts("B")}}}}
     md = compare.markdown(rep)
     assert md.splitlines()[0] == "| dataset | | A | B |" and "| ds | ✗ | 50.0 | 50.0 |" in md
+
+
+def test_dataset_changes_for_release_notes(monkeypatch):
+    """`sem datasets diff A B`: new module, tasks changed, revision only, prompts / rewards by the golden snapshot,
+    code only; unchanged datasets left out."""
+    from simple_evals_mm import dataset as dataset_mod
+    from simple_evals_mm import provenance
+
+    names = ["new", "data", "rev", "prm", "rwd", "code", "same"]
+    monkeypatch.setattr(dataset_mod, "DATASETS", {n: f"simple_evals_mm.tasks.{n}:X" for n in names})
+    own = {"data": ["L:datasets.data"], "rev": ["L:datasets.rev"], "prm": ["tasks/prm.py"], "rwd": ["tasks/rwd.py"],
+           "code": ["tasks/code.py"], "new": ["tasks/new.py"]}
+    monkeypatch.setattr(provenance, "changed_datasets", lambda a, b, ns, **kw: {
+        n: {"dataset": own.get(n, []), "generation": [], "verification": [], "unknown": []} for n in ns})
+    locks = {"A": {"datasets": {"data": {"tasks_sha256": 1}, "rev": {"tasks_sha256": 1, "revision": "x"}}},
+             "B": {"datasets": {"data": {"tasks_sha256": 2}, "rev": {"tasks_sha256": 1, "revision": "y"}}}}
+
+    def show(repo, commit, path):
+        if path.endswith("datasets.lock.json"):
+            return __import__("json").dumps(locks[commit])
+        return None if (commit == "A" and path.endswith("/new.py")) else "src"
+
+    monkeypatch.setattr(provenance, "_show", show)
+
+    class G:
+        def __init__(self, repo):
+            pass
+
+        def generation_part(self, c, n):
+            return {"p": c if n == "prm" else 0}
+
+        def reward_part(self, c, n):
+            return {"r": c if n == "rwd" else 0}
+
+        def _load(self, c):
+            return {}, {}
+
+    monkeypatch.setattr(compare, "Golden", G)
+    rep = compare.dataset_changes("A", "B", repo=".")
+    assert {n: d["change"] for n, d in rep["datasets"].items()} == {
+        "new": "added", "data": "data", "rev": "revision", "prm": "prompts", "rwd": "rewards", "code": "code"}
+    md = compare.changes_markdown(rep)
+    assert md.index("| new |") < md.index("| data |") < md.index("| code |") and "same" not in md

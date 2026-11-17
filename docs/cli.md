@@ -26,6 +26,7 @@ uv run --frozen sem job check jobs/qwen38-27b__low     # verify the recorded fil
 uv run --frozen sem job export jobs/qwen38-27b__low -o harbor_jobs   # Harbor's job layout: browse with `harbor view harbor_jobs`
 
 uv run --frozen sem datasets list | download | check   # registered datasets, data download, newer upstream revisions
+uv run --frozen sem datasets diff v0.5.8 HEAD          # datasets changed between two tags (the release notes' table)
 uv run --frozen sem models list                        # exact preset slugs, families, efforts, --model-arg keys
 uv run --frozen sem site build                         # leaderboard: site/leaderboard.yaml + the jobs it names -> site/data.js
 
