@@ -81,7 +81,15 @@
   const slug = s => s.toLowerCase().trim().replace(/<[^>]+>/g, "").replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
   const params = () => new URLSearchParams(location.search);
   let DEFAULT_REF = "main";  // the newest release tag with these docs once there is one (versions())
-  const state = () => ({ ref: params().get("v") || DEFAULT_REF, page: params().get("p") || "docs/README.md" });
+  const num = t => (String(t).match(/^v(\d+)\.(\d+)\.(\d+)$/) || []).slice(1).map(Number);
+  const newer = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+  // only main and the release tags from FIRST_VERSION have these docs: anything else (an older tag, a branch) is
+  // replaced by the default and said so
+  const allowed = ref => ref === "main" || (num(ref).length === 3 && newer(num(ref), FIRST_VERSION) >= 0);
+  const state = () => {
+    const asked = params().get("v");
+    return { ref: asked && allowed(asked) ? asked : DEFAULT_REF, asked, page: params().get("p") || "docs/README.md" };
+  };
 
   function resolve(base, rel) {  // a repository path relative to the page's directory
     const parts = base.split("/").slice(0, -1);
@@ -105,31 +113,31 @@
       const r = await fetch(`https://api.github.com/repos/${REPO}/tags?per_page=100`);
       if (r.ok) tags = (await r.json()).map(t => t.name);
     } catch (e) { /* offline or rate-limited: main only */ }
-    const num = t => (t.match(/^v(\d+)\.(\d+)\.(\d+)$/) || []).slice(1).map(Number);
-    const newer = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
     tags = tags.filter(t => num(t).length === 3 && newer(num(t), FIRST_VERSION) >= 0).sort((a, b) => newer(num(b), num(a)));
     if (tags.length) DEFAULT_REF = tags[0];
     const ref = state().ref;
     const opts = [...tags, "main"];
-    if (!opts.includes(ref)) opts.push(ref);
+    if (!opts.includes(ref)) opts.unshift(ref);  // an allowed tag the tag list did not return (rate limit)
     sel.innerHTML = opts.map(v => `<option value="${esc(v)}"${v === ref ? " selected" : ""}>${v === "main" ? "main (unreleased)" : esc(v) + (v === tags[0] ? " (latest)" : "")}</option>`).join("");
     sel.onchange = () => { location.search = href(sel.value, state().page).slice(1); };
   }
 
   async function render() {
-    const { ref, page } = state();
+    const { ref, asked, page } = state();
     toc(ref, page);
     const body = document.getElementById("docs-body");
+    const note = asked && asked !== ref
+      ? `<p class="docs-status">Docs exist from v${FIRST_VERSION.join(".")} on; “${esc(asked)}” is shown as ${esc(ref)}.</p>` : "";
     let md;
     try {
       const r = await fetch(RAW(ref, page));
       if (!r.ok) throw new Error(`${r.status}`);
       md = await r.text();
     } catch (e) {
-      body.innerHTML = `<p class="docs-status">${esc(page)} is not in ${esc(ref)} (${esc(e.message)}). <a href="${href("main", "docs/README.md")}">Open the latest docs</a>.</p>`;
+      body.innerHTML = note + `<p class="docs-status">${esc(page)} is not in ${esc(ref)} (${esc(e.message)}). <a href="${href("main", "docs/README.md")}">Open the latest docs</a>.</p>`;
       return;
     }
-    body.innerHTML = marked.parse(md, { gfm: true });
+    body.innerHTML = note + marked.parse(md, { gfm: true });
     for (const h of body.querySelectorAll("h1, h2, h3, h4")) h.id = slug(h.textContent);
     for (const a of body.querySelectorAll("a[href]")) {  // repository links: Markdown pages here, other files on GitHub
       const raw = a.getAttribute("href");
