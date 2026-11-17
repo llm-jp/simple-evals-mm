@@ -55,7 +55,8 @@ FAKE_SAMPLER = ("samplers.fake",)
 HF_SERVER = ("serving.hf_server", "serving.hf_backends")
 # the reports (site build, results / analysis pages, capability index, data lint, publish, watch, estimate, Harbor
 # export): only the CLI imports them (tests/test_provenance.py checks it), they read finished jobs
-REPORTS = ("leaderboard", "results", "analysis", "capability", "quality", "publish", "watch", "estimate", "harbor_export")
+REPORTS = ("leaderboard", "results", "analysis", "capability", "quality", "publish", "watch", "estimate", "harbor_export",
+           "compare")
 NEUTRAL = ("store", "cli", "checks", "derive", "provenance", "runner", "datalock", "dataset_admin", "parity",
            "serving", "serving.serve", "serving.manifest", "serving.stack", "samplers.presets", *REPORTS)
 NEUTRAL_PREFIXES = ("serving/patches/",)
