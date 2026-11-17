@@ -81,9 +81,11 @@ Re-running with the same `--job-name` resumes the job; `sem job resume -p jobs/N
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md) · [Concepts](docs/concepts.md) (jobs, failures, reproducibility, [comparing results](docs/concepts.md#comparing-results))
-- Guides: [API models](docs/guides/api-models.md) · [Local models (vLLM / SGLang)](docs/guides/local-models.md) · [Sharing and merging results](docs/guides/sharing.md) · [Analysis](docs/guides/analysis.md)
-- [Versioning](docs/versioning.md) · [Commands](docs/cli.md) · [Configuration](docs/configuration.md) · [Dataset setup](docs/task_setup.md) · [Troubleshooting](docs/troubleshooting.md)
+[Docs](https://llm-jp.github.io/simple-evals-mm/docs/) ([docs/](docs/README.md) in the repository):
+[Quick start](docs/getting-started/quick-start.md) · [Concepts](docs/concepts.md) ·
+[Datasets](docs/datasets/overview.md) · [Models](docs/models/overview.md) (API / [local](docs/models/local-models.md)) ·
+[Jobs](docs/jobs/run-a-job.md) · [Results](docs/results/view.md) ([comparing](docs/results/compare.md), [sharing](docs/results/sharing.md)) ·
+[Versioning](docs/versioning.md) · [Troubleshooting](docs/troubleshooting.md)
 
 ### Job layout
 

@@ -5,11 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 simple-evals-mm evaluates LLMs and VLMs on ~50 English and Japanese datasets (text and vision). The CLI is `sem`
-(alias `simple-evals-mm`); terms follow Harbor (job / dataset / task / trial, agent, verifier / reward). The design
-and its reasoning are in `docs/design/v0.5.md`: read it before changing the job files, locks or CLI.
+(alias `simple-evals-mm`); terms follow Harbor (job / dataset / task / trial, agent, verifier / reward).
 
-User documentation: `docs/README.md` (getting started, concepts, guides, versioning); keep it in step with a
-change to the CLI or the job files.
+The user documentation is `docs/` (index and table of contents: `docs/README.md`; the site's Docs page renders it at
+each release tag). Read `docs/concepts.md`, `docs/jobs/` and `docs/datasets/data-locks.md` before changing the job
+files, locks or CLI; `docs/design/v0.5.md` holds the original v0.5 design notes.
 
 ## Commands
 
@@ -24,7 +24,9 @@ uv run --frozen sem job show jobs/NAME | check jobs/NAME ; uv run --frozen sem j
 uv run --frozen sem job resume -p jobs/NAME -f provider_failed                         # retry transient failures
 uv run --frozen sem datasets list | download | check ; uv run --frozen sem models list
 uv run --frozen sem serve sglang MODEL --engine-venv VENV --manifest M.json ; uv run --frozen sem run -m sglang/MODEL --server M.json
-uv run --frozen sem site build [site/leaderboard.yaml] [-o site/data.js]               # leaderboard data from verified jobs
+uv run --frozen sem jobs compare jobs/A jobs/B                                          # scores side by side + per-dataset comparability
+uv run --frozen sem datasets diff v0.6.0 HEAD                                          # datasets a change touches (release notes)
+uv run --frozen sem site build [site/leaderboard.yaml] [-o site/data.js]               # leaderboard data from verified jobs (+ comparability)
 uv run --frozen python scripts/openrouter_smoke.py --models qwen/qwen3.8-27b          # one paid request per preset effort
 
 # tests (offline; fakes in tests/fakes.py, golden snapshots in tests/golden/)
@@ -32,18 +34,29 @@ uv run --frozen pytest -m "not api and not local_model and not network"
 uv run --frozen pytest tests/test_datasets_mcq.py --update-golden                      # after an intended prompt / reward change
 uv run --frozen pytest -m network                                                      # every dataset loads and verifies one task
 uv run --frozen ruff check src tests
+uv run --frozen pytest tests/test_docs.py                                              # every `sem` command / link / dataset arg in docs/
+bash scripts/release_check.sh                                                          # before a release (needs the cached data)
 ```
 
 ## Architecture (`src/simple_evals_mm/`)
 
 - `cli.py` (`sem`), `runner.py` (plan, generation loop, verification, resume), `store.py` (job files),
-  `derive.py` (`sem run --from`), `checks.py` (clean tree, uv.lock / RECORD checks, eager imports), `provenance.py`.
+  `derive.py` (`sem run --from`), `checks.py` (clean tree, uv.lock / RECORD checks, eager imports), `provenance.py`
+  (which datasets a code change touches: GENERATION / VERIFICATION / NEUTRAL file lists; a new framework module goes
+  in one of them).
+- `compare.py`: `sem jobs compare` (per-dataset comparability: tasks, resolved settings, prompts actually sent,
+  golden request bodies / rewards, judge) and `sem datasets diff`; used by `sem site build`.
+- Reports (read finished jobs, only the CLI imports them; `provenance.REPORTS`): `leaderboard.py` (`sem site build`),
+  `results.py`, `analysis.py`, `capability.py`, `parity.py`, `quality.py`, `publish.py`, `watch.py`, `estimate.py`,
+  `harbor_export.py`, `compare.py`.
 - `models.py` core types (Task, Message, Response, VerifierResult, TrialResult), `atif.py` trajectories,
   `errors.py` the error policy (failure cause -> retry? counted?), `metrics.py` aggregation.
 - `agent.py`: `direct` (one sampler call per turn; multi-turn datasets via `next_turn`).
 - `dataset.py`: `Dataset` base + `DATASETS` registry (name -> "module:Class"); `dataset_admin.py` (`sem datasets`).
 - `tasks/*.py`: one module per benchmark with its Dataset class and scoring functions; `tasks/image_qa.py` base of
-  judge-verified image QA; `tasks/vqa_data.py` rebuilds the InternVL-layout data; `tasks/sandbox.py` bubblewrap.
+  judge-verified image QA; `tasks/vqa_data.py` rebuilds the InternVL-layout data; `tasks/sandbox.py` bubblewrap
+  (+ a start self-test; a broken sandbox is `sandbox_failed`, never 0); `tasks/code_blocks.py` the fence reader of
+  the code datasets.
   (Named `tasks/`, not `datasets/`, to avoid shadowing the HF `datasets` package.)
 - `sources.py`: HF datasets at pinned revisions (images undecoded), JAMMEval pinned by sha256, images as
   content-addressed files, local data builders, MCQ prompt helpers.
@@ -77,6 +90,32 @@ Rules that keep jobs reproducible:
 - Nothing derived is stored: rewards, std, failure counts and costs are recomputed from the trial / verifier rows.
 - A change of a prompt, request body or reward shows up as a diff of `tests/golden/`; review it before
   `--update-golden`.
+
+## Changing the code: what goes with it
+
+- **Docs in the same PR.** A new or changed option, command, job file, failure cause or behaviour updates `docs/`
+  (and README / CONTRIBUTING where they mention it). A new page is added to the Contents list of `docs/README.md`
+  (it drives the site's sidebar). `tests/test_docs.py` parses every `sem ...` command in the docs, checks every
+  `--dataset-arg` key (one key per flag) and every relative link.
+- **Golden snapshots** for prompts, request bodies and rewards (`--update-golden`, review the diff). A dataset without
+  one gets one (`sem jobs compare` / `sem datasets diff` judge prompts and rewards by them).
+- **Data**: `sem datasets lock -d <name>` after an intended data change; `sem datasets lock --check` must pass.
+- **Comparability**: a change to a leaderboard dataset's prompts or rewards makes older jobs `✗` / `↻`
+  (`sem jobs compare`); say so in the PR, and regrade or rerun them before the site is rebuilt. A finding checked by
+  hand goes under `comparability_reviewed` in `site/leaderboard.yaml`.
+- A dataset's default arguments are not seen by `sem datasets diff`: a changed default is written in the release
+  notes by hand.
+
+## Versioning and releases (`docs/versioning.md`; from v0.6.0)
+
+- **0.Y.0**: framework changes (job file format, incompatible CLI, error policy, requests of every dataset, the default
+  judge). **0.y.Z**: datasets added or fixed, bug fixes, conveniences. 1.0 when the job files and the main CLI are
+  frozen (criteria in `docs/versioning.md`).
+- A version never decides comparability: `sem jobs compare` does, per dataset.
+- Release: the checklist in `docs/versioning.md` (offline tests, `scripts/release_check.sh`, `sem datasets diff
+  <previous tag> HEAD` for the notes), then an annotated tag `vX.Y.Z` on `main` and a GitHub release with the notes
+  and the dataset table. Tag and release only when the maintainer says so. The site's changelog
+  (`site/changelog.js`) is written by hand by the maintainers.
 
 ## Environment variables
 

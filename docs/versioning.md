@@ -34,7 +34,7 @@ A patch release may fix one dataset's verifier; a minor one may leave a dataset 
 compared is decided per dataset from what the jobs recorded, not from their versions:
 
 - `sem jobs compare jobs/A jobs/B`: per dataset ✓ / ↻ / ? / ✗, for jobs of any versions
-  ([Comparing results](concepts.md#comparing-results)).
+  ([Compare results](results/compare.md)).
 - Each release lists the datasets it changes, made by `sem datasets diff <previous tag> <tag>`: new datasets, other
   tasks, a changed source revision, changed prompts or rewards (golden snapshots), code-only changes.
 

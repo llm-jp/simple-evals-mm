@@ -20,7 +20,7 @@ uv run --frozen sem job parity jobs/NAME          # our score next to the card's
 ```
 
 ✓ within the tolerance, ⚠ outside it; `~` / `n/a` when the card used another split or tools. See
-[Parity](../parity.md).
+[Model card parity](../models/model-cards.md) and the [parity table](../parity.md).
 
 ## Questions worth a look
 

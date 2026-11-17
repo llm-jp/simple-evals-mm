@@ -91,7 +91,10 @@
   const RAW = (ref, path) => `https://raw.githubusercontent.com/${REPO}/${ref}/${path}`;
   const BLOB = (ref, path) => `https://github.com/${REPO}/blob/${ref}/${path}`;
   const FIRST_VERSION = [0, 6, 0];  // the first release with these docs (keep DEFAULT_REF below at least this)
-  const PAGES = [
+  // the sidebar: the "## Contents" list of docs/README.md at the version (navFrom); LEGACY_PAGES for v0.6.0, whose
+  // README has none
+  let PAGES = [];
+  const LEGACY_PAGES = [
     ["Start", [["docs/README.md", "Overview"], ["docs/getting-started.md", "Getting started"], ["docs/concepts.md", "Concepts"]]],
     ["Guides", [["docs/guides/api-models.md", "API models"], ["docs/guides/local-models.md", "Local models (vLLM / SGLang)"],
                 ["docs/guides/sharing.md", "Sharing and merging"], ["docs/guides/analysis.md", "Analysis"],
@@ -100,7 +103,32 @@
                    ["docs/troubleshooting.md", "Troubleshooting"], ["docs/versioning.md", "Versioning"],
                    ["docs/cost.md", "Time and cost"], ["docs/parity.md", "Parity with model cards"]]],
   ];
-  const FLAT = PAGES.flatMap(([group, items]) => items.map(([p, label]) => ({ p, label, group })));
+  let FLAT = [];
+  function navFrom(md) {  // [[group, [[path, label], ...]], ...] from "- **Group**" / "  - [Label](path)" lines
+    const sec = (md.split(/^## Contents\s*$/m)[1] || "").split(/^## /m)[0];
+    const groups = [];
+    for (const line of sec.split("\n")) {
+      let m = line.match(/^- \*\*(.+?)\*\*\s*$/);
+      if (m) { groups.push([m[1], []]); continue; }
+      m = line.match(/^\s+- \[(.+?)\]\(([^)#\s]+\.md)\)/);
+      if (m && groups.length) groups[groups.length - 1][1].push([resolve("docs/README.md", m[2]), m[1]]);
+    }
+    return groups.filter(g => g[1].length);
+  }
+  async function loadNav(ref) {
+    const key = `sem-docs-nav:${ref}`;
+    let nav = null;
+    try { nav = JSON.parse(sessionStorage.getItem(key) || "null"); } catch (e) {}
+    if (!nav) {
+      try {
+        const r = await fetch(RAW(ref, "docs/README.md"));
+        if (r.ok) nav = navFrom(await r.text());
+      } catch (e) {}
+      if (nav && nav.length) try { sessionStorage.setItem(key, JSON.stringify(nav)); } catch (e) {}
+    }
+    PAGES = nav && nav.length ? nav : LEGACY_PAGES;
+    FLAT = PAGES.flatMap(([group, items]) => items.map(([p, label]) => ({ p, label, group })));
+  }
   const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
   const ICON_DONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -235,6 +263,7 @@
 
   async function render() {
     const { ref, asked, page } = state();
+    await loadNav(ref);
     sidebar(ref, page);
     const cur = FLAT.find(x => x.p === page);
     document.getElementById("docs-crumb").textContent = cur ? cur.group : "";

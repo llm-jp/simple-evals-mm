@@ -30,7 +30,7 @@ model call; `--allow-data-mismatch` runs anyway and records the difference (not 
 
 The same `--job-name` with something that changes results: other settings, data, endpoint or server, or a code change
 that touches the job's datasets. The message lists what differs. Use a new `--job-name`, or `sem run --from JOB` to
-start a new job that copies the trials that are still valid ([Versioning](versioning.md#using-a-version)).
+start a new job that copies the trials that are still valid ([Resume and continue](jobs/resume.md)).
 `sem job resume --dry-run` shows the decision without running.
 
 ## Many `provider_failed`, or the job stopped with `circuit breaker`
@@ -48,7 +48,7 @@ lower value was given), or use a lower `--effort`.
 ## A served model: `thinking trace in content`
 
 The engine returns the reasoning inside the answer: serve it with the engine's reasoning parser
-(`sem serve ... -- --reasoning-parser <name>`), see [Local models](guides/local-models.md).
+(`sem serve ... -- --reasoning-parser <name>`), see [Local models](models/local-models.md).
 
 ## `verification refused (the tasks changed since generation)`
 

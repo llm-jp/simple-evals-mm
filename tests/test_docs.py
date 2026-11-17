@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from simple_evals_mm import cli
+from simple_evals_mm import dataset as dataset_mod
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = [ROOT / "README.md", ROOT / "CONTRIBUTING.md",
@@ -42,10 +43,17 @@ def test_doc_command_parses(doc, command):
     if argv and argv[0] == "serve":  # engine arguments after `--`, as cli.main splits them
         argv, _ = serve.split_extra(argv)
     try:
-        cli.make_parser().parse_args(argv)
+        args = cli.make_parser().parse_args(argv)
     except SystemExit as e:
         if e.code != 0:  # --version / --help exit 0
             pytest.fail(f"{doc}: `sem {command}` does not parse (exit {e.code})")
+        return
+    # every --dataset-arg names a key its dataset accepts (one key per flag: `a.x=1,y=2` is one value of x)
+    for ds, kv in cli._dataset_kv(getattr(args, "dataset_arg", None)).items():
+        accepted = getattr(dataset_mod.dataset_class(ds), "accepted_args", {}) if ds in dataset_mod.DATASETS else None
+        assert accepted is not None, f"{doc}: --dataset-arg for unknown dataset {ds}"
+        assert set(kv) <= set(accepted), f"{doc}: {ds} does not accept {sorted(set(kv) - set(accepted))}"
+        assert not any("," in str(v) and "=" in str(v) for v in kv.values()), f"{doc}: one --dataset-arg per key ({kv})"
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.relative_to(ROOT).as_posix())
