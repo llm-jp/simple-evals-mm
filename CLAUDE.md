@@ -106,6 +106,31 @@ Rules that keep jobs reproducible:
 - A dataset's default arguments are not seen by `sem datasets diff`: a changed default is written in the release
   notes by hand.
 
+## Common tasks
+
+Each has a page with the template and a checklist; the steps below are the files involved.
+
+- **Add a dataset** ([docs/datasets/adding-a-dataset.md](docs/datasets/adding-a-dataset.md)): `tasks/<name>.py`
+  (a `Dataset` subclass with a pinned `revision`, `file_fields`, a verifier); register in `dataset.DATASETS` and
+  `dataset_admin.HF_REPOS`; `sem datasets lock -d <name>`; a golden snapshot in `tests/test_datasets_*.py`; a README
+  row.
+- **Add a model preset** ([docs/models/adding-a-preset.md](docs/models/adding-a-preset.md)): an entry in
+  `samplers/presets.py` (OpenRouter / served / API, by exact slug); `sem models list`; the card's scores in
+  `references/model_cards.yaml`.
+- **Add an API format** ([docs/models/adding-an-api-format.md](docs/models/adding-an-api-format.md)): a `Sampler`
+  subclass in `samplers/<format>.py`; `registry.API_FORMATS` / `PROVIDERS` / `make_sampler`;
+  `provenance.SAMPLER_MODULES`; a golden request body in `tests/test_samplers.py`.
+- **Add a CLI command**: the parser and handler in `cli.py` (a report: its own module, listed in
+  `provenance.REPORTS`); `--json` output where it prints a table; a line in `docs/cli.md` and the page that explains
+  it.
+- **A new framework module**: classify it in `provenance.py` (GENERATION / VERIFICATION / NEUTRAL / REPORTS), or a
+  change to it counts as unknown and refuses resumes.
+
+Tests: the offline suite is the default check of a change; `-m network` / `-m api` / `-m local_model` only when the
+change touches loading real data or a real endpoint. Test behaviour, `--json` payloads and files, not the console
+layout. CI (`.github/workflows/`): `test.yml` (ruff + the offline suite on every PR), `pages.yml` (deploys `site/`),
+`datasets-check.yml` (weekly: newer upstream revisions, `datasets lock --check` on small datasets).
+
 ## Versioning and releases (`docs/versioning.md`; from v0.6.0)
 
 - **0.Y.0**: framework changes (job file format, incompatible CLI, error policy, requests of every dataset, the default

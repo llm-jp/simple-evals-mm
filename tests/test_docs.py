@@ -64,3 +64,10 @@ def test_relative_links_exist(doc):
             continue
         path = (doc.parent / target.split("#", 1)[0]).resolve()
         assert path.exists(), f"{doc.relative_to(ROOT)}: link to {target} (no such file)"
+
+
+def test_the_citation_is_the_same_everywhere():
+    """The README's BibTeX entry of simple-evals-mm is the one the site shows (site/index.html #cite)."""
+    bib = re.search(r"```bibtex\n(@software\{simple_evals_mm,.*?)\n```", (ROOT / "README.md").read_text(encoding="utf-8"), re.DOTALL)
+    assert bib, "README: the @software{simple_evals_mm, ...} entry"
+    assert bib.group(1) in (ROOT / "site" / "index.html").read_text(encoding="utf-8")
