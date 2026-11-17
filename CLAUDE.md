@@ -8,6 +8,9 @@ simple-evals-mm evaluates LLMs and VLMs on ~50 English and Japanese datasets (te
 (alias `simple-evals-mm`); terms follow Harbor (job / dataset / task / trial, agent, verifier / reward). The design
 and its reasoning are in `docs/design/v0.5.md`: read it before changing the job files, locks or CLI.
 
+User documentation: `docs/README.md` (getting started, concepts, guides, versioning); keep it in step with a
+change to the CLI or the job files.
+
 ## Commands
 
 ```bash
