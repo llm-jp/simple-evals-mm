@@ -18,6 +18,8 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 - Citation as software (`@software{simple_evals_mm}`) in the README and on the site; `AGENTS.md` (= `CLAUDE.md`) for
   coding agents (#189, this release).
 
+- `pbs/run_eval.sh`: `EFFORTS="low xhigh"` runs one job per effort against one server, so the model is loaded once;
+  docs on sharing a server between jobs (Local models).
 - README and the site's About list what the framework offers (models, benchmarks, reproducibility, parity, Explore and
   sharing, reasoning analysis, Harbor / ATIF, docs).
 
