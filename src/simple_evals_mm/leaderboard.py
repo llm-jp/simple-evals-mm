@@ -207,6 +207,15 @@ def job_reasons(cfg: dict, lock: dict, git: GitCheck) -> list[str]:
     return out
 
 
+def corpus_level(name: str) -> bool:
+    """The dataset scores an attempt as one corpus (it overrides Dataset.verify_all, e.g. OmniDocBench)."""
+    try:
+        cls = dataset_mod.dataset_class(dataset_mod.split_ref(name)[0])
+    except Exception:  # noqa: BLE001 - an unknown dataset is refused elsewhere
+        return False
+    return cls.verify_all is not dataset_mod.Dataset.verify_all
+
+
 def dataset_reasons(view: JobView, name: str, allow_ref: str | None = None) -> list[str]:
     """Why (view, dataset) cannot be shown; empty = accepted."""
     st, cfg, lock = view.store, view.cfg, view.lock
@@ -258,11 +267,17 @@ def dataset_reasons(view: JobView, name: str, allow_ref: str | None = None) -> l
             out.append(f"verification {vid}: {r}")
     # publish gate: no excluded trial (transient failures: provider_failed, endpoint_unavailable, judge_failed, ...);
     # a published mean is over every task, so retry them first (sem job resume -f CAUSE / sem job regrade)
+    # A corpus-level dataset (OmniDocBench: one score over all trials of an attempt, verify_all) scores a failed or
+    # cut-off trial inside that score (an empty / cut page) and leaves some per-trial rewards empty by design (pages
+    # without a text block): only a transient cause, which should be retried, blocks it.
+    corpus = corpus_level(name)
     _, results = st.read_verification(name)
     excluded: dict[str, int] = {}
     for rs in results.values():
         for r in rs:
             if r.reward is None:
+                if corpus and not (r.cause and errors.POLICY.get(r.cause) and errors.POLICY[r.cause].retry):
+                    continue
                 excluded[r.cause or "unscored"] = excluded.get(r.cause or "unscored", 0) + 1
     if excluded:
         out.append("excluded trials (retry before publishing): "

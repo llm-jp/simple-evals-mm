@@ -404,3 +404,9 @@ def test_column_comparability_and_reviewed_findings(monkeypatch):
     assert set(out) == {"a", "b"}  # one job: nothing to compare
     assert out["a"] == {"status": "ok", "notes": [], "reviewed": [notes["a"][0]]}
     assert out["b"]["status"] == "different" and out["b"]["notes"] == notes["b"]
+
+
+def test_corpus_level_datasets():
+    """OmniDocBench scores an attempt as one corpus: its per-page rewards may be empty without blocking the site."""
+    assert leaderboard.corpus_level("omnidocbench") and leaderboard.corpus_level("omnidocbench@" + "a" * 40)
+    assert not leaderboard.corpus_level("gpqa") and not leaderboard.corpus_level("no_such_dataset")
