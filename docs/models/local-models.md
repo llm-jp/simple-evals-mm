@@ -54,5 +54,14 @@ JOB_NAME=qwen38-27b__served MODEL=vllm/Qwen/Qwen3.8-27B DATASETS="hakushobench m
   sh pbs/run_eval.sh
 ```
 
+**Load the model once.** A server can be shared by any number of `sem run` jobs: effort, sampling, datasets and `-l`
+are request settings, so only server-side options (engine arguments such as the reasoning parser, `--dp` / `--tp`,
+patches, the chat template, a server-side `--model-arg`) need a new server. For large models, where loading takes
+long, run all the settings of one server in one batch job: `EFFORTS="low xhigh"` runs one job per effort
+(`JOB_NAME__low`, `JOB_NAME__xhigh`) in parallel against the same server. For other sweeps, start `sem serve` once and
+run several `sem run --server MANIFEST` in the background. Resuming in a later batch job loads the model again (the
+same server configuration passes the digest check). If loading takes over an hour, raise `sem serve --health-timeout`
+(seconds, default 3600).
+
 Compute nodes without internet: download the data first on a login node (`sem datasets download -d ...`) and keep
 the model in the shared Hugging Face cache (`HF_HOME`).
