@@ -740,16 +740,45 @@ def verify_job(st: store_mod.JobStore, datasets: list[str] | None = None, judge_
         jconf = judge.config() if judge is not None and ds.needs_judge else None
         vlock = dataset_mod.verifier_lock(ds, jconf, code.get("commit"))
         per_trial = type(ds).verify_all is dataset_mod.Dataset.verify_all  # corpus-level verifiers re-verify all
-        for k in ks:
+        # Results are saved per attempt as they come (verifier/_partial/<key>/), so a verification that is killed
+        # resumes where it stopped: per trial for per-trial verifiers (except results the retry policy would
+        # verify again), whole attempts for corpus-level ones. The key is the verifier lock: another judge, verifier
+        # code or dataset config starts afresh.
+        key = hashlib.sha256(json.dumps(vlock, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+        def verify_attempt(k: int, name=name, ds=ds, vlock=vlock, per_trial=per_trial, key=key, trials_of=trials_of,
+                           by_id=by_id, judge=judge):
             trials = trials_of[k]
             copied = derive.reused_results(trials, name, k, vlock) if per_trial else {}
-            todo = [t for t in trials if t.task_name not in copied]
+            pp = st.partial_path(name, key, k)
+            os.makedirs(st.partial_dir(name, key), exist_ok=True)
+            saved = {n: g for n, g in st.read_partial(pp).items()
+                     if not (g.cause in (errors.JUDGE_FAILED, errors.SANDBOX_FAILED) and should_retry(g.cause, retry))}
+            if not per_trial and not all(t.task_name in saved for t in trials):
+                saved = {}  # a corpus-level attempt is resumed whole or not at all
+            done = saved | copied
+            todo = [t for t in trials if t.task_name not in done]
+            if saved:
+                print(f"[verify] {name} a{k}: {len(set(saved) - set(copied))} result(s) resumed from an unfinished verification")
             fresh = ds.verify_all([by_id[t.task_name] for t in todo], [t.trajectory for t in todo],
                                   judge if ds.needs_judge else None, max_retries=retry["max_retries"],
-                                  retry_on=lambda c: should_retry(c, retry)) if todo else []
-            got = {t.task_name: g for t, g in zip(todo, fresh)} | copied
-            results[k] = [got[t.task_name] for t in trials]
-            reused += len(copied)
+                                  retry_on=lambda c: should_retry(c, retry),
+                                  on_result=(lambda g: st.append_partial(pp, [g])) if per_trial else None,
+                                  log_path=os.path.join(st.partial_dir(name, key), f"evaluator_a{k}.log")) if todo else []
+            if fresh and not per_trial:
+                st.append_partial(pp, fresh)
+            got = {t.task_name: g for t, g in zip(todo, fresh)} | done
+            return [got[t.task_name] for t in trials], len(copied), len(set(saved) - set(copied))
+
+        # corpus-level verifiers (an external evaluator per attempt) run their attempts concurrently
+        workers = 1 if per_trial else max(1, min(len(ks), ds.attempt_workers))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+            done_by_k = dict(zip(ks, ex.map(verify_attempt, ks)))
+        resumed = 0
+        for k in ks:
+            results[k], n_copied, n_saved = done_by_k[k]
+            reused += n_copied
+            resumed += n_saved
         vid = st.new_verification_id(name)
         meta = {"dataset": name, "judge": jconf, "verifier_lock": dataset_mod.verifier_lock(ds, jconf, code.get("commit")),
                 "verifier_deps": dataset_mod.verifier_deps(ds), "verifier_info": ds.verifier_info(),
@@ -758,9 +787,12 @@ def verify_job(st: store_mod.JobStore, datasets: list[str] | None = None, judge_
             meta["task_changes"] = changed
         if reused:  # `sem run --from`: verifier results copied from the source job (same verifier lock)
             meta["reused_results"] = reused
+        if resumed:  # results of an unfinished verification of this job (same verifier lock and trials)
+            meta["resumed_results"] = resumed
         if code.get("diff") is not None:  # --allow-dirty: the diff the verifier code ran with (dirty.diff next to meta)
             meta["diff_sha256"] = hashlib.sha256(code["diff"].encode("utf-8")).hexdigest()
         st.write_verification(name, vid, results, meta)
+        st.finish_partial(name, key, vid)
         if code.get("diff") is not None:
             st.write_verification_diff(name, vid, code["diff"])
         out[name] = vid

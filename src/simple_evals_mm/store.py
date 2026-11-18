@@ -12,6 +12,9 @@
     <jobs_dir>/<job>/<dataset>/verifier/<verification-id>/meta.json    judge + params, commit, sha256 of the verified
                                                                        trial files and of the result files
     <jobs_dir>/<job>/<dataset>/verifier/current           name of the current verification-id
+    <jobs_dir>/<job>/<dataset>/verifier/_partial/<key>/  results of an unfinished verification (per attempt,
+        appended as they come; key = the verifier lock): a rerun of `sem job regrade` resumes from them; removed
+        when the verification is written. Never read as a verification.
 
 The trial layout is behind write_trial() / iter_trials() (packed JSONL per attempt now; Harbor's one directory per
 trial would only change these two functions). Harbor also has a config.json + lock.json per trial; here the pair
@@ -26,6 +29,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import threading
 from datetime import datetime
 
@@ -122,11 +126,15 @@ def iter_trials(job_dir: str, dataset: str, attempt: int):
             yield TrialResult.from_dict(json.loads(line))
 
 
+PARTIAL = "_partial"  # verifier/_partial/: results of unfinished verifications (see the module docstring)
+
+
 class JobStore:
     def __init__(self, jobs_dir: str, job_name: str):
         self.jobs_dir, self.job_name = jobs_dir, job_name
         self.dir = os.path.join(jobs_dir, job_name)
         self.images = ImageStore(self.dir)
+        self._partial_lock = threading.Lock()
 
     @classmethod
     def from_path(cls, job_dir: str) -> JobStore:
@@ -246,6 +254,46 @@ class JobStore:
             n += 1
             gid = f"{base}-{n}"
         return gid
+
+    def partial_dir(self, ds: str, key: str | None = None) -> str:
+        d = os.path.join(self.verifier_dir(ds), PARTIAL)
+        return os.path.join(d, key) if key else d
+
+    def partial_path(self, ds: str, key: str, k: int) -> str:
+        """The partial results of attempt k, named by the attempt's trials sha256 (other trials: another file)."""
+        return os.path.join(self.partial_dir(ds, key), f"a{k}-{sha256_file(self.trials_path(ds, k))[:16]}.jsonl")
+
+    @staticmethod
+    def read_partial(p: str) -> dict[str, VerifierResult]:
+        """{task_name: result} saved at partial_path p by an unfinished verification (the last line of a task wins;
+        a line cut by a kill is skipped)."""
+        out = {}
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        g = VerifierResult.from_dict(json.loads(line))
+                    except (ValueError, KeyError, TypeError):
+                        continue
+                    out[g.task_id] = g
+        return out
+
+    def append_partial(self, p: str, results: list[VerifierResult]) -> None:
+        """Append results to partial_path p (thread-safe; flushed, so a kill loses at most the line being written)."""
+        with self._partial_lock:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "a", encoding="utf-8") as f:
+                f.write("".join(json.dumps(g.to_dict(), ensure_ascii=False) + "\n" for g in results))
+                f.flush()
+
+    def finish_partial(self, ds: str, key: str, vid: str) -> None:
+        """After verification vid is written: keep its evaluator logs next to it, drop every partial result."""
+        d = self.partial_dir(ds, key)
+        if os.path.isdir(d):
+            for f in os.listdir(d):
+                if f.startswith("evaluator_") and f.endswith(".log"):
+                    os.replace(os.path.join(d, f), os.path.join(self.verifier_dir(ds), vid, f))
+        shutil.rmtree(self.partial_dir(ds), ignore_errors=True)
 
     def write_verification_diff(self, ds: str, vid: str, diff: str) -> None:
         """`sem job regrade --allow-dirty`: the diff the verification ran with (its sha256 is in meta.json)."""

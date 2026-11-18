@@ -716,3 +716,83 @@ def test_resume_refused_on_another_python_or_architecture(job_env, capsys, field
     assert s["run"]() == 2
     err = capsys.readouterr().err
     assert runner.RESUME_REFUSED in err and f"python.{field}:" in err
+
+
+def test_regrade_resumes_an_interrupted_verification(job_env, monkeypatch):
+    """Per-trial results are saved as they come (verifier/_partial/); a regrade killed midway resumes from them."""
+    from simple_evals_mm import store as store_mod
+    from simple_evals_mm.models import VerifierResult
+
+    s = job_env
+    assert s["run"]("--generate-only") == 0
+    st = s["store"]()
+    monkeypatch.setattr(Arith, "verify_threads", 1)
+    seen = []
+
+    def verifier(task, traj, judge):
+        if task.id == "capital of France?" and not seen.count("ok"):
+            raise RuntimeError("killed")
+        seen.append(task.id)
+        return VerifierResult(task.id, float(traj.final_text == task.answer), method="exact")
+
+    monkeypatch.setattr(Arith, "verifier", staticmethod(verifier))
+    with pytest.raises(RuntimeError):
+        runner.verify_job(st)
+    assert st.current_verification_id("arith") is None and seen == ["2+2?", "3+3?"]
+    assert os.path.isdir(st.partial_dir("arith"))
+    seen.clear()
+    seen.append("ok")
+    runner.verify_job(st)
+    assert seen == ["ok", "capital of France?"]  # only the trial that was not verified
+    meta = st.read_verification_meta("arith")
+    assert meta["resumed_results"] == 2 and not os.path.exists(st.partial_dir("arith"))
+    assert runner.summarize_job(st)["arith"]["reward"] == pytest.approx(2 / 3)
+    assert store_mod.PARTIAL == "_partial"
+
+
+def test_corpus_level_attempts_run_concurrently_and_resume_whole(job_env, monkeypatch):
+    """A corpus-level verifier (own verify_all) scores its attempts concurrently; a finished attempt is kept when
+    another one fails, and the rerun verifies only the missing attempt; the evaluator log moves next to the result."""
+    import threading
+
+    from simple_evals_mm.models import VerifierResult
+
+    s = job_env
+    assert s["run"]("--generate-only", "-k", "3") == 0
+    st = s["store"]()
+    calls, active, peak, lock, failed = [], [0], [0], threading.Lock(), []
+    barrier = threading.Barrier(3, timeout=5)
+
+    def verify_all(self, tasks, trajs, judge, max_retries=0, retry_on=None, on_result=None, log_path=None):
+        with lock:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+            calls.append(trajs[0].session_id)
+        if self.sync:
+            barrier.wait()  # all three attempts are running at once
+        with open(log_path, "w") as f:
+            f.write("progress\n")
+        with lock:
+            active[0] -= 1
+            fail = self.fail_one and not failed
+            failed.append(fail)
+        if fail:  # one attempt's evaluator fails, the other two finish
+            raise RuntimeError("evaluator timed out")
+        return [VerifierResult(t.id, 1.0, method="corpus") for t in tasks]
+
+    monkeypatch.setattr(Arith, "verify_all", verify_all)
+    monkeypatch.setattr(Arith, "attempt_workers", 3)
+    monkeypatch.setattr(Arith, "sync", True, raising=False)
+    monkeypatch.setattr(Arith, "fail_one", True, raising=False)
+    with pytest.raises(RuntimeError):
+        runner.verify_job(st)
+    assert peak[0] == 3 and st.current_verification_id("arith") is None
+    calls.clear()
+    monkeypatch.setattr(Arith, "sync", False, raising=False)
+    monkeypatch.setattr(Arith, "fail_one", False, raising=False)
+    runner.verify_job(st)
+    assert len(calls) == 1  # the two finished attempts were resumed whole
+    vid = st.current_verification_id("arith")
+    assert st.read_verification_meta("arith")["resumed_results"] == 6
+    assert os.path.exists(os.path.join(st.verifier_dir("arith"), vid, "evaluator_a1.log"))
+    assert not os.path.exists(st.partial_dir("arith"))
