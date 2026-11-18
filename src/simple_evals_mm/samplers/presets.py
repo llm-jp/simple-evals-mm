@@ -173,6 +173,8 @@ SPECIAL_SAMPLING = {"decode": {"qwen": {"temperature": 1.0, "top_p": 1.0, "top_k
 # No family carries max_output_tokens: the default is the endpoint maximum (module docstring). `output_limit` is the documented
 # output limit of an API model (OpenAI / Azure / Gemini have no endpoint to ask), not a tuning choice.
 # effort default medium: Harmony's default reasoning level (the system message says "Reasoning: medium" unless set)
+SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "repetition_penalty")
+
 _HARMONY_VL = {"sampling": {"temperature": 0.0, "skip_special_tokens": False}, "efforts": ("low", "medium", "high"), "effort": "medium",
                "template_kwargs": {"conversation_start_date": ""}, "response_parser": "harmony",
                "args": ("date", "identity", "chat_template", "decode")}
@@ -248,7 +250,8 @@ SERVED_MODELS: dict[str, str] = {
 # temperature 0.6 / presence_penalty 0, the 4B / 9B at 1.0 / 1.5). Each entry: (sampling, source). The source is the
 # model card's line (revision-independent wording) or the snapshot's generation_config.json. `sem models check` compares
 # every entry with the generation_config.json of the local Hugging Face cache. Families whose sampling is greedy by
-# design (qwen3-vl, internvl3, sarashina, llm-jp: fixed for comparability) have no entry.
+# design (qwen3-vl, internvl3, sarashina, llm-jp: fixed for comparability) have no entry, except a model whose
+# developers recommend sampling (llm-jp-4.1-8b-thinking).
 _QWEN35_THINK_GENERAL = {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5,
                          "repetition_penalty": 1.0}
 _QWEN38_THINK = {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0,
@@ -268,6 +271,10 @@ SERVED_SAMPLING: dict[str, tuple[dict, str]] = {
     "google/gemma-4-12B-it": (_GEMMA4, "generation_config.json"),
     "google/gemma-4-31B-it": (_GEMMA4, "generation_config.json"),
     "meta-models/Muse-Glimmer-30B": (_GEMMA4, "generation_config.json"),
+    # llm-jp-4-text is greedy as a family; 4.1-8B-thinking samples (its generation_config.json sets nothing): the
+    # llm-jp-4-cookbook's example, and in a sweep (2026-11-18, -l 200 on 5 text tasks) greedy cut off more answers
+    # (41 vs 16) and scored 43.0 vs 46.6
+    "llm-jp/llm-jp-4.1-8b-thinking": ({"temperature": 0.7, "top_p": 0.9}, "llm-jp-4-cookbook: temperature=0.7, top_p=0.9"),
 }
 GREEDY_FAMILIES = ("qwen3-vl", "internvl3", "sarashina", "llm-jp-vl", "llm-jp-4-text")
 
@@ -275,8 +282,9 @@ GREEDY_FAMILIES = ("qwen3-vl", "internvl3", "sarashina", "llm-jp-vl", "llm-jp-4-
 def _served(model_id: str, family: str) -> dict:
     """A served model's preset: its family, with the model's own recommended sampling (SERVED_SAMPLING)."""
     p = _family(family)
-    if model_id in SERVED_SAMPLING:
-        p["sampling"] = dict(SERVED_SAMPLING[model_id][0])
+    if model_id in SERVED_SAMPLING:  # replaces the family's sampling values; keeps its other request fields
+        rest = {k: v for k, v in p.get("sampling", {}).items() if k not in SAMPLING_KEYS}  # e.g. skip_special_tokens
+        p["sampling"] = {**rest, **SERVED_SAMPLING[model_id][0]}
     return p
 
 
@@ -335,7 +343,6 @@ PRESETS: dict[str, dict] = {
 DEFAULT_JUDGE = "openrouter/openai/gpt-6-luna"
 
 
-SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "repetition_penalty")
 
 
 def check_generation_configs(hf_cache: str) -> list[dict]:
