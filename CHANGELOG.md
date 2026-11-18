@@ -18,6 +18,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 - Citation as software (`@software{simple_evals_mm}`) in the README and on the site; `AGENTS.md` (= `CLAUDE.md`) for
   coding agents (#189, this release).
 
+- README and the site's About list what the framework offers (models, benchmarks, reproducibility, parity, Explore and
+  sharing, reasoning analysis, Harbor / ATIF, docs).
+
 Datasets changed: none (no prompt, task or reward change).
 
 ## v0.6.0 - 2026-11-17
