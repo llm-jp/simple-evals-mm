@@ -248,7 +248,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     document.querySelectorAll(".org-btn").forEach(b => b.setAttribute("aria-pressed", picked.has(b.dataset.org)));
   }
   document.getElementById("tr-legend").onclick = e => { const b = e.target.closest(".org-btn"); if (!b) return;
-    picked.has(b.dataset.org) ? picked.delete(b.dataset.org) : picked.add(b.dataset.org); applyPick(); };
+    picked.has(b.dataset.org) ? picked.delete(b.dataset.org) : picked.add(b.dataset.org); applyPick(); syncURL(); };
   document.getElementById("tr-legend").onmouseover = e => { const b = e.target.closest(".org-btn"); if (b && hovered !== b.dataset.org) { hovered = b.dataset.org; applyPick(); } };
   document.getElementById("tr-legend").onmouseleave = () => { hovered = null; applyPick(); };
   const ymin = Math.floor((Math.min(...S.map(s => s.lo ?? s.index)) - 5) / 10) * 10, ymax = Math.ceil((Math.max(...S.map(s => s.hi ?? s.index)) + 5) / 10) * 10;
@@ -341,6 +341,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
   document.getElementById("b-eff").onclick = e => { const b = e.target.closest("button"); if (!b) return; effAll = b.dataset.v === "all";
     document.querySelectorAll("#b-eff button").forEach(x => x.setAttribute("aria-pressed", x === b)); bench(); };
   function bench() {
+    syncURL();
     const svg = document.getElementById("c-bench"); clear(svg);
     const nw = narrow(), W = nw ? cw(svg) : 960, H = nw ? Math.round(W * 1.05) : 460, M = nw ? {l: 40, r: 12, t: 16, b: 44} : {l: 56, r: 150, t: 20, b: 44};
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -406,6 +407,28 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
       e.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
     });
   }
+  // the view in the URL, so a link opens the same charts: #org=<pinned developers>&b=<benchmarks of chart 3>&eff=all
+  // (defaults omitted; an in-page anchor such as #method is kept until something changes), as on the leaderboard
+  function syncURL() {
+    const kv = [];
+    if (picked.size) kv.push("org=" + [...picked].map(encodeURIComponent).join(","));
+    if ([...pickedB].join(",") !== DEFAULT_B.join(",")) kv.push("b=" + [...pickedB].map(encodeURIComponent).join(","));
+    if (effAll) kv.push("eff=all");
+    const isState = /^#[a-z]+=/.test(location.hash);
+    if (!kv.length && !isState) return;
+    const url = kv.length ? "#" + kv.join("&") : location.pathname + location.search;
+    if (url !== location.hash) history.replaceState(null, "", url);
+  }
+  for (const kv of location.hash.slice(1).split("&")) {
+    const [k, v] = kv.split("=");
+    if (v == null) continue;
+    const vals = v.split(",").map(decodeURIComponent).filter(Boolean);
+    if (k === "org") vals.filter(o => S.some(s => s.dev === o)).forEach(o => picked.add(o));
+    else if (k === "b") { pickedB.clear(); vals.filter(x => T.curves[x]).forEach(x => pickedB.add(x)); }
+    else if (k === "eff" && v === "all") { effAll = true;
+      document.querySelectorAll("#b-eff button").forEach(x => x.setAttribute("aria-pressed", x.dataset.v === "all")); }
+  }
+  applyPick();
   bench();
   // redraw when the width class changes (rotation, a resized window), or on phones when the width changes
   let lastW = document.querySelector(".tr-chart").parentElement.clientWidth;

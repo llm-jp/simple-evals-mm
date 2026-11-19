@@ -472,6 +472,7 @@
     for (const k of ["view", "x", "scale"]) if (state[k] !== DEF[k]) kv.push(k + "=" + encodeURIComponent(state[k]));
     const off = ALL_CFG.filter(c => !state.cfg.has(c));
     if (off.length) kv.push("off=" + off.map(encodeURIComponent).join(","));
+    if (openRows.size) kv.push("open=" + [...openRows].map(encodeURIComponent).join(","));  // expanded rows (model|effort)
     const isState = /^#[a-z]+=/.test(location.hash);
     if (!kv.length && !isState) return;  // default state: keep the URL (and an anchor) as it is
     const url = kv.length ? "#" + kv.join("&") : location.pathname + location.search;
@@ -819,7 +820,7 @@
       const key = r.m.key + "|" + r.effort;
       tr.className = "has-settings" + (openRows.has(key) ? " open" : "");
       tr.title = "Show the job, settings and provenance of this configuration";
-      tr.addEventListener("click", e => { if (e.target.closest("details, a")) return; openRows.has(key) ? openRows.delete(key) : openRows.add(key); renderTable(); });
+      tr.addEventListener("click", e => { if (e.target.closest("details, a")) return; openRows.has(key) ? openRows.delete(key) : openRows.add(key); renderTable(); syncURL(); });
       tb.appendChild(tr);
       if (openRows.has(key)) {
         const sr = document.createElement("tr"); sr.className = "settings-row";
@@ -841,7 +842,7 @@
         + `<div class="lc-meta"><span>Cost / Q <b>${d.cost != null ? fmtCostE(d) : "–"}</b></span><span>Output tokens / Q <b>${d.tok != null ? fmtTok(d.tok) : "–"}</b></span>`
         + (rt => rt ? `<span>Cut off <b>${fmtRate(rt.cut)}</b></span><span>Refused <b>${fmtRate(rt.refused)}</b></span>` : "")(rates(r.lvl)) + `</div>`
         + (openRows.has(key) ? `<div class="lc-settings">${settingsHTML(r.m, r.lvl)}</div>` : "");
-      card.addEventListener("click", e => { if (e.target.closest(".lc-settings")) return; openRows.has(key) ? openRows.delete(key) : openRows.add(key); renderTable(); });
+      card.addEventListener("click", e => { if (e.target.closest(".lc-settings")) return; openRows.has(key) ? openRows.delete(key) : openRows.add(key); renderTable(); syncURL(); });
       list.appendChild(card);
     }
   }
@@ -854,6 +855,7 @@
     const val_ = decodeURIComponent(v);
     if (k === "models") { const keep = new Set(val_.split(",")); state.cfg = new Set(ALL_CFG.filter(c => keep.has(c.split(":")[0]))); }
     else if (k === "off") val_.split(",").forEach(c => state.cfg.delete(c));
+    else if (k === "open") v.split(",").map(decodeURIComponent).filter(x => /^[^|]+\|[a-z]+$/.test(x)).forEach(x => openRows.add(x));
     else if (k === "bench") state.subject = "b:" + val_;
     else if (k === "subject") state.subject = SCOPES.some(s => s.key === val_) ? val_ : (TASK_LABEL[val_] ? "t:" + val_ : state.subject);
     else if (k === "table") state.subject = SCOPES.some(x => x.key === val_) ? val_ : state.subject;  // old links

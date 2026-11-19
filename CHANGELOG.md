@@ -31,7 +31,8 @@ interruption, and OmniDocBench's evaluator can no longer hang.
 - **Docs and site**: docs in sections after Harbor with guides for adding a dataset, a preset and an API format, a
   search box, the design doc retired into reference pages (#186, #187, #190); citation as software and `AGENTS.md`
   (#189); README / About list what the framework offers (#194, #195); Trends: the simple-evals-mm Index is SEMI (#201);
-  link-preview tags on every page (#204); the leaderboard URL follows the view (#205).
+  link-preview tags on every page (#204); the URL keeps the view on the leaderboard (#205), Trends, Analysis
+  and the expanded rows (#208).
 
 Datasets changed since v0.6.0 (`sem datasets diff v0.6.0 v0.7.0`):
 

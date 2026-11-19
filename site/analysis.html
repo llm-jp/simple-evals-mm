@@ -126,7 +126,14 @@ function render() {
       return `<tr><td class="l" style="width:260px">${esc(names[k] || k)}</td><td>${b}</td><td>${tok(a.out)} tok</td><td class="l">${a.cause ? `<span class="warn">${esc(a.cause)}</span>` : ""}</td><td class="l" style="white-space:normal"><details><summary>${esc((a.extracted ?? (a.answer || "").slice(-80)) || "(empty)")}</summary><pre>${esc(a.answer)}</pre>${a.judge ? `<div>Judge:</div><pre>${esc(a.judge)}</pre>` : ""}</details></td></tr>`;
     }).join("") + `</tbody></table></div>`).join("");
 }
-$("ds").addEventListener("change", render);
+// the dataset in the URL (#ds=<key>), so a link opens the same analysis; the first dataset leaves it clean
+{ const m = location.hash.match(/(?:^#|&)ds=([^&]*)/), k = m && decodeURIComponent(m[1]);
+  if (k && [...$("ds").options].some(o => o.value === k)) $("ds").value = k; }
+$("ds").addEventListener("change", () => {
+  const first = $("ds").options[0] && $("ds").options[0].value;
+  history.replaceState(null, "", $("ds").value === first ? location.pathname + location.search : "#ds=" + encodeURIComponent($("ds").value));
+  render();
+});
 render();
 </script>
 <script src="theme.js"></script>
