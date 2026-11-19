@@ -7,6 +7,8 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Docs: [LLM-jp models](docs/models/llm-jp.md): serving and running LLM-jp-4-VL and LLM-jp-4.1 thinking on SGLang,
+  vLLM or the HF server (patch, presets, Harmony, vLLM 0.30's output limit, text-only subsets).
 - Site: an "All results" section on the leaderboard: every setting on every benchmark in one table (Best / All, a
   category filter, sort by any column, a shade per column; text-only subsets marked, refused / missing cells shown);
   its view is in the URL (`mview`, `mcat`, `msort`).
