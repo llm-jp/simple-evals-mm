@@ -1295,7 +1295,8 @@ def test_omnidocbench_func_timeout_stand_in(tmp_path):
     t0 = time.monotonic()
     with pytest.raises(ft.FunctionTimedOut):
         ft.func_timeout(1, spin)
-    assert time.monotonic() - t0 < 4
+    # 1 s of CPU, then SIGXCPU (or the 4x wall cap); a shared CI runner gives the child less than a core
+    assert time.monotonic() - t0 < 20
 
     def boom():
         raise ValueError("inner")
