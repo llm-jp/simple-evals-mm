@@ -7,6 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: each view has its controls right above it: the table gets the chart's set (score, Benchmarks, Best / All,
+  Configs; one shared state), set apart from the chart; All results has Category, Best / All and Configs (narrowing
+  its columns), and its category rows stay in view while scrolling.
+
 - Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
   of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
   BibTeX alone; the site changelog's 2026-11-19 entry.

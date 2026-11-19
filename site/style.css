@@ -112,7 +112,7 @@ nav.links a[aria-current="page"]::after { content: ""; position: absolute; left:
 .cta:hover { border-color: var(--text-muted); }
 .cta.primary { color: var(--bg); background: var(--text-primary); border-color: var(--text-primary); }
 .cta.primary:hover { opacity: .88; }
-.controls.table-top { margin: 22px 0 10px; }
+.controls.table-top { margin: 40px 0 8px; }  /* clear of the chart above, close to its table (proximity) */
 .eyebrow { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin: 0 0 6px; }
 
 section { padding: 36px 0; }
@@ -333,7 +333,7 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 .lb-top { flex-wrap: nowrap; gap: 16px; }
 .lb-top .pick-wrap { flex: 0 1 auto; min-width: 0; }
 .lb-top select.pick { max-width: 100%; text-overflow: ellipsis; }
-.lb-top #lb-meta { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13px; text-align: center; }
+.lb-top #lb-meta, .lb-top .meta { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13px; text-align: center; }
 .lb-top .filter-wrap.right { margin-left: 0; flex: 0 0 auto; }
 @media (max-width: 760px) {
   .lb-top { flex-wrap: wrap; gap: 10px 12px; }
@@ -642,8 +642,7 @@ h2:hover > a.anchor, h3:hover > a.anchor, a.anchor:focus { opacity: 1; }
 .share-pop button:hover { background: var(--border); color: var(--text-primary); }
 
 /* All results: benchmarks (rows) x settings (columns) */
-.ar-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
-.ar-cat { color: var(--text-secondary); font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+.controls.ar-top { margin: 6px 0 8px; }
 .ar-wrap { overflow: auto; max-height: 80vh; border: 1px solid var(--border); border-radius: 8px; }
 table.ar { border-collapse: separate; border-spacing: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 table.ar th, table.ar td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
@@ -653,7 +652,8 @@ table.ar th.ar-set .ar-name { display: flex; align-items: center; justify-conten
 table.ar th.ar-set .effort-tag { display: inline-block; margin-top: 3px; }
 table.ar .ar-task { position: sticky; left: 0; text-align: left; background: var(--bg); font-weight: 500; z-index: 1; }
 table.ar thead .ar-task { z-index: 3; background: var(--surface-2); }
-table.ar tr.ar-cat-row th { background: var(--surface-2); color: var(--text-secondary); font-size: 12px; font-weight: 600; text-align: left; }
+table.ar tr.ar-cat-row th { background: var(--surface-2); color: var(--text-secondary); font-size: 12px; font-weight: 600; text-align: left;
+  position: sticky; top: var(--ar-head, 56px); z-index: 2; }  /* the current category stays in view while scrolling */
 table.ar tr.ar-overall td, table.ar tr.ar-overall th { border-bottom: 2px solid var(--border); }
 table.ar td.ar-best { font-weight: 700; color: var(--text-primary); }
 table.ar td { color: var(--text-secondary); }
