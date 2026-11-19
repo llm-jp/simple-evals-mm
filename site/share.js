@@ -3,7 +3,7 @@
 //    copies it (with the page's current view state);
 //  * view state in the query string (?k=v&...), so a section anchor (#...) can follow it; links of the earlier
 //    #k=v form are still read;
-//  * two buttons under each chart / table (as on Epoch AI's ECI page): Share (X, Instagram, copy the link to that view
+//  * two buttons under each chart / table (as on Epoch AI's ECI page): Share (X, LinkedIn, copy the link to that view
 //    in its current state) and Download graph (PNG / SVG of a chart); a saved image carries the chart's
 //    title, the LLM-jp logo with "simple-evals-mm · CC BY 4.0" at the bottom left and the link and date at the right.
 (function () {
@@ -117,7 +117,7 @@
     share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg>',
     download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4M7 10l5 5 5-5M12 15V3"/></svg>',
     x: '<svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M17.8 3h3.1l-6.8 7.7 8 10.3h-6.3l-4.9-6.3L5.3 21H2.2l7.2-8.3L1.8 3h6.4l4.4 5.8L17.8 3Zm-1.1 16.2h1.7L7.3 4.7H5.5l11.2 14.5Z"/></svg>',
-    instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" class="fill"/></svg>',
+    linkedin: '<svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM3 9.5h4V21H3V9.5Zm7 0h3.8v1.6h.1c.5-1 1.8-2 3.8-2 4 0 4.8 2.6 4.8 6V21h-4v-5.2c0-1.2 0-2.8-1.7-2.8s-2 1.3-2 2.7V21h-4V9.5Z"/></svg>',
     link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
     image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg>',
   };
@@ -134,7 +134,7 @@
   document.addEventListener("click", e => { if (!e.target.closest(".share-menu")) closeMenus(null); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(null); });
 
-  // under `after`: Share (X, Instagram, copy link) and, for a chart (`svg`), Download graph (PNG / SVG). The image title is fixed per chart (no list of selections that could overflow).
+  // under `after`: Share (X, LinkedIn, copy link) and, for a chart (`svg`), Download graph (PNG / SVG). The image title is fixed per chart (no list of selections that could overflow).
   function bar(after, opt) {
     const id = () => anchorFor(b, opt.id), nm = () => (typeof opt.name === "function" ? opt.name() : opt.name) || opt.id;
     const title = () => (typeof opt.title === "function" ? opt.title() : opt.title) || nm();
@@ -161,10 +161,7 @@
     const shareItems = [
       ["x", "X", "Post the link on X", () => { window.open(`https://x.com/intent/post?${new URLSearchParams({ text: `${title()} (simple-evals-mm)`, url: linkTo(id()) })}`, "_blank", "noopener"); }],
     ];
-    if (opt.svg) shareItems.push(["instagram", "Instagram", "Share the chart image (Instagram takes images, not links): the system share sheet on a phone, else the PNG is saved to post", async () => {
-      const f = await png();
-      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: title() }); return null; }
-      download(f.name, f); return "PNG saved"; }]);
+    shareItems.push(["linkedin", "LinkedIn", "Share the link on LinkedIn", () => { window.open(`https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url: linkTo(id()) })}`, "_blank", "noopener"); }]);
     shareItems.push(["link", "Copy link", "Copy a link to this view (with the current selections)", copyLink]);
     menu("share", "Share", shareItems);
     const dl = [];
