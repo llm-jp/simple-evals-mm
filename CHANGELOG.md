@@ -7,6 +7,11 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- SEM-ECI has three indices, fitted separately: All (every question), Multimodal (the questions with images) and
+  Text (the questions without; HLE-Diamond's and JFinBench's text questions included). A benchmark takes part in an
+  index when at least 20% of its questions are of that kind. Text-only models are placed in the Text index only. The
+  Trends page switches between them (`?idx=multimodal|text`). `sem site results` records which questions have images
+  (`images/<dataset>.json`; counted over every user turn, so HLE's images, after a system message, are counted too).
 - Site, All results: no Overall row, no cell tooltips and no intro line; each benchmark's name opens it in Explore,
   whose Tasks view of one benchmark starts with what it is and how it is graded. Best / All, Configs and Category no
   longer move the page; the Category list opens below its button. A model's `note` (Qwen3.8 Flash: the API model,
