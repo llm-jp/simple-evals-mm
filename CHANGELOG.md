@@ -7,6 +7,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Docs: [LLM-jp models](docs/models/llm-jp.md): serving and running LLM-jp-4-VL and LLM-jp-4.1 thinking on SGLang,
+  vLLM or the HF server (patch, presets, Harmony, vLLM 0.30's output limit, text-only subsets).
+
 - Site: on the score-vs-cost / tokens chart a text-only subset is marked too ("*" on the model's label, a legend line,
   the question count in the tooltip).
 
