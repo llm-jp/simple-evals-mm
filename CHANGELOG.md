@@ -7,6 +7,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: shorter texts (About in 4 bullets, the table note, the parity and Trends intros, All results); All results
+  shows a cell's details at once on hover or tap (the browser's own tooltip was slow and absent on touch screens).
+
 - Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
   of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
   BibTeX alone; the site changelog's 2026-11-19 entry.

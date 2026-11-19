@@ -659,3 +659,5 @@ table.ar td.ar-best { font-weight: 700; color: var(--text-primary); }
 table.ar td { color: var(--text-secondary); }
 table.ar td.ar-na { color: var(--text-muted); }
 table.ar sup.subset { color: var(--text-secondary); }
+.ar-tip { position: fixed; z-index: 30; max-width: 320px; padding: 6px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.4;
+  background: var(--text-primary); color: var(--bg); box-shadow: 0 4px 14px rgba(0, 0, 0, .18); pointer-events: none; }
