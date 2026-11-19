@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="A reproducible, reliable evaluation framework for LLMs and VLMs on English and Japanese tasks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=5b6074e9c4">
+<link rel="stylesheet" href="style.css?v=a4cdee2aae">
 <!-- Google Analytics (the same GA4 property as speed1313.github.io) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-7X0Q0NSDB9"></script>
 <script>
@@ -128,7 +128,34 @@
         </div>
       </div>
 
-      <div class="controls table-top"><div class="pick-wrap" id="table-pick"></div></div>
+      <div class="controls lb-top table-top" role="toolbar" aria-label="Table options">
+        <div class="pick-wrap" id="table-pick"></div>
+        <div class="filter-wrap" data-filter="tasks" hidden>
+          <button class="filter-btn" aria-expanded="false" title="Benchmarks averaged into Overall">Benchmarks <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="panel" hidden>
+            <div class="presets">
+              <button data-preset="default" title="The benchmarks every model has">Default</button><button data-preset="all">All</button><button data-preset="ja">Japanese</button><button data-preset="en">English</button>
+              <button data-preset="multimodal" title="Benchmarks with images in the input">Multimodal</button><button data-preset="text">Text only</button><button data-preset="none">None</button>
+            </div>
+            <div class="task-list"></div>
+          </div>
+        </div>
+        <div class="meta" aria-hidden="true"></div>
+        <span class="seg" data-key="view" title="Best: each model at its higher-scoring effort level on this score (chart and table)">
+          <button data-v="best" aria-pressed="true">Best</button>
+          <button data-v="all" aria-pressed="false">All effort levels</button>
+        </span>
+        <div class="filter-wrap right" data-filter="cfg">
+          <button class="filter-btn" aria-expanded="false">Configs <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="panel" hidden>
+            <div class="presets">
+              <button data-preset="all">All</button><button data-preset="proprietary">Proprietary</button>
+              <button data-preset="open">Open-weight</button><button data-preset="small" title="Open-weight models with at most 100B total parameters">&le; 100B</button><button data-preset="none">None</button>
+            </div>
+            <div class="model-list"></div>
+          </div>
+        </div>
+      </div>
       <div class="table-wrap">
         <table class="lb" id="lb">
           <thead><tr></tr></thead>
@@ -144,9 +171,23 @@
     <div class="wrap">
       <h2>All results</h2>
       <p class="intro">Every benchmark for every setting at once: % correct averaged over the attempts (hover a cell for the spread and the question count); the best score of each row in bold.</p>
-      <div class="controls ar-controls">
-        <span class="seg" id="ar-view" role="group" aria-label="Settings shown"><button data-v="best" aria-pressed="true">Best</button><button data-v="all" aria-pressed="false">All</button></span>
-        <label class="ar-cat">Category <select class="pick" id="ar-cat" aria-label="Benchmark category"></select></label>
+      <div class="controls lb-top ar-top" role="toolbar" aria-label="All results options">
+        <div class="pick-wrap"><select class="pick" id="ar-cat" aria-label="Benchmark category"></select></div>
+        <div class="meta" aria-hidden="true"></div>
+        <span class="seg" data-key="view" title="Best: each model at its higher-scoring effort level on this score (chart and table)">
+          <button data-v="best" aria-pressed="true">Best</button>
+          <button data-v="all" aria-pressed="false">All effort levels</button>
+        </span>
+        <div class="filter-wrap right" data-filter="cfg">
+          <button class="filter-btn" aria-expanded="false">Configs <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="panel" hidden>
+            <div class="presets">
+              <button data-preset="all">All</button><button data-preset="proprietary">Proprietary</button>
+              <button data-preset="open">Open-weight</button><button data-preset="small" title="Open-weight models with at most 100B total parameters">&le; 100B</button><button data-preset="none">None</button>
+            </div>
+            <div class="model-list"></div>
+          </div>
+        </div>
       </div>
       <div class="ar-wrap"><table class="ar" id="ar-table"></table></div>
       <p class="note" id="ar-note"></p>
@@ -353,20 +394,22 @@
       changed();
     });
   }
-  const taskWrap = wraps.find(w => w.dataset.filter === "tasks");
-  taskWrap.querySelector(".task-list").innerHTML = (D.categories || []).map(c => {
+  const taskWraps = wraps.filter(w => w.dataset.filter === "tasks");  // above the chart and above the table
+  const TASK_LIST = (D.categories || []).map(c => {
     const ts = TASKS.filter(t => t.category === c).sort((a, b) => a.label.localeCompare(b.label));
     return ts.length ? `<div class="tgroup"><div class="tcat">${esc(c)}</div>${ts.map(t =>
       `<label class="trow"><input type="checkbox" data-t="${esc(t.key)}"><span>${esc(t.label)}</span><span class="tlang">${esc(t.lang || "")}</span></label>`).join("")}</div>` : "";
   }).join("");
-  function renderTaskPanel() {
+  for (const w of taskWraps) w.querySelector(".task-list").innerHTML = TASK_LIST;
+  function renderTaskPanel() { for (const taskWrap of taskWraps) {
     taskWrap.hidden = !isOverall();
     taskWrap.querySelectorAll("input[data-t]").forEach(cb => { cb.checked = state.ovTasks.has(cb.dataset.t); });
     taskWrap.querySelector(".filter-btn").innerHTML = `Benchmarks (${state.ovTasks.size}/${ALL_TASKS.length}) <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
-  }
+  } }
   function tasksChanged() {
     renderTaskPanel(); state.sortKey = null; render();
   }
+  for (const taskWrap of taskWraps) {
   taskWrap.querySelector(".task-list").addEventListener("change", e => {
     const k = e.target.dataset.t; if (!k) return;
     e.target.checked ? state.ovTasks.add(k) : state.ovTasks.delete(k);
@@ -380,6 +423,7 @@
     state.ovTasks = new Set(pr === "none" ? [] : TASKS.filter(keep).map(t => t.key));
     tasksChanged();
   });
+  }
   pick.addEventListener("change", renderTaskPanel);
   document.addEventListener("click", e => { if (!e.composedPath().some(n => wraps.includes(n))) closePanels(null); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closePanels(null); });
@@ -487,13 +531,13 @@
     const off = ALL_CFG.filter(c => !state.cfg.has(c));
     if (off.length) kv.push("off=" + off.map(encodeURIComponent).join(","));
     if (openRows.size) kv.push("open=" + [...openRows].map(encodeURIComponent).join(","));  // expanded rows (model|effort)
-    if (AR.view !== "best") kv.push("mview=" + AR.view);  // the All results table
     if (AR.cat) kv.push("mcat=" + encodeURIComponent(AR.cat));
     SHARE.writeState(kv);  // the query string (?k=v&...); an in-page anchor stays after it
   }
 
   function render() {
     syncURL();
+    if (typeof renderAll === "function" && document.getElementById("ar-cat").options.length) renderAll();  // All results shares Best / All and Configs
     setDims();
     while (svg.lastChild && svg.lastChild.tagName !== "desc") svg.removeChild(svg.lastChild);
     const pts = points().map(p => ({ ...p, x: p.d[state.x], y: p.d.score }));
@@ -729,7 +773,7 @@
     const d = tVal(r.lvl); return d ? num(d[k]) : -1;
   }
   const openRows = new Set();  // rows whose settings panel is open (model key | effort)
-  const AR = { view: "best", cat: "" };  // the All results table: settings shown, benchmark category
+  const AR = { cat: "" };  // the All results table's benchmark category (settings: the shared Best / All and Configs)
   const CAUSES = D.causes || { zeroed: [], excluded: [] };
   const ALIAS_TIP = "the model id is not a dated snapshot, so the provider may move it to a newer one; the snapshot that answered is recorded (Served identity)";
   const aliasTag = () => "";  // the alias note lives in the row's details (Model)
@@ -875,7 +919,6 @@
     if (k === "models") { const keep = new Set(val_.split(",")); state.cfg = new Set(ALL_CFG.filter(c => keep.has(c.split(":")[0]))); }
     else if (k === "off") val_.split(",").forEach(c => state.cfg.delete(c));
     else if (k === "open") v.split(",").map(decodeURIComponent).filter(x => /^[^|]+\|[a-z]+$/.test(x)).forEach(x => openRows.add(x));
-    else if (k === "mview" && (val_ === "best" || val_ === "all")) AR.view = val_;
     else if (k === "mcat" && (D.categories || []).includes(val_)) AR.cat = val_;
     else if (k === "bench") state.subject = "b:" + val_;
     else if (k === "subject") state.subject = SCOPES.some(s => s.key === val_) ? val_ : (TASK_LABEL[val_] ? "t:" + val_ : state.subject);
@@ -901,10 +944,12 @@
   // the row's best; a refused cell says so (hover: why); a missing one is "–"
   function renderAll() {
     const tasks = TASKS.filter(t => !AR.cat || t.category === AR.cat);
-    const cols = [];
-    for (const m of D.models) for (const [eff, lvl] of [["max", m.max], ["low", m.low]])
-      if (lvl && (AR.view === "all" || eff === "max")) cols.push({ m, eff, lvl });
     const ov = c => ((c.lvl.benchmarks || {}).Overall || {}).score;
+    const cols = [];  // the settings the Configs filter keeps; Best: one per model, its higher Overall (else its highest)
+    for (const m of D.models) {
+      const lv = [["max", m.max], ["low", m.low]].filter(([e, l]) => l && on(m, e)).map(([eff, lvl]) => ({ m, eff, lvl }));
+      if (state.view === "best" && lv.length > 1) cols.push((ov(lv[1]) ?? -1) > (ov(lv[0]) ?? -1) ? lv[1] : lv[0]); else cols.push(...lv);
+    }
     const head = `<tr><th class="ar-task">Benchmark</th>` + cols.map(c => `<th class="ar-set" title="${esc(c.m.name + " (" + effLabel(c.m, c.eff) + ")")}">`
       + `<span class="ar-name">${logoHTML(c.m)}${esc(c.m.name)}</span><span class="effort-tag">${esc(effLabel(c.m, c.eff))}</span></th>`).join("") + "</tr>";
     const bestOf = vals => { const v = vals.filter(x => x != null); return v.length ? Math.max(...v) : null; };
@@ -924,15 +969,15 @@
         }).join("") + "</tr>";
       }
     }
-    document.getElementById("ar-table").innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+    const tbl = document.getElementById("ar-table");
+    tbl.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+    tbl.style.setProperty("--ar-head", tbl.tHead.offsetHeight + "px");  // the category rows stick right under the header
     document.getElementById("ar-note").textContent = `${tasks.length} benchmarks × ${cols.length} settings. % correct, mean over attempts (hover a cell for ± std and the question count); the best score of each row in bold. "–" = not evaluated; "refused" = left out by the site build (hover for why).`
       + (cols.some(c => tasks.some(t => (c.lvl.tasks[t.key] || {}).subset)) ? " * Text-only subset of a text-only model (questions without an image): not comparable, not in Overall." : "");
   }
   { const sel = document.getElementById("ar-cat");
     sel.innerHTML = `<option value="">All categories</option>` + (D.categories || []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
     sel.value = AR.cat; sel.onchange = () => { AR.cat = sel.value; renderAll(); syncURL(); };
-    document.querySelectorAll("#ar-view button").forEach(b => { b.setAttribute("aria-pressed", String(b.dataset.v === AR.view));
-      b.onclick = () => { AR.view = b.dataset.v; document.querySelectorAll("#ar-view button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); renderAll(); syncURL(); }; });
     renderAll();
     SHARE.bar(document.getElementById("ar-note"), { id: "ar-table" }); }
 
