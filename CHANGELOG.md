@@ -32,6 +32,8 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 - **Preset change**: `llm-jp/llm-jp-4.1-8b-thinking` samples at temperature 0.7, top_p 0.9 (the llm-jp-4-cookbook's
   setting; was greedy, which cut off more answers in a sweep: 41 vs 16 of 759); other `llm-jp-4-text` models stay
   greedy. A served model's own sampling now keeps the family's other request fields (`skip_special_tokens`).
+- OmniDocBench stall detection: a run counts as stalled when it wrote nothing and used under 5% of a core for 20 min
+  (a deadlocked evaluator still ticks: tqdm's monitor thread kept resetting the first version); up to 5 runs (Regrade).
 
 Datasets changed: new `hle_diamond_text`, `jfinbench_text`; no existing dataset changed (no prompt, task or reward change).
 
