@@ -3,10 +3,22 @@
 simple-evals-mm runs from a git checkout (a job records the commit it ran at, so the checkout must be clean). Pick a
 release tag for results you will compare with others ([Versioning](../versioning.md)):
 
+Clone a release and enter it:
+
 ```bash
-git clone --branch v0.6.0 https://github.com/llm-jp/simple-evals-mm.git
+git clone --branch v0.7.0 https://github.com/llm-jp/simple-evals-mm.git
 cd simple-evals-mm
-uv sync --frozen                 # Python 3.13 and the locked dependencies (https://docs.astral.sh/uv/)
+```
+
+Install Python 3.13 and the locked dependencies with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync --frozen
+```
+
+Check the installed version:
+
+```bash
 uv run --frozen sem --version
 ```
 

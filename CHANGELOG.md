@@ -7,6 +7,18 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: each view has its controls right above it: the table gets the chart's set (score, Benchmarks, Best / All,
+  Configs; one shared state), set apart from the chart; All results has Category, Best / All and Configs (narrowing
+  its columns), and its category rows stay in view while scrolling.
+- Docs: code blocks have a header bar (language, Copy) and their own background, so the button no longer covers the
+  code; Quick start explains every column of `sem job show` (verified, causes, ...); Concepts shows a job as a file tree.
+- Docs: every shell example fits the Docs page without scrolling (at most 88 characters a line, as Harbor's docs):
+  long commands split before an option with ` \`, comments on their own line; `tests/test_docs.py` checks it.
+- Docs and README: one command per code box, each introduced by a sentence (as Harbor's docs); sequences that only
+  work together stay in one box; checked by `tests/test_docs.py`. Fixed a shell example that a comment line split in two.
+- Docs page: the sidebar and "On this page" start where they stick, so scrolling never moves them; another docs page
+  opens in place (as Harbor's docs: the sidebar keeps its scroll, Back / Forward and new tabs work); on load the
+  current page's link is scrolled into view in the sidebar.
 - Site: shorter texts (About in 4 bullets, the table note, the parity and Trends intros, All results); All results
   shows a cell's details at once on hover or tap (the browser's own tooltip was slow and absent on touch screens).
 

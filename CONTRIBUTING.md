@@ -5,9 +5,21 @@ explain what a job records and why. The user docs are in [docs/](docs/README.md)
 
 ## Development setup
 
++ --extra hf-server for `sem serve hf`:
+
 ```bash
-uv sync --frozen                     # + --extra hf-server for `sem serve hf`
-uv run --frozen pytest -m "not api and not local_model and not network"     # offline tests (fakes, golden snapshots)
+uv sync --frozen
+```
+
+Offline tests (fakes, golden snapshots):
+
+```bash
+uv run --frozen pytest -m "not api and not local_model and not network"
+```
+
+Lint:
+
+```bash
 uv run --frozen ruff check src tests
 ```
 
@@ -67,8 +79,15 @@ network tests of the leaderboard datasets.
 
 ## Before opening a pull request
 
+Lint:
+
 ```bash
 uv run --frozen ruff check src tests
+```
+
+Offline tests:
+
+```bash
 uv run --frozen pytest -m "not api and not local_model and not network"
 ```
 
@@ -81,7 +100,8 @@ Keep the docs in step: a changed option or a new command belongs in `docs/` (`te
 not CI: it needs every dataset's data). From a clean, committed tree:
 
 ```bash
-nice -n 19 bash scripts/release_check.sh      # RELEASE_CHECK_DIR=... to keep the jobs, RELEASE_CHECK_SKIP=a,b to leave datasets out
+# RELEASE_CHECK_DIR=... to keep the jobs, RELEASE_CHECK_SKIP=a,b to leave datasets out
+nice -n 19 bash scripts/release_check.sh
 ```
 
 It uses the scripted test-only provider `fake/` (`src/simple_evals_mm/samplers/fake.py`, registered only with
