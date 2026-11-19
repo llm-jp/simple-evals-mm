@@ -130,6 +130,15 @@
     image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg>',
     table: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>',
   };
+  // the readable anchor of the section a chart / table belongs to: the nearest heading before it (its "#" link)
+  function anchorFor(el, fallback) {
+    for (let e = el; e && e.tagName !== "MAIN" && e !== document.body; e = e.parentElement)
+      for (let p = e.previousElementSibling; p; p = p.previousElementSibling) {
+        const h = /^H[23]$/.test(p.tagName) ? p : null;
+        if (h) return h.dataset.anchor || h.id || (h.closest("section[id]") || {}).id || fallback;
+      }
+    return fallback;
+  }
   function closeMenus(except) { document.querySelectorAll(".share-menu.open").forEach(m => m !== except && m.classList.remove("open")); }
   document.addEventListener("click", e => { if (!e.target.closest(".share-menu")) closeMenus(null); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(null); });
@@ -137,7 +146,7 @@
   // two buttons under `after`: Share (X, Instagram, copy link) and Download (PNG / SVG with `svg`; CSV with `csv`
   // (rows function) or `table`). The image title is fixed per chart (no list of selections that could overflow).
   function bar(after, opt) {
-    const id = opt.id, nm = () => (typeof opt.name === "function" ? opt.name() : opt.name) || id;
+    const id = () => anchorFor(b, opt.id), nm = () => (typeof opt.name === "function" ? opt.name() : opt.name) || opt.id;
     const title = () => (typeof opt.title === "function" ? opt.title() : opt.title) || nm();
     const svg = () => typeof opt.svg === "string" ? document.getElementById(opt.svg) : opt.svg;
     const png = async () => new File([await pngBlob(svg(), title(), 2)], `${nm()}-${today()}.png`, { type: "image/png" });
@@ -157,10 +166,10 @@
       btn.onclick = () => { const open = !w.classList.contains("open"); closeMenus(w); w.classList.toggle("open", open); btn.setAttribute("aria-expanded", String(open)); };
       b.appendChild(w);
     };
-    const copyLink = () => new Promise(res => { const tmp = document.createElement("button"); copy(linkTo(id), tmp);
+    const copyLink = () => new Promise(res => { const tmp = document.createElement("button"); copy(linkTo(id()), tmp);
       setTimeout(() => res(tmp.textContent === "Copy failed" ? "Copy failed" : "Link copied"), 300); });
     const shareItems = [
-      ["x", "X", "Post the link on X", () => { window.open(`https://x.com/intent/post?${new URLSearchParams({ text: `${title()} (simple-evals-mm)`, url: linkTo(id) })}`, "_blank", "noopener"); }],
+      ["x", "X", "Post the link on X", () => { window.open(`https://x.com/intent/post?${new URLSearchParams({ text: `${title()} (simple-evals-mm)`, url: linkTo(id()) })}`, "_blank", "noopener"); }],
     ];
     if (opt.svg) shareItems.push(["instagram", "Instagram", "Share the chart image (Instagram takes images, not links): the system share sheet on a phone, else the PNG is saved to post", async () => {
       const f = await png();
