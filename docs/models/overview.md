@@ -16,9 +16,8 @@ Three API formats carry the requests: `openai_chat_completions` (OpenRouter, ser
 
 ## Presets
 
-A **preset** is the settings a model's card recommends, kept as data in `src/simple_evals_mm/samplers/presets.py`
-and keyed by the exact slug: sampling (temperature, top-p, ...), the effort levels and the default, the output
-limit, the chat-template arguments, and for OpenRouter the pinned provider.
+A **preset** is the settings a model's card recommends, keyed by the exact slug: sampling (temperature, top-p, ...),
+the effort levels and the default, the output limit, the chat-template arguments, and for OpenRouter the pinned provider.
 
 ```bash
 # exact slugs, efforts (default), provider pin, --model-arg keys; then the families

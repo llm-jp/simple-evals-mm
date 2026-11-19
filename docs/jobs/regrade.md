@@ -19,25 +19,12 @@ Each regrade is a new verification under `<dataset>/verifier/<id>/`; `current` p
 earlier ones stay as history. Use it after a verifier or judge change between versions (`↻` in
 [Comparing results](../results/compare.md)), to try another judge, or to verify a `--generate-only` job.
 
-Options: `-d` the datasets to regrade, `--judge-model` another judge, `-r` judge retries. A regrade refuses a dataset
-whose tasks changed since the trials were generated (`--allow-task-change` verifies anyway and records the changed
-task ids).
+Options: `-d` the datasets to regrade, `--judge-model` another judge, `-r` judge retries. A dataset whose tasks
+changed since the trials were generated is refused (`--allow-task-change` verifies anyway and records the changed ids).
 
-**Interrupted regrades resume.** Results are saved as they come, under `<dataset>/verifier/_partial/` (never read as a
-verification). Running the same `sem job regrade` again after a kill or a timeout verifies only what is missing: per
-trial for most datasets (results the retry policy would verify again, such as `judge_failed`, are redone), whole
-attempts for corpus-level datasets (OmniDocBench). Another judge, verifier code or dataset config starts afresh. The
-verification records how many results it resumed (`resumed_results` in its meta.json); the saved results are removed
-once it is written.
+**Interrupted regrades resume.** Results are saved as they come; running the same `sem job regrade` again after a
+kill or a timeout verifies only what is missing (another judge, verifier code or dataset config starts afresh).
 
-**OmniDocBench** runs the official evaluator once per attempt, one attempt at a time (8 worker processes). Its output
-goes to `<dataset>/verifier/_partial/<key>/evaluator_a<k>.log` while it runs (`tail -f` to follow it) and is kept next
-to the verification afterwards. Runaway outputs make it slow (about an hour per attempt for a model with ~100 pages cut
-at 100k characters); a run is stopped after 12 h.
-
-The evaluator limits each page's matching to 420 s and then falls back to a slower chunked matching. Upstream, the
-limit is wall-clock time enforced by stopping a thread (the `func_timeout` package), which made the fallback depend on
-how busy the machine was and could deadlock the evaluator. We run the official evaluator unchanged, with one module
-replaced in its container: our `func_timeout` (`tasks/omnidocbench_patch/`, its sha256 in the verifier lock) runs the
-page's matching in a forked child limited to 420 s of CPU time. As a safety net, a run that writes nothing and uses
-under 5% of a core for 20 minutes is killed and run again (up to 5 runs; the log marks each run).
+OmniDocBench runs its official evaluator once per attempt; runaway outputs make it slow (about an hour per
+attempt). Its log is written under `<dataset>/verifier/` as it runs (`tail -f` to follow it). Details: its module
+(`src/simple_evals_mm/tasks/omnidocbench.py`).

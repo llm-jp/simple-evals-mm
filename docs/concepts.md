@@ -50,6 +50,8 @@ verifies the files' hashes. Generation and verification are separate: `--generat
 | Endpoint | the OpenRouter endpoint (provider, quantization), or the `sem serve` manifest (engine, patches, model files, chat template) | refused if changed |
 | Verifier | rules, sandboxed code, the judge identity, recorded per verification | a new verification (`sem job regrade`) |
 
+<p align="center"><img src="assets/resume.svg" width="860" alt="A job resumes only when nothing that affects its results has changed; otherwise sem run --from starts a new job. sem job parity compares the scores with the model card."></p>
+
 No environment variable changes prompts, sampling or rewards: everything that does is a CLI option or job config
 value, recorded in the job.
 

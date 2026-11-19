@@ -35,9 +35,8 @@ another version are in its tag on GitHub (`https://github.com/llm-jp/simple-eval
   - [Failures and retries](jobs/failures.md)
   - [Regrade](jobs/regrade.md)
 - **Results**
-  - [View results](results/view.md)
+  - [View and analyze results](results/view.md)
   - [Compare results](results/compare.md)
-  - [Analysis](results/analysis.md)
   - [Sharing and leaderboards](results/sharing.md)
 - **Contributing**
   - [Contributing](../CONTRIBUTING.md)

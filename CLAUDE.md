@@ -119,8 +119,8 @@ Each has a page with the template and a checklist; the steps below are the files
 
 - **Add a dataset** ([docs/datasets/adding-a-dataset.md](docs/datasets/adding-a-dataset.md)): `tasks/<name>.py`
   (a `Dataset` subclass with a pinned `revision`, `file_fields`, a verifier); register in `dataset.DATASETS` and
-  `dataset_admin.HF_REPOS`; `sem datasets lock -d <name>`; a golden snapshot in `tests/test_datasets_*.py`; a README
-  row.
+  `dataset_admin.HF_REPOS`; `sem datasets lock -d <name>`; a golden snapshot in `tests/test_datasets_*.py`; a row
+  in the benchmark table of `docs/datasets/overview.md`.
 - **Add a model preset** ([docs/models/adding-a-preset.md](docs/models/adding-a-preset.md)): an entry in
   `samplers/presets.py` (OpenRouter / served / API, by exact slug); `sem models list`; the card's scores in
   `references/model_cards.yaml`.

@@ -1,6 +1,6 @@
 # Command reference
 
-The short version is in the [README](../README.md#usage); `uv run --frozen sem <command> --help` lists every option.
+`uv run --frozen sem <command> --help` lists every option.
 
 ## Commands
 
@@ -77,6 +77,8 @@ Regenerate the transient failures:
 uv run --frozen sem job resume -p jobs/qwen38-27b__low -f provider_failed
 ```
 
+Grade the answers again with another judge (no model calls):
+
 ```bash
 uv run --frozen sem job regrade jobs/qwen38-27b__low \
     --judge-model openrouter/openai/gpt-6-luna
@@ -132,6 +134,6 @@ uv run --frozen sem run -m sglang/Qwen/Qwen3.8-27B -d mmmu \
     --server jobs/_servers/qwen38.json
 ```
 
-Re-running `sem run` with the same `--job-name` (or `sem job resume`) resumes the job (the same config is required). A resume at a later commit stays in the same job directory when the change cannot affect the job: clean trees, the stored commit an ancestor of HEAD, the same lock check / endpoint / settings / server manifest / data, no change to this job's datasets or generation-side files (verification-side changes are re-verified at the end), and every stored trial still reusable under the new code; otherwise it is refused with the changed files, and `sem run --from JOB` continues in a new directory. `sem job resume --dry-run` prints that decision. `--generate-only` stores the trials and `sem job regrade` verifies them later; `sem run --from JOB` reuses an earlier job's trials where they are still valid. `-c job.yaml` reads the options from a YAML file (`--print-config` shows the keys). `uv run --frozen sem <command> --help` lists every option.
-
+Re-running `sem run` with the same `--job-name` (or `sem job resume`) resumes the job ([Resume and
+continue](jobs/resume.md)); `-c job.yaml` reads the options from a YAML file ([Run a job](jobs/run-a-job.md#job-config)).
 Serving with `hf` (`sem serve hf ...`) needs the optional extra: `uv sync --frozen --extra hf-server`.
