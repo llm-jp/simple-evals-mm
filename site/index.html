@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="A reproducible, reliable evaluation framework for LLMs and VLMs on English and Japanese tasks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=e5b2d43e09">
+<link rel="stylesheet" href="style.css?v=1daea1d4b9">
 <!-- Google Analytics (the same GA4 property as speed1313.github.io) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-7X0Q0NSDB9"></script>
 <script>
@@ -170,7 +170,6 @@
   <section id="all-results">
     <div class="wrap">
       <h2>All results</h2>
-      <p class="intro">Every benchmark for every setting; the best score of each row in bold. Hover or tap a cell for details.</p>
       <div class="controls lb-top ar-top" role="toolbar" aria-label="All results options">
         <div class="pick-wrap"><select class="pick" id="ar-cat" aria-label="Benchmark category"></select></div>
         <div class="meta" aria-hidden="true"></div>
@@ -242,7 +241,7 @@
 </footer>
 
 <script src="logos.js?v=95862aac74"></script>
-<script src="data.js?v=b5a5f227c4"></script>
+<script src="data.js?v=1f76cacee7"></script>
 <script src="share.js?v=4f2f258deb"></script>
 <script>
 (function () {
@@ -292,6 +291,8 @@
   };
 
   // ---- score pulldown + segmented controls ----
+  // a control that re-renders the page keeps its own position on screen: the chart / table above it can change height
+  function keepPos(el, fn) { const y0 = el.getBoundingClientRect().top; fn(); const dy = el.getBoundingClientRect().top - y0; if (dy) window.scrollBy(0, dy); }
   const pick = document.getElementById("pick-subject");  // one score for the chart and the table
   // Overall first, then the tasks grouped by category (the Data section's order), alphabetical within a category
   const opt = s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`;
@@ -335,7 +336,7 @@
   }
   document.querySelectorAll(".seg[data-key]").forEach(seg => seg.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
-    state[seg.dataset.key] = b.dataset.v; syncSegs(); render();
+    keepPos(seg, () => { state[seg.dataset.key] = b.dataset.v; syncSegs(); render(); });
   }));
 
   // ---- panels: configs (shared state, two instances) and task columns ----
@@ -363,12 +364,14 @@
   function closePanels(except) {
     for (const w of wraps) if (w !== except) { w.querySelector(".panel").hidden = true; w.querySelector(".filter-btn").setAttribute("aria-expanded", "false"); }
   }
-  function changed() { renderPanels(); render(); }
+  let changedAt = null;  // the Configs control in use (its position is kept)
+  function changed() { const f = () => { renderPanels(); render(); }; changedAt ? keepPos(changedAt, f) : f(); }
   for (const w of wraps) {
     const btn = w.querySelector(".filter-btn"), panel = w.querySelector(".panel");
     btn.addEventListener("click", () => { const open = panel.hidden; closePanels(null); panel.hidden = !open; btn.setAttribute("aria-expanded", String(open)); });
   }
   for (const w of cfgWraps) {
+    w.addEventListener("pointerdown", () => { changedAt = w; }, true);
     const list = w.querySelector(".model-list"), panel = w.querySelector(".panel");
     list.addEventListener("change", e => {
       const row = e.target.closest(".mrow"); if (!row) return;
@@ -438,7 +441,7 @@
   const ptName = p => p.m.name + (p.d && p.d.subset ? " *" : "");  // a chart label: "*" on a text-only subset
   const subsetTip = d => `scored on the text-only subset (${d.subset.n ?? "?"} of ${d.subset.of ?? "?"} questions, those without an image): a text-only model; not comparable with the full benchmark and not in Overall`;
   const pickVal = lvl => state.subject.startsWith("t:") ? lvl.tasks[state.subject.slice(2)] : isOverall() ? overallOf(lvl) : lvl.benchmarks[state.subject.slice(2)];
-  // a configuration is plotted when it has a score; one without a cost goes to the "no price" band of the cost axis
+  // a configuration is plotted when it has a score; one without a cost goes to the "cost unavailable" band of the cost axis
   const has = lvl => { const d = pickVal(lvl); return d && d.score != null && (d[state.x] != null || state.x === "cost"); };
   function points() {
     const pts = [];
@@ -546,7 +549,7 @@
     document.getElementById("chart-legend").innerHTML = state.x === "cost"
       ? `<span><svg viewBox="-12 -12 24 24" width="18" height="18"><circle r="10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>billed cost</span>`
         + (pts.some(p => p.d.cost_est) ? `<span><svg viewBox="-12 -16 28 28" width="20" height="20"><circle r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="-9" r="6" fill="var(--bg)" stroke="currentColor"/><text x="9" y="-6" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor">≈</text></svg>estimated (API price × our tokens)</span>` : "")
-        + (noX.length ? `<span><span class="lg-band"></span>no price</span>` : "") : "";
+        + (noX.length ? `<span><span class="lg-band"></span>cost unavailable</span>` : "") : "";
     // a text-only model's text-only subset (HLE-Diamond, JFinBench): "*" on its label, explained here and in the tooltip
     const sub = pts.find(p => p.d.subset);
     if (sub) document.getElementById("chart-legend").insertAdjacentHTML("beforeend",
@@ -555,7 +558,7 @@
     const LOG = state.scale === "log";
     const x0 = LOG ? Math.min(...xs) / 1.8 : 0, x1 = LOG ? Math.max(...xs) * 1.8 : Math.max(...xs) * 1.08;
     const y0 = Math.max(0, Math.floor((Math.min(...ys) - 6) / 10) * 10), y1 = 100;
-    // "no price" band: a strip left of the cost scale (an axis break separates it), for configurations without a cost
+    // "cost unavailable" band: a strip left of the cost scale (an axis break separates it), for configurations without a cost
     const BAND = noX.length ? Math.round(64 * FS) : 0, PL = M.l + BAND;
     const sx = LOG ? v => PL + (Math.log10(v) - Math.log10(x0)) / (Math.log10(x1) - Math.log10(x0)) * (W - PL - M.r)
                    : v => PL + (v - x0) / (x1 - x0) * (W - PL - M.r);
@@ -575,17 +578,18 @@
     }
     if (BAND) {
       el("rect", { x: M.l, y: M.t, width: BAND - 10, height: H - M.t - M.b, fill: "var(--surface-2)", opacity: 0.6, rx: 4 }, g);
-      el("text", { x: M.l + (BAND - 10) / 2, y: H - M.b + 20, "text-anchor": "middle" }, g).textContent = "no price";
+      const bt = el("text", { x: M.l + (BAND - 10) / 2, y: H - M.b + 20, "text-anchor": "middle" }, g);  // two lines: the band is narrow
+      ["cost", "unavailable"].forEach((w, i) => { el("tspan", { x: M.l + (BAND - 10) / 2, dy: i ? "1.15em" : 0 }, bt).textContent = w; });
       const bx = M.l + BAND - 5, by = H - M.b;  // axis break: two short slashes between the band and the scale
       for (const dx of [-3, 3]) el("line", { x1: bx + dx - 3, y1: by + 6, x2: bx + dx + 3, y2: by - 6, stroke: "var(--text-muted)", "stroke-width": 1.4 }, g);
     }
     for (const v of (LOG ? logTicks(x0, x1) : linTicks(x1))) {
       el("line", { class: "gridline", x1: sx(v), x2: sx(v), y1: M.t, y2: H - M.b, "stroke-dasharray": "2 4" }, g);
-      if (BAND && sx(v) - (M.l + (BAND - 10) / 2) < (W < 600 ? 62 : 48)) continue;  // label too close to "no price"
+      if (BAND && sx(v) - (M.l + (BAND - 10) / 2) < (W < 600 ? 62 : 48)) continue;  // label too close to "cost unavailable"
       el("text", { x: sx(v), y: H - M.b + 20, "text-anchor": "middle" }, g).textContent =
         state.x === "cost" ? (v === 0 ? "$0" : fmtCost(v).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")) : (v === 0 ? "0" : Math.round(v * 1000).toLocaleString("en-US"));
     }
-    el("text", { class: "axis-title", x: (M.l + W - M.r) / 2, y: H - 14, "text-anchor": "middle" }, svg).textContent =
+    el("text", { class: "axis-title", x: (PL + W - M.r) / 2, y: H - 14, "text-anchor": "middle" }, svg).textContent =
       (state.x === "cost" ? "API cost per question (USD" + (LOG ? ", log scale)" : ")") : "Output tokens per question" + (LOG ? " (log scale)" : ""));
     if (W < 600) el("text", { class: "axis-title", x: M.l, y: M.t - 10, "text-anchor": "start" }, svg).textContent = scopeLabel() + " score";  // portrait: title above the plot
     else el("text", { class: "axis-title", x: 16, y: (M.t + H - M.b) / 2, "text-anchor": "middle", transform: `rotate(-90 16 ${(M.t + H - M.b) / 2})` }, svg).textContent = scopeLabel() + " score";
@@ -683,7 +687,7 @@
     tip.innerHTML = `<div class="tt-name" style="color:${nameColor(p.m)}">${esc(p.m.name)}</div><div class="tt-sub">${esc(sub)}</div>
       <div class="tt-row"><span>${esc(scopeLabel())}</span><b>${p.d.score.toFixed(1)}%${p.d.std != null ? ` <span class="pm">± ${p.d.std.toFixed(1)}</span>` : ""}${p.d.n_repeats && p.d.n_repeats < SITE.n_runs ? ` <span class="pm">(${p.d.n_repeats} attempts)</span>` : ""}</b></div>
       ${p.d.subset ? `<div class="tt-row"><span>* Text-only subset</span><b>${p.d.subset.n} of ${p.d.subset.of} questions</b></div>` : ""}
-      <div class="tt-row"><span>Cost / question</span><b>${p.d.cost != null ? fmtCostE(p.d) : "no price"}</b></div>
+      <div class="tt-row"><span>Cost / question</span><b>${p.d.cost != null ? fmtCostE(p.d) : "cost unavailable"}</b></div>
       <div class="tt-row"><span>Output tokens / question</span><b>${p.d.tok != null ? fmtTok(p.d.tok) : "–"}</b></div>`;
     placeTip(p);
   }
@@ -793,7 +797,7 @@
       const notSent = Object.entries(j.settings || {}).filter(([, v]) => v.value == null).map(([k]) => k);
       const price = j.price && j.price.prompt != null && j.price.completion != null
         ? `${usd(j.price.prompt)} input · ${usd(j.price.completion)} output per 1M tokens` + pm("(the provider's price at run time; the cost shown is the billed cost)") : "";
-      return row("Model", code(j.model) + (j.model_identity === "alias" ? pm(`alias: ${esc(ALIAS_TIP)}`) : "") + (j.preset ? pm(`preset ${esc(j.preset)}`) : ""))
+      return row("Model", code(j.model) + (j.model_identity === "alias" ? pm(`alias: ${esc(ALIAS_TIP)}`) : "") + (j.preset ? pm(`preset ${esc(j.preset)}`) : "") + (m.note ? `<br>${esc(m.note)}` : ""))
         + row("Served identity", ident) + row("Provider", prov) + row("Server", served) + row("Base URL", j.base_url_host ? code(j.base_url_host) : "")
         + row("Price", price)
         + row("Settings", (sets || "") + (notSent.length ? pm(`not sent: ${esc(notSent.join(", "))} (provider default)`) : ""));
@@ -874,7 +878,7 @@
       tr.innerHTML = `<td><span class="mname">${logoHTML(r.m)}${esc(r.m.name)} <span class="effort-tag">${esc(effLabel(r.m, r.effort))}</span>${aliasTag(r.lvl)}</span></td>`
         + `<td class="barcol">${pct != null ? `<div class="sbar"><i style="width:${pct}%;background:${nameColor(r.m)}"></i>${whisk}</div>` : ""}</td>`
         + `<td class="hl overall">${d.score != null ? d.score.toFixed(1) : "–"}${d.subset ? `<sup class="subset" title="${esc(subsetTip(d))}">*</sup>` : ""}${d.std != null ? ` <span class="pm">± ${d.std.toFixed(1)}</span>` : ""}${d.n_repeats && d.n_repeats < SITE.n_runs ? ` <span class="pm" title="fewer attempts than the other configurations">(${d.n_repeats} attempts)</span>` : ""}</td>`
-        + `<td class="sep" ${d.cost_est ? 'title="estimate: the same model\'s API price x our tokens (row details)"' : d.cost == null ? 'title="no price: a self-served model with no API listing to price it"' : ""}>${d.cost != null ? fmtCostE(d) : "–"}</td><td>${d.tok != null ? fmtTok(d.tok) : "–"}</td>`
+        + `<td class="sep" ${d.cost_est ? 'title="estimate: the same model\'s API price x our tokens (row details)"' : d.cost == null ? 'title="cost unavailable: a self-served model with no API listing to price it"' : ""}>${d.cost != null ? fmtCostE(d) : "–"}</td><td>${d.tok != null ? fmtTok(d.tok) : "–"}</td>`
         + (rt => `<td class="sep" title="${esc(rt ? rt.cut_tip : "")}">${fmtRate(rt && rt.cut)}</td><td title="${esc(rt ? rt.refused_tip : "")}">${fmtRate(rt && rt.refused)}</td>`)(rates(r.lvl));
       const key = r.m.key + "|" + r.effort;
       tr.className = "has-settings" + (openRows.has(key) ? " open" : "");
@@ -946,46 +950,42 @@
       const lv = [["max", m.max], ["low", m.low]].filter(([e, l]) => l && on(m, e)).map(([eff, lvl]) => ({ m, eff, lvl }));
       if (state.view === "best" && lv.length > 1) cols.push((ov(lv[1]) ?? -1) > (ov(lv[0]) ?? -1) ? lv[1] : lv[0]); else cols.push(...lv);
     }
-    const head = `<tr><th class="ar-task">Benchmark</th>` + cols.map(c => `<th class="ar-set" title="${esc(c.m.name + " (" + effLabel(c.m, c.eff) + ")")}">`
+    const head = `<tr><th class="ar-task">Benchmark</th>` + cols.map(c => `<th class="ar-set" title="${esc(c.m.name + " (" + effLabel(c.m, c.eff) + ")" + (c.m.note ? "\n" + c.m.note : ""))}">`
       + `<span class="ar-name">${logoHTML(c.m)}${esc(c.m.name)}</span><span class="effort-tag">${esc(effLabel(c.m, c.eff))}</span></th>`).join("") + "</tr>";
     const bestOf = vals => { const v = vals.filter(x => x != null); return v.length ? Math.max(...v) : null; };
-    const ovBest = bestOf(cols.map(ov));
-    let body = `<tr class="ar-overall"><th class="ar-task">Overall</th>` + cols.map(c => ov(c) != null
-      ? `<td${ov(c) === ovBest ? ' class="ar-best"' : ""}>${ov(c).toFixed(1)}</td>` : `<td class="ar-na" title="not run on every benchmark">–</td>`).join("") + "</tr>";
+    let body = "";
     for (const cat of (D.categories || []).filter(c => tasks.some(t => t.category === c))) {
       body += `<tr class="ar-cat-row"><th class="ar-task" colspan="${cols.length + 1}">${esc(cat)}</th></tr>`;
       for (const t of tasks.filter(t => t.category === cat)) {
         const best = bestOf(cols.map(c => (x => x && !x.subset ? x.score : null)(c.lvl.tasks[t.key])));
-        body += `<tr><th class="ar-task" title="${esc(t.label)}">${esc(t.label)}</th>` + cols.map(c => {
+        body += `<tr><th class="ar-task"><a href="explore/?view=tasks&amp;d=${encodeURIComponent(t.key)}" title="This benchmark in Explore">${esc(t.label)}</a></th>` + cols.map(c => {
           const x = c.lvl.tasks[t.key];
-          if (!x) return (c.lvl.refused || {})[t.key] ? `<td class="ar-na" data-tip="${esc(c.lvl.refused[t.key])}">refused</td>` : `<td class="ar-na">–</td>`;
-          const tip = `${c.m.name} (${effLabel(c.m, c.eff)}), ${t.label}: ${x.score.toFixed(1)}%` + (x.std != null ? ` ± ${x.std.toFixed(1)}` : "")
-            + (x.n ? `, ${x.n} questions` : "") + (x.subset ? ` (${subsetTip(x)})` : "");
-          return `<td${!x.subset && x.score === best ? ' class="ar-best"' : ""} data-tip="${esc(tip)}">${x.score.toFixed(1)}${x.subset ? `<sup class="subset">*</sup>` : ""}</td>`;
+          if (!x) return (c.lvl.refused || {})[t.key] ? `<td class="ar-na">refused</td>` : `<td class="ar-na">–</td>`;
+          return `<td${!x.subset && x.score === best ? ' class="ar-best"' : ""}>${x.score.toFixed(1)}${x.subset ? `<sup class="subset">*</sup>` : ""}</td>`;
         }).join("") + "</tr>";
       }
     }
     const tbl = document.getElementById("ar-table");
     tbl.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
     tbl.style.setProperty("--ar-head", tbl.tHead.offsetHeight + "px");  // the category rows stick right under the header
-    document.getElementById("ar-note").textContent = `% correct, mean over attempts. "–" = not evaluated; "refused" = left out by the site build.`
+    document.getElementById("ar-note").textContent = `% correct, mean over attempts; the best score of each row in bold. "–" = not evaluated; "refused" = left out by the site build. A benchmark's name opens it in Explore.`
       + (cols.some(c => tasks.some(t => (c.lvl.tasks[t.key] || {}).subset)) ? " * Text-only subset (questions without an image): not comparable, not in Overall." : "");
   }
-  // the cell's details at once on hover, or on tap (the browser's own title tooltip is slow and absent on touch)
-  { const tip = document.createElement("div"); tip.className = "ar-tip"; tip.hidden = true; document.body.appendChild(tip);
-    const tbl = document.getElementById("ar-table");
-    const show = td => { tip.textContent = td.dataset.tip; tip.hidden = false;
-      const r = td.getBoundingClientRect(), w = tip.offsetWidth;
-      tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
-      tip.style.top = (r.top - tip.offsetHeight - 6 < 8 ? r.bottom + 6 : r.top - tip.offsetHeight - 6) + "px"; };
-    tbl.addEventListener("mouseover", e => { const td = e.target.closest("td[data-tip]"); if (td) show(td); });
-    tbl.addEventListener("mouseout", e => { if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest("td[data-tip]")) tip.hidden = true; });
-    tbl.addEventListener("click", e => { const td = e.target.closest("td[data-tip]"); if (td) show(td); });
-    document.querySelector(".ar-wrap").addEventListener("scroll", () => { tip.hidden = true; });
-    window.addEventListener("scroll", () => { tip.hidden = true; }, { passive: true }); }
   { const sel = document.getElementById("ar-cat");
     sel.innerHTML = `<option value="">All categories</option>` + (D.categories || []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
-    sel.value = AR.cat; sel.onchange = () => { AR.cat = sel.value; renderAll(); syncURL(); };
+    sel.value = AR.cat; sel.onchange = () => { keepPos(sel.parentElement, () => { AR.cat = sel.value; renderAll(); }); syncURL(); };
+    // shown as the score pulldown is: a button with a list under it (the hidden <select> keeps the value)
+    const dd = document.createElement("div"); dd.className = "dd";
+    dd.innerHTML = `<button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Benchmark category"><span class="dd-val"></span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="dd-pop" role="listbox"></div>`;
+    sel.after(dd); sel.hidden = true;
+    const ddPop = dd.querySelector(".dd-pop"), ddBtn = dd.querySelector(".dd-btn");
+    ddPop.innerHTML = [...sel.options].map(o => `<button type="button" class="dd-opt" role="option" data-v="${esc(o.value)}">${esc(o.textContent)}</button>`).join("");
+    const ddSyncCat = () => { dd.querySelector(".dd-val").textContent = sel.options[sel.selectedIndex].textContent;
+      ddPop.querySelectorAll(".dd-opt").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === sel.value))); };
+    ddSyncCat();
+    ddBtn.addEventListener("click", e => { e.stopPropagation(); const open = !dd.classList.contains("open"); dd.classList.toggle("open", open); ddBtn.setAttribute("aria-expanded", String(open)); });
+    ddPop.addEventListener("click", e => { const b = e.target.closest(".dd-opt"); if (!b) return; sel.value = b.dataset.v; ddSyncCat(); dd.classList.remove("open"); sel.dispatchEvent(new Event("change")); });
+    document.addEventListener("click", e => { if (!dd.contains(e.target)) { dd.classList.remove("open"); ddBtn.setAttribute("aria-expanded", "false"); } });
     renderAll();
     SHARE.bar(document.getElementById("ar-note"), { id: "ar-table" }); }
 

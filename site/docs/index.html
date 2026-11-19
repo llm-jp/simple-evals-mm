@@ -137,7 +137,8 @@
   async function loadNav(ref) {
     const key = `sem-docs-nav:${ref}`;
     let nav = null;
-    try { nav = JSON.parse(sessionStorage.getItem(key) || "null"); } catch (e) {}
+    // a release's Contents never change; main's do (a page added, merged or removed), so main is always fetched
+    if (ref !== "main") try { nav = JSON.parse(sessionStorage.getItem(key) || "null"); } catch (e) {}
     if (!nav) {
       try {
         const r = await fetch(RAW(ref, "docs/README.md"));
