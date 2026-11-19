@@ -71,3 +71,16 @@ def test_the_citation_is_the_same_everywhere():
     bib = re.search(r"```bibtex\n(@software\{simple_evals_mm,.*?)\n```", (ROOT / "README.md").read_text(encoding="utf-8"), re.DOTALL)
     assert bib, "README: the @software{simple_evals_mm, ...} entry"
     assert bib.group(1) in (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+
+
+SHELL_LINE_MAX = 88  # what the Docs page's text column shows without scrolling (as Harbor's docs: ~80)
+
+
+@pytest.mark.parametrize("doc", DOCS, ids=lambda p: str(p.relative_to(ROOT)))
+def test_shell_examples_fit_without_scrolling(doc):
+    """Every line of a shell code block fits the Docs page's column: split a long command before an option with
+    ' \\' (4-space continuation) and put a comment on its own line above the command (the docs copy as they read)."""
+    text = doc.read_text(encoding="utf-8")
+    long = [f"{len(line)}: {line[:60]}..." for m in re.finditer(r"```(?:bash|sh|shell|console)\n(.*?)```", text, re.DOTALL)
+            for line in m.group(1).splitlines() if len(line) > SHELL_LINE_MAX]
+    assert not long, f"{doc.name}: shell lines over {SHELL_LINE_MAX} characters:\n" + "\n".join(long)

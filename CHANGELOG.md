@@ -9,6 +9,8 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 - Docs: code blocks have a header bar (language, Copy) and their own background, so the button no longer covers the
   code; Quick start explains every column of `sem job show` (verified, causes, ...); Concepts shows a job as a file tree.
+- Docs: every shell example fits the Docs page without scrolling (at most 88 characters a line, as Harbor's docs):
+  long commands split before an option with ` \`, comments on their own line; `tests/test_docs.py` checks it.
 
 - Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
   of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the

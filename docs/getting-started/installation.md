@@ -6,7 +6,8 @@ release tag for results you will compare with others ([Versioning](../versioning
 ```bash
 git clone --branch v0.6.0 https://github.com/llm-jp/simple-evals-mm.git
 cd simple-evals-mm
-uv sync --frozen                 # Python 3.13 and the locked dependencies (https://docs.astral.sh/uv/)
+# Python 3.13 and the locked dependencies (https://docs.astral.sh/uv/)
+uv sync --frozen
 uv run --frozen sem --version
 ```
 

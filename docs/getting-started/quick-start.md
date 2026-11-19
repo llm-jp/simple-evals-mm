@@ -5,10 +5,13 @@ Install first: [Installation](installation.md).
 ## The first job
 
 ```bash
-# what would run: the resolved settings, the trials, an estimated cost and time; nothing is generated
+# what would run: the resolved settings, the trials, an estimated cost and time; nothing
+# is generated
 uv run --frozen sem run -m openrouter/qwen/qwen3.8-27b -d hakushobench -l 5 --dry-run
-# 5 HakushoBench questions, 3 attempts each (the dataset default), judged by the default judge
-uv run --frozen sem run -m openrouter/qwen/qwen3.8-27b -d hakushobench -l 5 --job-name first
+# 5 HakushoBench questions, 3 attempts each (the dataset default), judged by the default
+# judge
+uv run --frozen sem run -m openrouter/qwen/qwen3.8-27b -d hakushobench -l 5 --job-name \
+    first
 uv run --frozen sem job show jobs/first
 ```
 

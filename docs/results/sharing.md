@@ -5,8 +5,10 @@
 ## Share a job
 
 ```bash
-uv run --frozen sem job publish jobs/NAME --repo ORG/NAME        # a private Hugging Face dataset repo (--public)
-uv run --frozen sem job download ORG/NAME                        # the other side: restored under jobs/, sha256-checked
+# a private Hugging Face dataset repo (--public)
+uv run --frozen sem job publish jobs/NAME --repo ORG/NAME
+# the other side: restored under jobs/, sha256-checked
+uv run --frozen sem job download ORG/NAME
 ```
 
 The published job is the complete record (config, lock, trials, verifications) with the question texts obfuscated
