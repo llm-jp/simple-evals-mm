@@ -45,6 +45,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 - Leaderboard spec: `subsets: {column: dataset}` lets a text-only model fill a benchmark's column from its text-only
   version (marked `*` on the page, never in an aggregate, no parity / comparability entry); SEMI places text-only
   models from their text benchmarks (marked in the tooltip).
+- Site: the Trends URL keeps the pinned developers, the benchmarks of "SEMI vs benchmark score" and Best / All; the
+  Analysis URL keeps the dataset; the leaderboard URL also keeps the expanded rows (`open=`), so a shared link opens
+  the same view.
 
 Datasets changed: new `hle_diamond_text`, `jfinbench_text`; no existing dataset changed (no prompt, task or reward change).
 
