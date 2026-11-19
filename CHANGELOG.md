@@ -7,6 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Trends: the index is renamed **SEM-ECI** (simple-evals-mm ECI), a simple-evals-mm version of the Epoch Capabilities
+  Index (as OpenAI ECI is OpenAI's); its own scale (GPT-6 Astra max 150, Qwen3.5-9B 100), not comparable with Epoch's
+  ECI. Was SEMI (#201).
+
 - Site: every section title has a link (#); under each chart and table, Share (X, Instagram, copy link) and Download
   (PNG / SVG with a fixed title, the LLM-jp logo and "simple-evals-mm · CC BY 4.0" at the bottom left; CSV), as on
   Epoch AI's pages; the view state moved to the
