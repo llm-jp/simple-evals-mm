@@ -7,6 +7,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: on the score-vs-cost / tokens chart a text-only subset is marked too ("*" on the model's label, a legend line,
+  the question count in the tooltip).
+
 - Site: Share offers LinkedIn instead of Instagram (LinkedIn shares links; Instagram takes only images).
 
 - Site: no CSV export (Share and Download graph only, as on Epoch AI's pages; the data is on Hugging Face and in the
