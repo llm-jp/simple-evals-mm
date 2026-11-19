@@ -7,6 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Docs page: the sidebar and "On this page" start where they stick, so scrolling never moves them; another docs page
+  opens in place (as Harbor's docs: the sidebar keeps its scroll, Back / Forward and new tabs work); on load the
+  current page's link is scrolled into view in the sidebar.
+
 - Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
   of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
   BibTeX alone; the site changelog's 2026-11-19 entry.

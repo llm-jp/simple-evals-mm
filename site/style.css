@@ -523,7 +523,10 @@ header.site.hdr-hidden { transform: translateY(-100%); }
    comfortable line length, and "On this page" sits at the right edge */
 .wrap.docs-layout, .wrap.wrap-docs { max-width: 1440px; }  /* the docs page's header lines up with it */
 .docs-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr) 210px; gap: 40px; padding-top: 32px; padding-bottom: 56px; align-items: start; }
-.docs-nav, .docs-otp { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow-y: auto; font-size: 14px; }
+/* the sidebars start where they stick (the header's 57px + the layout's 24px), so scrolling the page never moves them */
+section#docs { padding-top: 0; }
+.docs-layout { padding-top: 24px !important; }
+.docs-nav, .docs-otp { position: sticky; top: 81px; max-height: calc(100vh - 97px); overflow-y: auto; font-size: 14px; }
 .docs-nav .docs-ver { display: flex; gap: 8px; align-items: center; color: var(--text-muted); font-size: 13px; margin-bottom: 8px; }
 .docs-nav select { font: inherit; color: var(--text-primary); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 3px 8px; }
 .docs-menu > summary { display: none; }
