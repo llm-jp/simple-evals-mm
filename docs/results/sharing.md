@@ -4,10 +4,15 @@
 
 ## Share a job
 
+A private Hugging Face dataset repo (--public):
+
 ```bash
-# a private Hugging Face dataset repo (--public)
 uv run --frozen sem job publish jobs/NAME --repo ORG/NAME
-# the other side: restored under jobs/, sha256-checked
+```
+
+The other side: restored under jobs/, sha256-checked:
+
+```bash
 uv run --frozen sem job download ORG/NAME
 ```
 

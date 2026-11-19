@@ -84,3 +84,32 @@ def test_shell_examples_fit_without_scrolling(doc):
     long = [f"{len(line)}: {line[:60]}..." for m in re.finditer(r"```(?:bash|sh|shell|console)\n(.*?)```", text, re.DOTALL)
             for line in m.group(1).splitlines() if len(line) > SHELL_LINE_MAX]
     assert not long, f"{doc.name}: shell lines over {SHELL_LINE_MAX} characters:\n" + "\n".join(long)
+    # a comment line after a ' \\' continuation ends the command there (the rest would run as another command)
+    split = [m.group(1).splitlines()[i][:60] for m in re.finditer(r"```(?:bash|sh|shell|console)\n(.*?)```", text, re.DOTALL)
+             for i in range(1, len(m.group(1).splitlines()))
+             if m.group(1).splitlines()[i - 1].rstrip().endswith("\\") and m.group(1).splitlines()[i].lstrip().startswith("#")]
+    assert not split, f"{doc.name}: a comment line inside a continued command:\n" + "\n".join(split)
+
+
+def _shell_commands(block: str) -> int:
+    """The commands in a shell block: lines that are neither blank nor comments nor a continuation of the line before."""
+    n, cont = 0, False
+    for line in block.splitlines():
+        if not cont and line.strip() and not line.lstrip().startswith("#"):
+            n += 1
+        cont = line.rstrip().endswith("\\")
+    return n
+
+
+# a sequence that only works together stays in one box: a variable set then used, cd, two terminals, ...
+_SEQUENCE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*=\S|export |cd |for |if |source )|<<|terminal \d", re.IGNORECASE | re.MULTILINE)
+
+
+@pytest.mark.parametrize("doc", DOCS, ids=lambda p: str(p.relative_to(ROOT)))
+def test_one_command_per_shell_example(doc):
+    """As Harbor's docs: a code box holds one command, explained by the sentence before it (a sequence that only works
+    together, such as a variable set then used, stays in one box)."""
+    text = doc.read_text(encoding="utf-8")
+    many = [m.group(1).strip().splitlines()[0][:70] for m in re.finditer(r"```(?:bash|sh|shell|console)\n(.*?)```", text, re.DOTALL)
+            if _shell_commands(m.group(1)) > 1 and not _SEQUENCE.search(m.group(1))]
+    assert not many, f"{doc.name}: code boxes with several commands (one per box, each with its sentence):\n" + "\n".join(many)
