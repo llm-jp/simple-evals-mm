@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="A reproducible, reliable evaluation framework for LLMs and VLMs on English and Japanese tasks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=cab294999f">
+<link rel="stylesheet" href="style.css?v=191e658d1f">
 <!-- Google Analytics (the same GA4 property as speed1313.github.io) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-7X0Q0NSDB9"></script>
 <script>
@@ -193,7 +193,7 @@
 </footer>
 
 <script src="logos.js?v=95862aac74"></script>
-<script src="data.js?v=1f736512f9"></script>
+<script src="data.js?v=f2bb1fbe67"></script>
 <script>
 (function () {
   const D = window.LB;
@@ -376,12 +376,13 @@
   // undefined when the level misses one of them (that configuration is then left out of Overall, as on the site's default)
   function overallOf(lvl) {
     const ts = [...state.ovTasks].map(k => lvl.tasks[k]);
-    if (!ts.length || ts.some(t => !t || t.score == null)) return undefined;
+    if (!ts.length || ts.some(t => !t || t.score == null || t.subset)) return undefined;  // a text-only subset never counts
     const mean = k => ts.every(t => t[k] != null) ? ts.reduce((a, t) => a + t[k], 0) / ts.length : null;
     return { score: mean("score"), cost: mean("cost"), tok: mean("tok"), cost_est: ts.some(t => t.cost_est),
              std: ts.every(t => t.std != null) ? Math.sqrt(ts.reduce((a, t) => a + t.std ** 2, 0)) / ts.length : null,
              n_repeats: Math.min(...ts.map(t => t.n_repeats || SITE.n_runs)) };
   }
+  const subsetTip = d => `scored on the text-only subset (${d.subset.n ?? "?"} of ${d.subset.of ?? "?"} questions, those without an image): a text-only model; not comparable with the full benchmark and not in Overall`;
   const pickVal = lvl => state.subject.startsWith("t:") ? lvl.tasks[state.subject.slice(2)] : isOverall() ? overallOf(lvl) : lvl.benchmarks[state.subject.slice(2)];
   // a configuration is plotted when it has a score; one without a cost goes to the "no price" band of the cost axis
   const has = lvl => { const d = pickVal(lvl); return d && d.score != null && (d[state.x] != null || state.x === "cost"); };
@@ -793,6 +794,8 @@
     thead.innerHTML = cs.map(c => `<th data-k="${esc(c.key)}" class="${c.key === state.sortKey ? "sorted" : ""} ${c.key === "score" ? "hl" : ""} ${c.cls === "sep" ? "sep" : ""}">${esc(c.label)}</th>`).join("");
     // Overall: only configurations evaluated on every task of the set; the others are listed in the note instead of "-" rows
     const isTotal = TOTAL.some(b => "b:" + b.key === state.subject);
+    const subs = rowsNow().map(r => tVal(r.lvl)).filter(d => d && d.subset);
+    if (subs.length) document.getElementById("table-note").textContent += ` * Text-only model: scored on the text-only subset (${subs[0].subset.n} of ${subs[0].subset.of} questions, those without an image); not comparable with the full benchmark and not in Overall.`;
     const all = rowsNow();
     const omitted = isTotal ? all.filter(r => (tVal(r.lvl) || {}).score == null) : [];
     if (omitted.length) document.getElementById("table-note").textContent += ` Not in ${tScope().label} (missing benchmarks): `
@@ -810,7 +813,7 @@
       const whisk = pct != null && d.std != null ? `<span class="err" style="left:${Math.max(0, pct - d.std)}%;width:${Math.min(100, pct + d.std) - Math.max(0, pct - d.std)}%"></span>` : "";
       tr.innerHTML = `<td><span class="mname">${logoHTML(r.m)}${esc(r.m.name)} <span class="effort-tag">${esc(effLabel(r.m, r.effort))}</span>${aliasTag(r.lvl)}</span></td>`
         + `<td class="barcol">${pct != null ? `<div class="sbar"><i style="width:${pct}%;background:${nameColor(r.m)}"></i>${whisk}</div>` : ""}</td>`
-        + `<td class="hl overall">${d.score != null ? d.score.toFixed(1) : "–"}${d.std != null ? ` <span class="pm">± ${d.std.toFixed(1)}</span>` : ""}${d.n_repeats && d.n_repeats < SITE.n_runs ? ` <span class="pm" title="fewer attempts than the other configurations">(${d.n_repeats} attempts)</span>` : ""}</td>`
+        + `<td class="hl overall">${d.score != null ? d.score.toFixed(1) : "–"}${d.subset ? `<sup class="subset" title="${esc(subsetTip(d))}">*</sup>` : ""}${d.std != null ? ` <span class="pm">± ${d.std.toFixed(1)}</span>` : ""}${d.n_repeats && d.n_repeats < SITE.n_runs ? ` <span class="pm" title="fewer attempts than the other configurations">(${d.n_repeats} attempts)</span>` : ""}</td>`
         + `<td class="sep" ${d.cost_est ? 'title="estimate: the same model\'s API price x our tokens (row details)"' : d.cost == null ? 'title="no price: a self-served model with no API listing to price it"' : ""}>${d.cost != null ? fmtCostE(d) : "–"}</td><td>${d.tok != null ? fmtTok(d.tok) : "–"}</td>`
         + (rt => `<td class="sep" title="${esc(rt ? rt.cut_tip : "")}">${fmtRate(rt && rt.cut)}</td><td title="${esc(rt ? rt.refused_tip : "")}">${fmtRate(rt && rt.refused)}</td>`)(rates(r.lvl));
       const key = r.m.key + "|" + r.effort;

@@ -42,6 +42,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
   image); `sem site build` versions the image URL on every page.
 - Site: the leaderboard's URL follows what is shown (score, chart axis / scale, Best / All, hidden settings, the
   Overall benchmark subset), so a copied link opens the same view.
+- Leaderboard spec: `subsets: {column: dataset}` lets a text-only model fill a benchmark's column from its text-only
+  version (marked `*` on the page, never in an aggregate, no parity / comparability entry); SEMI places text-only
+  models from their text benchmarks (marked in the tooltip).
 
 Datasets changed: new `hle_diamond_text`, `jfinbench_text`; no existing dataset changed (no prompt, task or reward change).
 
