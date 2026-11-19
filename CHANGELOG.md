@@ -7,6 +7,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: each view has its controls right above it: the table gets the chart's set (score, Benchmarks, Best / All,
+  Configs; one shared state), set apart from the chart; All results has Category, Best / All and Configs (narrowing
+  its columns), and its category rows stay in view while scrolling.
 - Docs trimmed for users: implementation internals, incident history and dataset-specific details left out of the
   guides and reference pages (OmniDocBench's evaluator in Regrade, the leaderboard's refusal rules, the job-file and
   resume internals, serving and inference-setting internals); Analysis merged into
@@ -19,6 +22,11 @@ version does not decide whether two results are comparable: `sem jobs compare` d
   long commands split before an option with ` \`, comments on their own line; `tests/test_docs.py` checks it.
 - Docs and README: one command per code box, each introduced by a sentence (as Harbor's docs); sequences that only
   work together stay in one box; checked by `tests/test_docs.py`. Fixed a shell example that a comment line split in two.
+- Docs page: the sidebar and "On this page" start where they stick, so scrolling never moves them; another docs page
+  opens in place (as Harbor's docs: the sidebar keeps its scroll, Back / Forward and new tabs work); on load the
+  current page's link is scrolled into view in the sidebar.
+- Site: shorter texts (About in 4 bullets, the table note, the parity and Trends intros, All results); All results
+  shows a cell's details at once on hover or tap (the browser's own tooltip was slow and absent on touch screens).
 
 - Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
   of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
