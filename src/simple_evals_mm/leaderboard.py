@@ -19,6 +19,8 @@ one or more jobs, one job per dataset:
             job: kimi-k3__low               # supplies every leaderboard dataset it contains
             datasets: {mmmu_pro: kimi-k3__low__2}   # dataset -> job: overrides / additions (another provider ...)
             allow_refs: {livecodebench: release_v5} # a non-default `-d name@ref` accepted for this dataset
+            subsets: {hle_diamond: hle_diamond_text} # a text-only model: the column shows its text-only version
+                                                     # (marked, never in an aggregate)
 
 A job is a name under jobs_dir, or a path (with a "/"; relative to the spec file). For every (setting, dataset) the
 build checks the job (`sem job check` plus the rules below) and refuses the dataset with the reason when one fails;
@@ -106,6 +108,24 @@ def load_spec(path: str) -> dict:
         if missing:
             raise SpecError(f"{path}: benchmark {b.get('key')}: tasks not in `tasks`: {missing}")
     return spec
+
+
+def setting_plan(spec: dict, s: dict, jobs_dir: str, spec_dir: str) -> dict[str, tuple[str, str]]:
+    """{column (spec task): (job ref, dataset read from that job)}: the setting's `job` supplies every spec task it
+    contains, `datasets` maps single tasks to other jobs, `subsets` reads a column from another dataset of the job (a
+    text-only model's text-only version of a benchmark: hle_diamond <- hle_diamond_text)."""
+    subsets = s.get("subsets") or {}
+    plan: dict[str, tuple[str, str]] = {}
+    if s.get("job"):
+        st = store_mod.JobStore.from_path(resolve_job(s["job"], jobs_dir, spec_dir))
+        if st.exists():
+            have = set(runner.dataset_entries(st.read_config()))
+            for name in spec["tasks"]:
+                if subsets.get(name, name) in have:
+                    plan[name] = (s["job"], subsets.get(name, name))
+    for name, ref in (s.get("datasets") or {}).items():
+        plan[name] = (ref, subsets.get(name, name))
+    return plan
 
 
 def resolve_job(ref: str, jobs_dir: str, spec_dir: str) -> str:
@@ -538,27 +558,25 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
     for m in spec.get("models") or []:
         levels = []
         for s in m["settings"]:
-            plan: dict[str, str] = {}
-            if s.get("job"):
-                v = view(s["job"])
-                for name in runner.dataset_entries(v.cfg) if v.cfg else {}:
-                    if name in spec["tasks"]:
-                        plan[name] = s["job"]
-                if not v.cfg:
-                    report["refused"].append({"model": m["key"], "setting": s["label"], "dataset": "*", "job": s["job"],
-                                              "reasons": v.reasons})
-            plan.update(s.get("datasets") or {})
+            if s.get("job") and not view(s["job"]).cfg:
+                report["refused"].append({"model": m["key"], "setting": s["label"], "dataset": "*", "job": s["job"],
+                                          "reasons": view(s["job"]).reasons})
+            full = setting_plan(spec, s, jobs_dir, spec_dir)
+            plan = {k: ref for k, (ref, _) in full.items()}
             tasks, refused, jobs = {}, {}, {}
             for name in [k for k in task_keys if k in plan]:
-                v = view(plan[name])
-                reasons = dataset_reasons(v, name, (s.get("allow_refs") or {}).get(name))
+                v, ds = view(plan[name]), full[name][1]
+                reasons = dataset_reasons(v, ds, (s.get("allow_refs") or {}).get(name))
                 if m.get("model") and v.cfg and v.cfg.get("model") != m["model"]:
                     reasons.append(f"job model {v.cfg.get('model')} is not the row's model {m['model']}")
                 if s.get("effort") is not None and v.cfg and v.cfg.get("effort") != s["effort"]:
                     reasons.append(f"job effort {v.cfg.get('effort')} is not the setting's effort {s['effort']}")
                 if not reasons:
                     try:
-                        cell = dataset_cell(v, name, m.get("cost_estimate"))
+                        cell = dataset_cell(v, ds, m.get("cost_estimate"))
+                        if ds != name:  # a text-only subset: marked on the page, left out of every aggregate
+                            full_n = (datalock.entry(dataset_mod.split_ref(name)[0]) or {}).get("n_tasks")
+                            cell["subset"] = {"dataset": ds, "n": cell.get("n"), "of": full_n}
                     except Exception as e:  # noqa: BLE001 - reported as a refusal, the build goes on
                         reasons.append(f"metrics failed: {type(e).__name__}: {e}")
                 if reasons:
@@ -567,7 +585,7 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
                                               "job": plan[name], "reasons": reasons})
                     continue
                 tasks[name] = cell
-                if v.path not in columns.setdefault(name, []):
+                if ds == name and v.path not in columns.setdefault(name, []):  # (a subset is its own dataset)
                     columns[name].append(v.path)
                 jid = v.lock.get("job_id")
                 if jid not in jobs:
@@ -578,7 +596,8 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
             jp = list(jobs.values())
             lvl = {
                 "label": s["label"], "effort": _common(j["effort"] for j in jp) or s.get("effort"),
-                "tasks": tasks, "benchmarks": level_benchmarks(tasks, benches),
+                "tasks": tasks,
+                "benchmarks": level_benchmarks({k: c for k, c in tasks.items() if not c.get("subset")}, benches),
                 "refused": {k: "; ".join(v) for k, v in refused.items()} or None,
                 "jobs": jobs, "alias": any(j["model_identity"] == "alias" for j in jp),
                 "provider": _common((j["endpoint"] or {}).get("provider_name") for j in jp),
@@ -589,13 +608,15 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
         if not levels:
             report["warnings"].append(f"{m['key']}: nothing to show")
             continue
-        row = {k: m[k] for k in ("key", "name", "dev", "type") if k in m}
+        row = {k: m[k] for k in ("key", "name", "dev", "type", "text_only") if k in m}
         row.update(logo=m.get("logo"), params_b=m.get("params_b"),
                    model=m.get("model") or _common(j["model"] for lv in levels for j in lv["jobs"].values()))
         if refs is not None:  # the card comparison on the highest effort setting (cards report a model's best)
             top, top_s = levels[-1], next(s for s in m["settings"] if s["label"] == levels[-1]["label"])
             plan = dict(top_s.get("datasets") or {})
             for name, cell in top["tasks"].items():
+                if cell.get("subset"):  # model cards report the full benchmark
+                    continue
                 ref = plan.get(name) or top_s.get("job")
                 if ref:
                     pc = parity_cells(view(ref), refs, parity_cache).get(name)
@@ -611,7 +632,8 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
     for row in models_out:
         for lv in (row.get("max"), row.get("low")):
             for name, c in (lv or {}).get("tasks", {}).items():
-                by_ds.setdefault(name, set()).add(c["prov"]["tasks_sha256"])
+                if not c.get("subset"):
+                    by_ds.setdefault(name, set()).add(c["prov"]["tasks_sha256"])
     for name, shas in sorted(by_ds.items()):
         if len(shas) > 1:
             report["warnings"].append(f"{name}: {len(shas)} different task sets (tasks_sha256) across the rows")
@@ -627,7 +649,7 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
     for name, t in spec["tasks"].items():
         lk = datalock.entry(dataset_mod.split_ref(name)[0]) or {}
         ns = {c["n"] for row in models_out for lv in (row.get("max"), row.get("low")) if lv
-              for k, c in lv["tasks"].items() if k == name and c.get("n") is not None}
+              for k, c in lv["tasks"].items() if k == name and c.get("n") is not None and not c.get("subset")}
         tasks_out.append({"key": name, **t, "n": ns.pop() if len(ns) == 1 else lk.get("n_tasks"),
                           "revision": lk.get("revision")})
     versions = sorted({j["version"] for row in models_out for lv in (row.get("max"), row.get("low")) if lv

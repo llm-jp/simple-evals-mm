@@ -308,8 +308,9 @@ def test_data_js_has_the_keys_the_page_reads(lb):
     check("SITE", data["site"])
     check("m", row)
     check("lvl", lvl)
-    check("t", set(data["tasks"][0]) | set(cell) | {"jammeval", "paper", "dataset", "description"})
-    check("d", cell)
+    cell_optional = {"subset"}  # a text-only subset cell only (test_subset_column_is_marked_and_left_out_of_aggregates)
+    check("t", set(data["tasks"][0]) | set(cell) | cell_optional | {"jammeval", "paper", "dataset", "description"})
+    check("d", set(cell) | cell_optional)
     check("j", job, text=panel)
     check("c", cell, text=panel)
     check("p", cell["prov"], text=panel)
@@ -436,3 +437,19 @@ def test_every_page_has_link_preview_tags(tmp_path):
     for page in lb.OG_PAGES:
         html = (out / page).read_text(encoding="utf-8")
         assert html.count(f"og-image.png?v={v}") == 2, page  # og:image and twitter:image
+
+
+def test_subset_column_is_marked_and_left_out_of_aggregates(lb):
+    """`subsets: {column: dataset}`: a text-only model's text-only version of a benchmark fills the column, marked,
+    with no Overall, no parity, no task-set warning and no comparability column entry."""
+    s = lb
+    assert s["run_lb"]("t", datasets="arith2") == 0
+    p = s["spec"]([{"label": "low", "job": "t", "subsets": {"arith": "arith2"}}], tasks=("arith",))
+    data, report = s["build"](p)
+    assert report["refused"] == [] and not [w for w in report["warnings"] if "task sets" in w]
+    lvl = data["models"][0]["max"]
+    cell = lvl["tasks"]["arith"]
+    assert cell["subset"]["dataset"] == "arith2" and cell["score"] == pytest.approx(100.0)
+    assert lvl["benchmarks"].get("Overall") is None  # a subset never counts in an aggregate
+    assert leaderboard.setting_plan(leaderboard.load_spec(p), {"job": "t", "subsets": {"arith": "arith2"}}, s["jobs"],
+                               os.path.dirname(p)) == {"arith": ("t", "arith2")}

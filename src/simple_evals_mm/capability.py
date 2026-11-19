@@ -215,7 +215,13 @@ def build_js(spec_path: str, results_dir: str, out: str, anchors: tuple[str, str
         mk = s["key"].split("__")[0]
         m = models.get(mk, {})
         s.update(model_key=mk, released=m.get("released"), type=m.get("type"), logo=m.get("logo"), dev=m.get("dev"))
-    res["scores"] = scores(load(results_dir, benches))
+        if m.get("text_only"):  # estimated from the text benchmarks only (the questions it did not answer are left out)
+            s["text_only"] = True
+    with open(os.path.join(results_dir, "index.json"), encoding="utf-8") as f:
+        subsets = {s["key"]: set(s.get("subsets") or {}) for s in json.load(f)["settings"]}
+    # benchmark scores against the index: a text-only subset is not the benchmark's score (left out of that chart)
+    res["scores"] = {b: {k: v for k, v in sc.items() if b not in subsets.get(k, ())}
+                     for b, sc in scores(load(results_dir, benches)).items()}
     res["fits"] = {k: {**logistic_summary(c, res["guess"].get(k, 0.0)), "guess": res["guess"].get(k, 0.0)} for k, c in res["curves"].items()}
     res["benchmarks"] = [{"key": k, "label": v.get("label", k), "category": v.get("category")} for k, v in spec["tasks"].items()
                          if k in res["curves"]]

@@ -616,3 +616,4 @@ header.site.hdr-hidden { transform: translateY(-100%); }
   .docs-pager { grid-template-columns: 1fr; }
   .docs-pg.next { grid-column: 1; }
 }
+.overall sup.subset { color: var(--text-secondary); margin-left: 1px; cursor: help; }
