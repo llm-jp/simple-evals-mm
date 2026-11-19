@@ -170,6 +170,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
 </footer>
 <script src="../logos.js"></script>
 <script src="../trends.js"></script>
+<script src="../share.js"></script>
 <script>
 (function () {
   const T = window.TRENDS, NS = "http://www.w3.org/2000/svg", LOGOS = window.LB_LOGOS || {logos: {}, logoColors: {}, images: {}};
@@ -407,19 +408,16 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
       e.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
     });
   }
-  // the view in the URL, so a link opens the same charts: #org=<pinned developers>&b=<benchmarks of chart 3>&eff=all
-  // (defaults omitted; an in-page anchor such as #method is kept until something changes), as on the leaderboard
+  // the view in the URL, so a link opens the same charts: ?org=<pinned developers>&b=<benchmarks of chart 3>&eff=all
+  // (defaults omitted; old #k=v links are read too), as on the leaderboard
   function syncURL() {
     const kv = [];
     if (picked.size) kv.push("org=" + [...picked].map(encodeURIComponent).join(","));
     if ([...pickedB].join(",") !== DEFAULT_B.join(",")) kv.push("b=" + [...pickedB].map(encodeURIComponent).join(","));
     if (effAll) kv.push("eff=all");
-    const isState = /^#[a-z]+=/.test(location.hash);
-    if (!kv.length && !isState) return;
-    const url = kv.length ? "#" + kv.join("&") : location.pathname + location.search;
-    if (url !== location.hash) history.replaceState(null, "", url);
+    SHARE.writeState(kv);  // the query string; an in-page anchor such as #method stays after it
   }
-  for (const kv of location.hash.slice(1).split("&")) {
+  for (const kv of SHARE.stateString().split("&")) {
     const [k, v] = kv.split("=");
     if (v == null) continue;
     const vals = v.split(",").map(decodeURIComponent).filter(Boolean);
@@ -430,6 +428,16 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
   }
   applyPick();
   bench();
+  // Share / PNG / SVG / CSV under each chart, section links (share.js)
+  const semiRows = () => [["model", "setting", "developer", "released", "SEMI", "90% low", "90% high", "text-only"],
+    ...S.map(s => [s.model, s.label, s.dev, s.released, s.index.toFixed(1), s.lo != null ? s.lo.toFixed(1) : "", s.hi != null ? s.hi.toFixed(1) : "", s.text_only ? "yes" : ""])];
+  SHARE.bar(document.getElementById("c-time"), { id: "c-time", name: "semi-over-time", svg: "c-time", title: "SEMI (simple-evals-mm Index) over time", csv: semiRows });
+  SHARE.bar(document.getElementById("c-rank"), { id: "c-rank", name: "semi-every-setting", svg: "c-rank", title: "SEMI (simple-evals-mm Index) of every setting", csv: semiRows });
+  SHARE.bar(document.getElementById("c-bench"), { id: "c-bench", name: "semi-vs-benchmark", svg: "c-bench",
+    title: () => "Benchmark score vs SEMI: " + [...pickedB].map(k => (T.benchmarks.find(b => b.key === k) || {}).label || k).join(", "),
+    csv: () => [["model", "setting", "SEMI", ...[...pickedB]],
+      ...S.filter(shown).map(s => [s.model, s.label, s.index.toFixed(1), ...[...pickedB].map(k => (T.scores[k] || {})[s.key] ?? "")])] });
+  SHARE.anchors();
   // redraw when the width class changes (rotation, a resized window), or on phones when the width changes
   let lastW = document.querySelector(".tr-chart").parentElement.clientWidth;
   addEventListener("resize", () => { const w = document.querySelector(".tr-chart").parentElement.clientWidth;

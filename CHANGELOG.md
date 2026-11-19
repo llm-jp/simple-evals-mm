@@ -7,6 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: every section title has a link (#), a bar under each chart and table copies a link to that view (Share) or
+  downloads it as PNG / SVG (with title, source and date) or CSV, as on Epoch AI's pages; the view state moved to the
+  query string (?k=v), so a section anchor can follow it (old #k=v links still open the same view).
+
 ## v0.7.0 - 2026-11-19
 
 A minor release: the per-dataset data location variables are gone (one data directory), verification resumes after an
