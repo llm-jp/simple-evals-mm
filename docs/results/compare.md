@@ -6,7 +6,7 @@ too, as long as nothing that decides the prompts or the rewards of **that datase
 number alone does not say so ([Versioning](../versioning.md)). `sem jobs compare` checks it per dataset:
 
 ```bash
-uv run --frozen sem jobs compare jobs/mine jobs/theirs
+sem jobs compare jobs/mine jobs/theirs
 ```
 
 ```mermaid

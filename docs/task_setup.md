@@ -13,7 +13,7 @@ jobs).
 Every dataset keeps its data under one data directory: `data/` in the checkout, or the directory `SEM_DATA_DIR`
 names (e.g. a shared disk, or to keep it apart from other data you have in `data/`). Moving it changes nothing else:
 the data is checked against `datasets.lock` wherever it is. Compute nodes without internet: run
-`uv run --frozen sem datasets download -d ...` once on a machine with it, into the same directory.
+`sem datasets download -d ...` once on a machine with it, into the same directory.
 
 ## Instruction following: IFEval, IFBench
 
