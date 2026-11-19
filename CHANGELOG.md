@@ -7,6 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: an "All results" section on the leaderboard: every setting on every benchmark in one table (Best / All, a
+  category filter, sort by any column, a shade per column; text-only subsets marked, refused / missing cells shown);
+  its view is in the URL (`mview`, `mcat`, `msort`).
+
 - Site: on the score-vs-cost / tokens chart a text-only subset is marked too ("*" on the model's label, a legend line,
   the question count in the tooltip).
 
