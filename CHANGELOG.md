@@ -40,6 +40,8 @@ version does not decide whether two results are comparable: `sem jobs compare` d
   not depend on machine load; part of the verifier lock (Regrade).
 - Site: Explore, Trends, Analysis, Changelog and Docs have their own link-preview tags (og: / twitter:, the shared
   image); `sem site build` versions the image URL on every page.
+- Site: the leaderboard's URL follows what is shown (score, chart axis / scale, Best / All, hidden settings, the
+  Overall benchmark subset), so a copied link opens the same view.
 
 Datasets changed: new `hle_diamond_text`, `jfinbench_text`; no existing dataset changed (no prompt, task or reward change).
 

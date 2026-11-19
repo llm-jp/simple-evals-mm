@@ -353,8 +353,6 @@
   }
   function tasksChanged() {
     renderTaskPanel(); state.sortKey = null; render();
-    // shareable: #subject=b:Overall&tasks=a,b,... (cleared when every task is picked)
-    history.replaceState(null, "", ovPartial() ? `#subject=${encodeURIComponent(state.subject)}&tasks=${[...state.ovTasks].join(",")}` : location.pathname + location.search);
   }
   taskWrap.querySelector(".task-list").addEventListener("change", e => {
     const k = e.target.dataset.t; if (!k) return;
@@ -463,7 +461,24 @@
   let FS = 1;
   const EMPTY_MSG = "No configurations match the current filters.";
 
+  // shareable URL: the state that differs from the default goes into the hash (#subject=ifbench&x=tok&view=all&...);
+  // the default state leaves the URL clean, and an in-page anchor (#parity) is kept until something changes
+  const DEF = { subject: SCOPES[0].key, view: "best", x: "cost", scale: "log" };
+  function syncURL() {
+    const kv = [];
+    if (state.subject !== DEF.subject) kv.push("subject=" + encodeURIComponent(state.subject.startsWith("t:") ? state.subject.slice(2) : state.subject));
+    if (isOverall() && ovPartial()) kv.push("tasks=" + [...state.ovTasks].join(","));
+    for (const k of ["view", "x", "scale"]) if (state[k] !== DEF[k]) kv.push(k + "=" + encodeURIComponent(state[k]));
+    const off = ALL_CFG.filter(c => !state.cfg.has(c));
+    if (off.length) kv.push("off=" + off.map(encodeURIComponent).join(","));
+    const isState = /^#[a-z]+=/.test(location.hash);
+    if (!kv.length && !isState) return;  // default state: keep the URL (and an anchor) as it is
+    const url = kv.length ? "#" + kv.join("&") : location.pathname + location.search;
+    if (url !== location.hash) history.replaceState(null, "", url);
+  }
+
   function render() {
+    syncURL();
     setDims();
     while (svg.lastChild && svg.lastChild.tagName !== "desc") svg.removeChild(svg.lastChild);
     const pts = points().map(p => ({ ...p, x: p.d[state.x], y: p.d.score }));
