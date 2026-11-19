@@ -152,7 +152,10 @@
           catch (e) { sp.textContent = "Failed"; setTimeout(() => { sp.textContent = text; }, 1600); } };
         pop.appendChild(it);
       }
-      btn.onclick = () => { const open = !w.classList.contains("open"); closeMenus(w); w.classList.toggle("open", open); btn.setAttribute("aria-expanded", String(open)); };
+      btn.onclick = () => { const open = !w.classList.contains("open"); closeMenus(w);
+        // opens downward (not over the chart / table above it), upward only when the window has no room below
+        if (open) w.classList.toggle("up", window.innerHeight - w.getBoundingClientRect().bottom < pop.childElementCount * 34 + 16);
+        w.classList.toggle("open", open); btn.setAttribute("aria-expanded", String(open)); };
       b.appendChild(w);
     };
     const copyLink = () => new Promise(res => { const tmp = document.createElement("button"); copy(linkTo(id()), tmp);

@@ -7,6 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
+  of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
+  BibTeX alone; the site changelog's 2026-11-19 entry.
+
 - Docs: [LLM-jp models](docs/models/llm-jp.md): serving and running LLM-jp-4-VL and LLM-jp-4.1 thinking on SGLang,
   vLLM or the HF server (patch, presets, Harmony, vLLM 0.30's output limit, text-only subsets).
 - Site: an "All results" section on the leaderboard: every setting on every benchmark in one table (Best / All, a
