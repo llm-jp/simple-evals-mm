@@ -608,7 +608,7 @@ def build(spec_path: str, jobs_dir: str | None = None, repo: str | None = None, 
         if not levels:
             report["warnings"].append(f"{m['key']}: nothing to show")
             continue
-        row = {k: m[k] for k in ("key", "name", "dev", "type", "text_only") if k in m}
+        row = {k: m[k] for k in ("key", "name", "dev", "type", "text_only", "note") if k in m}
         row.update(logo=m.get("logo"), params_b=m.get("params_b"),
                    model=m.get("model") or _common(j["model"] for lv in levels for j in lv["jobs"].values()))
         if refs is not None:  # the card comparison on the highest effort setting (cards report a model's best)

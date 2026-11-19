@@ -306,7 +306,7 @@ def test_data_js_has_the_keys_the_page_reads(lb):
 
     check("D", data, extra=optional)
     check("SITE", data["site"])
-    check("m", row)
+    check("m", row, extra={"note"})  # an optional spec field (a line in the details)
     check("lvl", lvl)
     cell_optional = {"subset"}  # a text-only subset cell only (test_subset_column_is_marked_and_left_out_of_aggregates)
     check("t", set(data["tasks"][0]) | set(cell) | cell_optional | {"jammeval", "paper", "dataset", "description"})
