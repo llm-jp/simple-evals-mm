@@ -59,9 +59,9 @@ and reuses the trials that are still valid.
 
 ## Release checklist (maintainers)
 
-1. Tests: `uv run --frozen pytest -m "not api and not local_model and not network"` and `ruff check src tests`.
+1. Tests: `pytest -m "not api and not local_model and not network"` and `ruff check src tests`.
 2. `bash scripts/release_check.sh` (every dataset end to end with the scripted provider, `datasets lock --check`, the
    leaderboard datasets' live smoke tests).
-3. `uv run --frozen sem datasets diff <previous tag> HEAD` for the release notes; decide the bump with the table
+3. `sem datasets diff <previous tag> HEAD` for the release notes; decide the bump with the table
    above. In `CHANGELOG.md`, turn "Unreleased" into the version with its date and the dataset table.
 4. Tag on `main` (`git tag -a vX.Y.Z -m "..."`, push), then a GitHub release with the notes and the dataset table.

@@ -7,6 +7,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Docs and README write commands as `sem ...` (after `source .venv/bin/activate`, explained in Installation;
+  `uv run --frozen sem ...` still works without activating).
+
 - Site: each view has its controls right above it: the table gets the chart's set (score, Benchmarks, Best / All,
   Configs; one shared state), set apart from the chart; All results has Category, Best / All and Configs (narrowing
   its columns), and its category rows stay in view while scrolling.

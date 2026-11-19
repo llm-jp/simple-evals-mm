@@ -14,13 +14,13 @@ uv sync --frozen
 Offline tests (fakes, golden snapshots):
 
 ```bash
-uv run --frozen pytest -m "not api and not local_model and not network"
+pytest -m "not api and not local_model and not network"
 ```
 
 Lint:
 
 ```bash
-uv run --frozen ruff check src tests
+ruff check src tests
 ```
 
 ## What to add, and where

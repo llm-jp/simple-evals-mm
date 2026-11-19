@@ -10,12 +10,12 @@ matching: a new model never inherits settings silently).
   "qwen/qwen3.8-27b": {"provider": ["alibaba"], "sampling": QWEN38, "efforts": ("low", "medium", "xhigh"), "open_weight": True},
   ```
 
-  Check it with `uv run --frozen python scripts/openrouter_smoke.py --models qwen/qwen3.8-27b` (one paid request per effort).
+  Check it with `python scripts/openrouter_smoke.py --models qwen/qwen3.8-27b` (one paid request per effort).
 - **Served model** (`sglang/`, `vllm/`, `hf/`): add its Hugging Face id to `SERVED_MODELS` with a family from
   `FAMILIES` (or add a family: sampling, efforts, chat-template kwargs, reasoning parser). Every engine prefix gets it.
 - **OpenAI / Azure / Gemini**: an entry in `PRESETS` built with `_family(...)`, with the documented `output_limit`.
 
-A model id without an entry (an internal checkpoint) runs with `--preset FAMILY` or `--preset none`. `uv run --frozen sem
+A model id without an entry (an internal checkpoint) runs with `--preset FAMILY` or `--preset none`. `sem
 models list` shows the result; `tests/test_samplers.py` snapshots the request bodies of the main presets
 (`tests/golden/samplers.json`).
 

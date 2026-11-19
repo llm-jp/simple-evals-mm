@@ -18,7 +18,7 @@ A dataset is complete when every trial has a counted result; `sem job show` list
 - A transient failure (rate limit, 5xx, timeout, connection error) is retried inside the trial with backoff
   (`retry.max_retries` in the [job config](run-a-job.md#job-config)); rate limits do not use up the retries.
 - What still fails is written as `provider_failed`, excluded from the score, and regenerated later:
-  `uv run --frozen sem job resume -p jobs/NAME -f provider_failed`.
+  `sem job resume -p jobs/NAME -f provider_failed`.
 - An API that answers every retry of one request with an error, while the job's other requests go through, rejects
   that request: `request_rejected` (0, not retried).
 - **Circuit breaker**: when many consecutive trials fail at once (`retry.abort_after_consecutive`, a provider outage or

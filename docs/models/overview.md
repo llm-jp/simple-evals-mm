@@ -21,7 +21,7 @@ the effort levels and the default, the output limit, the chat-template arguments
 
 ```bash
 # exact slugs, efforts (default), provider pin, --model-arg keys; then the families
-uv run --frozen sem models list
+sem models list
 ```
 
 - `--effort LEVEL`: one of the preset's levels. Each setting of a model is its own job (`<model>__<effort>`).
