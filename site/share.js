@@ -5,7 +5,7 @@
 //    #k=v form are still read;
 //  * two buttons under each chart / table (as on Epoch AI's ECI page): Share (X, LinkedIn, copy the link to that view
 //    in its current state) and Download graph (PNG / SVG of a chart); a saved image carries the chart's
-//    title, the LLM-jp logo with "simple-evals-mm · CC BY 4.0" at the bottom left and the link and date at the right.
+//    title and the LLM-jp logo with "simple-evals-mm · CC BY 4.0" at the bottom left.
 (function () {
   const BASE = new URL(".", document.currentScript.src).href;  // the site root (share.js lives there)
   const STATE_HASH = /^#[a-z]+=/;
@@ -100,7 +100,6 @@
     if (logo) { const im = document.createElementNS(NS, "image"); im.setAttribute("href", logo);
       im.setAttribute("x", 12); im.setAttribute("y", h + top + 8); im.setAttribute("width", 20); im.setAttribute("height", 20); out.appendChild(im); }
     text(logo ? 38 : 12, h + top + 23, "simple-evals-mm · CC BY 4.0", 12, "start", 600);
-    text(w - 12, h + top + 23, `${location.host}${location.pathname} · ${today()}`, 11, "end");
     return { svg: new XMLSerializer().serializeToString(out), w, h: h + top + bottom };
   }
   async function svgBlob(svg, title) { const s = await standalone(svg, title); return new Blob([s.svg], { type: "image/svg+xml" }); }
