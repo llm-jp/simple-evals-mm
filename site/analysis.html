@@ -98,7 +98,7 @@ details summary { cursor: pointer; }
 </footer>
 
 <script src="analysis.js?v=96eeb93993"></script>
-<script src="share.js?v=28994af085"></script>
+<script src="share.js?v=c5611b7ca7"></script>
 <script>
 const A = window.ANALYSIS;
 const $ = id => document.getElementById(id);
@@ -136,8 +136,8 @@ $("ds").addEventListener("change", () => {
   render();
 });
 render();
-SHARE.bar($("tbl").parentElement, { id: "tbl", name: () => "analysis-" + $("ds").value, table: "tbl" });
-SHARE.bar($("flips").parentElement, { id: "flips", name: "analysis-flips", table: "flips" });
+SHARE.bar($("tbl").parentElement, { id: "tbl" });
+SHARE.bar($("flips").parentElement, { id: "flips" });
 SHARE.anchors();
 </script>
 <script src="theme.js"></script>

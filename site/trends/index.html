@@ -428,15 +428,11 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
   }
   applyPick();
   bench();
-  // Share / PNG / SVG / CSV under each chart, section links (share.js)
-  const eciRows = () => [["model", "setting", "developer", "released", "SEM-ECI", "90% low", "90% high", "text-only"],
-    ...S.map(s => [s.model, s.label, s.dev, s.released, s.index.toFixed(1), s.lo != null ? s.lo.toFixed(1) : "", s.hi != null ? s.hi.toFixed(1) : "", s.text_only ? "yes" : ""])];
-  SHARE.bar(document.getElementById("c-time"), { id: "c-time", name: "sem-eci-over-time", svg: "c-time", title: "SEM-ECI (simple-evals-mm ECI) over time", csv: eciRows });
-  SHARE.bar(document.getElementById("c-rank"), { id: "c-rank", name: "sem-eci-every-setting", svg: "c-rank", title: "SEM-ECI (simple-evals-mm ECI) of every setting", csv: eciRows });
+  // Share and Download graph (PNG / SVG) under each chart, section links (share.js)
+  SHARE.bar(document.getElementById("c-time"), { id: "c-time", name: "sem-eci-over-time", svg: "c-time", title: "SEM-ECI (simple-evals-mm ECI) over time" });
+  SHARE.bar(document.getElementById("c-rank"), { id: "c-rank", name: "sem-eci-every-setting", svg: "c-rank", title: "SEM-ECI (simple-evals-mm ECI) of every setting" });
   SHARE.bar(document.getElementById("c-bench"), { id: "c-bench", name: "sem-eci-vs-benchmark", svg: "c-bench",
-    title: "Benchmark score vs SEM-ECI (simple-evals-mm ECI)",  // the chart's own legend names the benchmarks
-    csv: () => [["model", "setting", "SEM-ECI", ...[...pickedB]],
-      ...S.filter(shown).map(s => [s.model, s.label, s.index.toFixed(1), ...[...pickedB].map(k => (T.scores[k] || {})[s.key] ?? "")])] });
+    title: "Benchmark score vs SEM-ECI (simple-evals-mm ECI)" });  // the chart's own legend names the benchmarks
   SHARE.anchors();
   // redraw when the width class changes (rotation, a resized window), or on phones when the width changes
   let lastW = document.querySelector(".tr-chart").parentElement.clientWidth;

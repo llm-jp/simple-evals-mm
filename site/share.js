@@ -4,7 +4,7 @@
 //  * view state in the query string (?k=v&...), so a section anchor (#...) can follow it; links of the earlier
 //    #k=v form are still read;
 //  * two buttons under each chart / table (as on Epoch AI's ECI page): Share (X, Instagram, copy the link to that view
-//    in its current state) and Download (PNG / SVG of a chart, CSV of the values); a saved image carries the chart's
+//    in its current state) and Download graph (PNG / SVG of a chart); a saved image carries the chart's
 //    title, the LLM-jp logo with "simple-evals-mm · CC BY 4.0" at the bottom left and the link and date at the right.
 (function () {
   const BASE = new URL(".", document.currentScript.src).href;  // the site root (share.js lives there)
@@ -65,14 +65,6 @@
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-  const csvCell = v => { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const toCSV = rows => rows.map(r => r.map(csvCell).join(",")).join("\n") + "\n";
-  // the visible text of a table (header and body), for a table without its own rows function
-  function tableRows(table) {
-    return [...table.querySelectorAll("tr")].filter(tr => tr.offsetParent !== null || !table.offsetParent)
-      .map(tr => [...tr.children].map(td => td.innerText.replace(/\s+/g, " ").trim()));
-  }
-
   const STYLE_PROPS = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity", "stroke-dasharray",
     "stroke-linecap", "opacity", "font-family", "font-size", "font-weight", "font-style", "text-anchor",
     "dominant-baseline", "letter-spacing", "visibility", "display", "paint-order", "stroke-linejoin", "stroke-miterlimit"];
@@ -128,7 +120,6 @@
     instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" class="fill"/></svg>',
     link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
     image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg>',
-    table: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>',
   };
   // the readable anchor of the section a chart / table belongs to: the nearest heading before it (its "#" link)
   function anchorFor(el, fallback) {
@@ -143,8 +134,7 @@
   document.addEventListener("click", e => { if (!e.target.closest(".share-menu")) closeMenus(null); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(null); });
 
-  // two buttons under `after`: Share (X, Instagram, copy link) and Download (PNG / SVG with `svg`; CSV with `csv`
-  // (rows function) or `table`). The image title is fixed per chart (no list of selections that could overflow).
+  // under `after`: Share (X, Instagram, copy link) and, for a chart (`svg`), Download graph (PNG / SVG). The image title is fixed per chart (no list of selections that could overflow).
   function bar(after, opt) {
     const id = () => anchorFor(b, opt.id), nm = () => (typeof opt.name === "function" ? opt.name() : opt.name) || opt.id;
     const title = () => (typeof opt.title === "function" ? opt.title() : opt.title) || nm();
@@ -182,13 +172,10 @@
       dl.push(["image", "PNG", "Download this chart as a PNG image", async () => { const f = await png(); download(f.name, f); }]);
       dl.push(["image", "SVG", "Download this chart as an SVG image", async () => download(`${nm()}-${today()}.svg`, await svgBlob(svg(), title()))]);
     }
-    if (opt.csv || opt.table) dl.push(["table", "CSV", "Download the values as CSV", () => {
-      const rows = opt.csv ? opt.csv() : tableRows(typeof opt.table === "string" ? document.getElementById(opt.table) : opt.table);
-      download(`${nm()}-${today()}.csv`, new Blob([toCSV(rows)], { type: "text/csv" })); }]);
-    menu("download", opt.svg ? "Download graph" : "Download", dl);
+    if (dl.length) menu("download", "Download graph", dl);
     after.insertAdjacentElement("afterend", b);
     return b;
   }
 
-  window.SHARE = { stateString, writeState, anchors, bar, copy, linkTo, toCSV };
+  window.SHARE = { stateString, writeState, anchors, bar, copy, linkTo };
 })();

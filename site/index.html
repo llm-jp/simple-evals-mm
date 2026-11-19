@@ -194,7 +194,7 @@
 
 <script src="logos.js?v=95862aac74"></script>
 <script src="data.js?v=f2bb1fbe67"></script>
-<script src="share.js?v=28994af085"></script>
+<script src="share.js?v=c5611b7ca7"></script>
 <script>
 (function () {
   const D = window.LB;
@@ -867,13 +867,11 @@
   renderTaskPanel();
   render();
 
-  // section links and Share / PNG / SVG / CSV under the chart and the tables (share.js)
+  // section links; Share and Download graph (PNG / SVG) under the chart, Share under the tables (share.js)
   const xName = () => state.x === "cost" ? "cost per question (USD)" : "output tokens per question";
   SHARE.bar(document.querySelector(".chart-foot"), { id: "chart", name: "simple-evals-mm-chart", svg: "chart",
-    title: () => `${scopeLabel()} vs ${xName()}`,
-    csv: () => [["model", "setting", "score", "std", xName()], ...points().map(p => [p.m.name, effLabel(p.m, p.effort),
-      p.d.score != null ? p.d.score.toFixed(2) : "", p.d.std != null ? p.d.std.toFixed(2) : "", p.d[state.x] ?? ""])] });
-  SHARE.bar(document.getElementById("lb-list"), { id: "lb", name: "simple-evals-mm-table", table: "lb" });
+    title: () => `${scopeLabel()} vs ${xName()}` });
+  SHARE.bar(document.getElementById("lb-list"), { id: "lb" });
 
   // Parity with model cards: benchmarks x models (each model's highest setting); a row that matches on most models
   // says the task code is right, a column that matches on most benchmarks says the model is served right
@@ -903,7 +901,7 @@
     const body = tasks.map(t => { const rs = models.map(m => at(m, t)), c = rs.filter(r => r && isCmp(r));
       return `<tr><td class="pt">${esc(t.label)}</td>${rs.map(cellHTML).join("")}<td class="psum">${c.length ? `${c.filter(r => r.p.result === "✓").length} of ${c.length}` : "–"}</td></tr>`; }).join("");
     document.getElementById("parity-table").innerHTML = head + `<tbody>${body}</tbody>`;
-    SHARE.bar(document.querySelector(".parity-wrap"), { id: "parity-table", name: "simple-evals-mm-parity", table: "parity-table" });
+    SHARE.bar(document.querySelector(".parity-wrap"), { id: "parity-table" });
     // phones: the same results as a list by model, only the benchmarks with a card value (the table is mostly empty
     // and needs a lot of sideways scrolling at 390 px)
     document.getElementById("parity-list").innerHTML = models.map(m => {

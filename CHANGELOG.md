@@ -7,6 +7,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: no CSV export (Share and Download graph only, as on Epoch AI's pages; the data is on Hugging Face and in the
+  jobs).
+
 - Trends: the index is renamed **SEM-ECI** (simple-evals-mm ECI), a simple-evals-mm version of the Epoch Capabilities
   Index (as OpenAI ECI is OpenAI's); its own scale (GPT-6 Astra max 150, Qwen3.5-9B 100), not comparable with Epoch's
   ECI. Was SEMI (#201).
