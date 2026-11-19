@@ -12,6 +12,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 - Site: an "All results" section on the leaderboard: every setting on every benchmark in one table (Best / All, a
   category filter, sort by any column, a shade per column; text-only subsets marked, refused / missing cells shown);
   its view is in the URL (`mview`, `mcat`, `msort`).
+- Site: a saved chart image has no link / date at the bottom right (the logo and "simple-evals-mm · CC BY 4.0" stay
+  at the left); JFinBench's description says how its score differs from the paper's (question mean vs exam mean).
+- Docs page of the site: versions from v0.7.0 (and main); v0.6.0 is no longer listed.
 
 - Site: on the score-vs-cost / tokens chart a text-only subset is marked too ("*" on the model's label, a legend line,
   the question count in the tooltip).

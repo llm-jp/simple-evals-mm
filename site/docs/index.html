@@ -105,11 +105,11 @@
 <script src="https://cdn.jsdelivr.net/npm/minisearch@7.1.2/dist/umd/index.min.js"></script>
 <script>
   // The docs are the Markdown files of the repository (docs/, README, CONTRIBUTING) at a version (a tag from
-  // v0.6.0, or main), fetched from GitHub and rendered here: nothing is built or copied, so there is no stale copy.
+  // v0.7.0, or main), fetched from GitHub and rendered here: nothing is built or copied, so there is no stale copy.
   const REPO = "llm-jp/simple-evals-mm";
   const RAW = (ref, path) => `https://raw.githubusercontent.com/${REPO}/${ref}/${path}`;
   const BLOB = (ref, path) => `https://github.com/${REPO}/blob/${ref}/${path}`;
-  const FIRST_VERSION = [0, 6, 0];  // the first release with these docs (keep DEFAULT_REF below at least this)
+  const FIRST_VERSION = [0, 7, 0];  // the first release with these docs (keep DEFAULT_REF below at least this)
   // the sidebar: the "## Contents" list of docs/README.md at the version (navFrom); LEGACY_PAGES for v0.6.0, whose
   // README has none
   let PAGES = [];
@@ -155,7 +155,7 @@
   const slug = s => s.toLowerCase().trim().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
   const params = () => new URLSearchParams(location.search);
   // the newest release tag (versions(): the GitHub tag list); FIRST_VERSION when the list cannot be read (rate limit)
-  let DEFAULT_REF = "v0.6.0";
+  let DEFAULT_REF = "v0.7.0";
   const num = t => (String(t).match(/^v(\d+)\.(\d+)\.(\d+)$/) || []).slice(1).map(Number);
   const newer = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
   // only main and the release tags from FIRST_VERSION have these docs: another ref (an older tag, a branch) is
