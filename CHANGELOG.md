@@ -7,8 +7,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
-- Site: every section title has a link (#), a bar under each chart and table copies a link to that view (Share) or
-  downloads it as PNG / SVG (with title, source and date) or CSV, as on Epoch AI's pages; the view state moved to the
+- Site: every section title has a link (#); under each chart and table, Share (X, Instagram, copy link) and Download
+  (PNG / SVG with a fixed title, the LLM-jp logo and "simple-evals-mm · CC BY 4.0" at the bottom left; CSV), as on
+  Epoch AI's pages; the view state moved to the
   query string (?k=v), so a section anchor can follow it (old #k=v links still open the same view).
 
 ## v0.7.0 - 2026-11-19

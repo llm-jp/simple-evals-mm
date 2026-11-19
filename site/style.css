@@ -623,8 +623,16 @@ main h2, main h3 { scroll-margin-top: 72px; }
 a.anchor { margin-left: 8px; color: var(--text-muted); text-decoration: none; font-weight: 400; opacity: 0; transition: opacity .15s; }
 h2:hover > a.anchor, h3:hover > a.anchor, a.anchor:focus { opacity: 1; }
 @media (hover: none) { a.anchor { opacity: .5; } }
-/* Share / PNG / SVG / CSV under a chart or table (share.js) */
-.share-bar { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; margin: 6px 0 2px; }
-.share-bar button { font: inherit; font-size: 12px; color: var(--text-secondary); background: transparent; border: 1px solid var(--border);
-  border-radius: 6px; padding: 3px 10px; cursor: pointer; }
-.share-bar button:hover { color: var(--text-primary); border-color: var(--text-muted); }
+/* Share and Download under a chart or table (share.js), as on Epoch AI's pages */
+.share-bar { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin: 8px 0 2px; }
+.share-menu { position: relative; }
+.share-btn, .share-pop button { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--text-secondary); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+.share-btn:hover, .share-menu.open .share-btn { color: var(--text-primary); border-color: var(--text-muted); }
+.share-bar svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.share-bar svg.fill, .share-bar svg .fill { fill: currentColor; stroke: none; }
+.share-pop { display: none; position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 20; min-width: 150px; padding: 4px;
+  background: var(--bg, #fff); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .12); }
+.share-menu.open .share-pop { display: flex; flex-direction: column; }
+.share-pop button { border: 0; border-radius: 5px; width: 100%; justify-content: flex-start; padding: 6px 10px; }
+.share-pop button:hover { background: var(--border); color: var(--text-primary); }
