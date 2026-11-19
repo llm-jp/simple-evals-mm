@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="A reproducible, reliable evaluation framework for LLMs and VLMs on English and Japanese tasks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=191e658d1f">
+<link rel="stylesheet" href="style.css?v=8618217f7e">
 <!-- Google Analytics (the same GA4 property as speed1313.github.io) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-7X0Q0NSDB9"></script>
 <script>
@@ -194,6 +194,7 @@
 
 <script src="logos.js?v=95862aac74"></script>
 <script src="data.js?v=f2bb1fbe67"></script>
+<script src="share.js?v=801455d424"></script>
 <script>
 (function () {
   const D = window.LB;
@@ -229,11 +230,11 @@
   ALL_CFG.forEach(c => state.cfg.add(c));
   const on = (m, c) => state.cfg.has(m.key + ":" + c);
   // Overall = mean over the tasks picked in the Tasks panel (by default the spec's Overall tasks, which every model has;
-  // a benchmark some models lack, such as ScreenSpot-Pro, can be added; kept in the URL as #tasks=a,b,...)
+  // a benchmark some models lack, such as ScreenSpot-Pro, can be added; kept in the URL as ?tasks=a,b,...)
   const ALL_TASKS = TASKS.map(t => t.key);
   const OV_DEFAULT = ((TOTAL[0] || {}).tasks || ALL_TASKS).filter(k => ALL_TASKS.includes(k));
   state.ovTasks = new Set(OV_DEFAULT);
-  { const m = location.hash.match(/(?:^#|&)tasks=([^&]*)/); if (m) { const ks = decodeURIComponent(m[1]).split(",").filter(k => ALL_TASKS.includes(k)); if (ks.length) state.ovTasks = new Set(ks); } }
+  { const m = ("&" + SHARE.stateString()).match(/&tasks=([^&]*)/); if (m) { const ks = decodeURIComponent(m[1]).split(",").filter(k => ALL_TASKS.includes(k)); if (ks.length) state.ovTasks = new Set(ks); } }
   const isOverall = () => TOTAL.some(b => "b:" + b.key === state.subject);
   const ovPartial = () => state.ovTasks.size !== OV_DEFAULT.length || OV_DEFAULT.some(k => !state.ovTasks.has(k));  // not the default set
   const scopeLabel = () => {
@@ -462,7 +463,7 @@
   let FS = 1;
   const EMPTY_MSG = "No configurations match the current filters.";
 
-  // shareable URL: the state that differs from the default goes into the hash (#subject=ifbench&x=tok&view=all&...);
+  // shareable URL: the state that differs from the default goes into the query string (?subject=ifbench&x=tok&view=all&...; old #k=v links are read too);
   // the default state leaves the URL clean, and an in-page anchor (#parity) is kept until something changes
   const DEF = { subject: SCOPES[0].key, view: "best", x: "cost", scale: "log" };
   function syncURL() {
@@ -473,10 +474,7 @@
     const off = ALL_CFG.filter(c => !state.cfg.has(c));
     if (off.length) kv.push("off=" + off.map(encodeURIComponent).join(","));
     if (openRows.size) kv.push("open=" + [...openRows].map(encodeURIComponent).join(","));  // expanded rows (model|effort)
-    const isState = /^#[a-z]+=/.test(location.hash);
-    if (!kv.length && !isState) return;  // default state: keep the URL (and an anchor) as it is
-    const url = kv.length ? "#" + kv.join("&") : location.pathname + location.search;
-    if (url !== location.hash) history.replaceState(null, "", url);
+    SHARE.writeState(kv);  // the query string (?k=v&...); an in-page anchor stays after it
   }
 
   function render() {
@@ -849,7 +847,7 @@
 
 
   // initial state from URL hash, e.g. #subject=t:jdocqa&x=tok  (also accepts bench=JAMMEval / subject=jdocqa)
-  for (const kv of location.hash.slice(1).split("&")) {
+  for (const kv of SHARE.stateString().split("&")) {
     const [k, v] = kv.split("=");
     if (!v) continue;
     const val_ = decodeURIComponent(v);
@@ -868,6 +866,14 @@
   renderPanels();
   renderTaskPanel();
   render();
+
+  // section links and Share / PNG / SVG / CSV under the chart and the tables (share.js)
+  const xName = () => state.x === "cost" ? "cost per question (USD)" : "output tokens per question";
+  SHARE.bar(document.querySelector(".chart-foot"), { id: "chart", name: "simple-evals-mm-chart", svg: "chart",
+    title: () => `${scopeLabel()} vs ${xName()}`,
+    csv: () => [["model", "setting", "score", "std", xName()], ...points().map(p => [p.m.name, effLabel(p.m, p.effort),
+      p.d.score != null ? p.d.score.toFixed(2) : "", p.d.std != null ? p.d.std.toFixed(2) : "", p.d[state.x] ?? ""])] });
+  SHARE.bar(document.getElementById("lb-list"), { id: "lb", name: "simple-evals-mm-table", table: "lb" });
 
   // Parity with model cards: benchmarks x models (each model's highest setting); a row that matches on most models
   // says the task code is right, a column that matches on most benchmarks says the model is served right
@@ -897,6 +903,7 @@
     const body = tasks.map(t => { const rs = models.map(m => at(m, t)), c = rs.filter(r => r && isCmp(r));
       return `<tr><td class="pt">${esc(t.label)}</td>${rs.map(cellHTML).join("")}<td class="psum">${c.length ? `${c.filter(r => r.p.result === "✓").length} of ${c.length}` : "–"}</td></tr>`; }).join("");
     document.getElementById("parity-table").innerHTML = head + `<tbody>${body}</tbody>`;
+    SHARE.bar(document.querySelector(".parity-wrap"), { id: "parity-table", name: "simple-evals-mm-parity", table: "parity-table" });
     // phones: the same results as a list by model, only the benchmarks with a card value (the table is mostly empty
     // and needs a lot of sideways scrolling at 390 px)
     document.getElementById("parity-list").innerHTML = models.map(m => {
@@ -911,6 +918,7 @@
     document.getElementById("parity-notes").innerHTML = warns.map(r => `<li id="pn-${fn(r)}"><b>${esc(r.m.name)} (${esc(effLabel(r.m, "max"))}), ${esc(r.t.label)}</b>: ours ${(r.p.ours ?? r.c.score).toFixed(1)}, card ${r.p.card.toFixed(1)}. ${esc(r.p.note || "Cause unknown, not investigated yet.")}${r.p.link ? ` <a href="${esc(r.p.link)}" target="_blank" rel="noopener">Details</a>` : ""}</li>`).join("");
   })();
 })();
+SHARE.anchors();
 </script>
 <script src="theme.js"></script>
 <script>

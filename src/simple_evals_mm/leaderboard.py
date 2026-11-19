@@ -750,8 +750,8 @@ def stamp_assets(site_dir: str) -> None:
     """Version the asset URLs in index.html and changelog.html (?v=<content hash>), so a browser that cached an older
     copy (GitHub Pages: max-age=600) cannot pair the new page with stale data or styles."""
     pages = {"changelog.html": ("style.css", "changelog.js"),
-             "index.html": ("style.css", "logos.js", "data.js"),
-             "analysis.html": ("style.css", "analysis.js")}
+             "index.html": ("style.css", "logos.js", "data.js", "share.js"),
+             "analysis.html": ("style.css", "analysis.js", "share.js")}
     for page, names in pages.items():
         p = os.path.join(site_dir, page)
         if not os.path.exists(p):
