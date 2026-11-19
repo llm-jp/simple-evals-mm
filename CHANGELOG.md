@@ -10,6 +10,8 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 - Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
   of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
   BibTeX alone; the site changelog's 2026-11-19 entry.
+- Docs page: wider (up to 1440px, the header aligned): the text column grows from 460px to 712px at a 1280px window
+  (at most 820px), "On this page" at the right edge.
 
 - Docs: [LLM-jp models](docs/models/llm-jp.md): serving and running LLM-jp-4-VL and LLM-jp-4.1 thinking on SGLang,
   vLLM or the HF server (patch, presets, Harmony, vLLM 0.30's output limit, text-only subsets).
