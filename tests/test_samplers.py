@@ -1047,9 +1047,14 @@ def test_served_sampling_is_per_model():
         sampling, source = pr.SERVED_SAMPLING[mid]
         assert source and all(k in pr.SAMPLING_KEYS for k in sampling), mid
         for eng in pr.SERVED_ENGINES:
-            assert pr.PRESETS[f"{eng}/{mid}"]["sampling"] == sampling, (eng, mid)
+            got = pr.PRESETS[f"{eng}/{mid}"]["sampling"]
+            assert {k: v for k, v in got.items() if k in pr.SAMPLING_KEYS} == sampling, (eng, mid)
     assert pr.PRESETS["sglang/Qwen/Qwen3.5-397B-A17B"]["sampling"]["temperature"] == 0.6
     assert pr.PRESETS["sglang/Qwen/Qwen3.5-9B"]["sampling"]["presence_penalty"] == 1.5
+    # a greedy family's model with its own sampling keeps the family's other request fields (Harmony needs the tokens)
+    assert pr.PRESETS["vllm/llm-jp/llm-jp-4.1-8b-thinking"]["sampling"] == {"temperature": 0.7, "top_p": 0.9,
+                                                                           "skip_special_tokens": False}
+    assert pr.PRESETS["vllm/llm-jp/llm-jp-4-8b-thinking"]["sampling"]["temperature"] == 0.0
 
 
 def test_check_generation_configs_flags_conflicts(tmp_path):

@@ -410,3 +410,29 @@ def test_corpus_level_datasets():
     """OmniDocBench scores an attempt as one corpus: its per-page rewards may be empty without blocking the site."""
     assert leaderboard.corpus_level("omnidocbench") and leaderboard.corpus_level("omnidocbench@" + "a" * 40)
     assert not leaderboard.corpus_level("gpqa") and not leaderboard.corpus_level("no_such_dataset")
+
+
+def test_every_page_has_link_preview_tags(tmp_path):
+    """Each content page of the site carries its own og: / twitter: tags with the shared image; stamp_assets versions
+    the image URL on all of them (link previews cache by URL)."""
+    import re
+    import shutil
+
+    from simple_evals_mm import leaderboard as lb
+
+    site = os.path.join(os.path.dirname(__file__), "..", "site")
+    for page in lb.OG_PAGES:
+        with open(os.path.join(site, page), encoding="utf-8") as f:
+            html = f.read()
+        title = re.search(r"<title>(.*?)</title>", html).group(1)
+        for tag in ('property="og:image"', 'property="og:title"', 'property="og:url"', 'name="twitter:card"'):
+            assert tag in html, (page, tag)
+        assert f'property="og:title" content="{title}"' in html, page
+    out = tmp_path / "site"
+    shutil.copytree(site, out, ignore=shutil.ignore_patterns("results", "data.js", "trends.js", "analysis.js"))
+    (out / "assets" / "og-image.png").write_bytes(b"new image")
+    lb.stamp_assets(str(out))
+    v = __import__("hashlib").sha256(b"new image").hexdigest()[:10]
+    for page in lb.OG_PAGES:
+        html = (out / page).read_text(encoding="utf-8")
+        assert html.count(f"og-image.png?v={v}") == 2, page  # og:image and twitter:image

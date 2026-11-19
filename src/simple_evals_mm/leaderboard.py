@@ -721,6 +721,9 @@ def _version_urls(html: str, site_dir: str, names: tuple[str, ...]) -> str:
     return html
 
 
+OG_PAGES = ("index.html", "changelog.html", "analysis.html", "explore/index.html", "trends/index.html", "docs/index.html")
+
+
 def stamp_assets(site_dir: str) -> None:
     """Version the asset URLs in index.html and changelog.html (?v=<content hash>), so a browser that cached an older
     copy (GitHub Pages: max-age=600) cannot pair the new page with stale data or styles."""
@@ -733,13 +736,20 @@ def stamp_assets(site_dir: str) -> None:
             continue
         with open(p, encoding="utf-8") as fh:
             html = _version_urls(fh.read(), site_dir, names)
-        og = os.path.join(site_dir, "assets", "og-image.png")
-        if page == "index.html" and os.path.exists(og):  # link previews cache by image URL
-            with open(og, "rb") as fh:
-                v = hashlib.sha256(fh.read()).hexdigest()[:10]
-            html = re.sub(r'(assets/og-image\.png)(\?v=[0-9a-f]+)?"', rf'\g<1>?v={v}"', html)
         with open(p, "w", encoding="utf-8") as fh:
             fh.write(html)
+    og = os.path.join(site_dir, "assets", "og-image.png")
+    if os.path.exists(og):  # link previews cache by image URL: every page that shares it
+        with open(og, "rb") as fh:
+            v = hashlib.sha256(fh.read()).hexdigest()[:10]
+        for page in OG_PAGES:
+            p = os.path.join(site_dir, page)
+            if not os.path.exists(p):
+                continue
+            with open(p, encoding="utf-8") as fh:
+                html = re.sub(r'(assets/og-image\.png)(\?v=[0-9a-f]+)?"', rf'\g<1>?v={v}"', fh.read())
+            with open(p, "w", encoding="utf-8") as fh:
+                fh.write(html)
 
 
 def format_report(report: dict) -> str:
