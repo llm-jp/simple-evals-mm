@@ -71,9 +71,8 @@ of the CLI options (`uv run --frozen sem run --help`).
 
 ## Environment variables
 
-Nothing in the environment changes prompts, sampling or rewards: what does is a job config value, recorded in the
-job. The environment holds only secrets and machine-local locations; `.env` at the repository root is read for the
-secrets.
+The environment holds only secrets (read from `.env` at the repository root) and machine-local locations; nothing in
+it changes prompts, sampling or rewards.
 
 | Variable | Use |
 |---|---|
@@ -83,4 +82,4 @@ secrets.
 | `HF_TOKEN` | gated Hugging Face datasets, `sem job publish` / `download` |
 | `SGLANG_BASE_URL`, `VLLM_BASE_URL`, `HF_BASE_URL` | a served model without `--server` (or `--base-url`) |
 | `HF_HOME` | the Hugging Face cache (models, datasets) |
-| `SEM_DATA_DIR` | the data directory (default `data/` in the checkout; [Dataset setup](../task_setup.md#where-the-data-lives)); the data in it is checked against `datasets.lock` |
+| `SEM_DATA_DIR` | the data directory (default `data/` in the checkout; [Dataset setup](../task_setup.md#where-the-data-lives)) |

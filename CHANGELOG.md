@@ -10,6 +10,12 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 - Site: each view has its controls right above it: the table gets the chart's set (score, Benchmarks, Best / All,
   Configs; one shared state), set apart from the chart; All results has Category, Best / All and Configs (narrowing
   its columns), and its category rows stay in view while scrolling.
+- Docs trimmed for users: implementation internals, incident history and dataset-specific details left out of the
+  guides and reference pages (OmniDocBench's evaluator in Regrade, the leaderboard's refusal rules, the job-file and
+  resume internals, serving and inference-setting internals); Analysis merged into
+  [View and analyze results](docs/results/view.md); the README shortened to an intro, installation, one example and
+  the citation, its benchmark table moved to [Datasets](docs/datasets/overview.md) and its resume figure to
+  [Concepts](docs/concepts.md); CONTRIBUTING's test list and release check condensed.
 - Docs: code blocks have a header bar (language, Copy) and their own background, so the button no longer covers the
   code; Quick start explains every column of `sem job show` (verified, causes, ...); Concepts shows a job as a file tree.
 - Docs: every shell example fits the Docs page without scrolling (at most 88 characters a line, as Harbor's docs):
