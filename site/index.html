@@ -241,7 +241,7 @@
 </footer>
 
 <script src="logos.js?v=95862aac74"></script>
-<script src="data.js?v=fc7e9e943a"></script>
+<script src="data.js?v=1f76cacee7"></script>
 <script src="share.js?v=4f2f258deb"></script>
 <script>
 (function () {
@@ -441,7 +441,7 @@
   const ptName = p => p.m.name + (p.d && p.d.subset ? " *" : "");  // a chart label: "*" on a text-only subset
   const subsetTip = d => `scored on the text-only subset (${d.subset.n ?? "?"} of ${d.subset.of ?? "?"} questions, those without an image): a text-only model; not comparable with the full benchmark and not in Overall`;
   const pickVal = lvl => state.subject.startsWith("t:") ? lvl.tasks[state.subject.slice(2)] : isOverall() ? overallOf(lvl) : lvl.benchmarks[state.subject.slice(2)];
-  // a configuration is plotted when it has a score; one without a cost goes to the "no price" band of the cost axis
+  // a configuration is plotted when it has a score; one without a cost goes to the "cost unavailable" band of the cost axis
   const has = lvl => { const d = pickVal(lvl); return d && d.score != null && (d[state.x] != null || state.x === "cost"); };
   function points() {
     const pts = [];
@@ -549,7 +549,7 @@
     document.getElementById("chart-legend").innerHTML = state.x === "cost"
       ? `<span><svg viewBox="-12 -12 24 24" width="18" height="18"><circle r="10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>billed cost</span>`
         + (pts.some(p => p.d.cost_est) ? `<span><svg viewBox="-12 -16 28 28" width="20" height="20"><circle r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="-9" r="6" fill="var(--bg)" stroke="currentColor"/><text x="9" y="-6" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor">≈</text></svg>estimated (API price × our tokens)</span>` : "")
-        + (noX.length ? `<span><span class="lg-band"></span>no price</span>` : "") : "";
+        + (noX.length ? `<span><span class="lg-band"></span>cost unavailable</span>` : "") : "";
     // a text-only model's text-only subset (HLE-Diamond, JFinBench): "*" on its label, explained here and in the tooltip
     const sub = pts.find(p => p.d.subset);
     if (sub) document.getElementById("chart-legend").insertAdjacentHTML("beforeend",
@@ -558,7 +558,7 @@
     const LOG = state.scale === "log";
     const x0 = LOG ? Math.min(...xs) / 1.8 : 0, x1 = LOG ? Math.max(...xs) * 1.8 : Math.max(...xs) * 1.08;
     const y0 = Math.max(0, Math.floor((Math.min(...ys) - 6) / 10) * 10), y1 = 100;
-    // "no price" band: a strip left of the cost scale (an axis break separates it), for configurations without a cost
+    // "cost unavailable" band: a strip left of the cost scale (an axis break separates it), for configurations without a cost
     const BAND = noX.length ? Math.round(64 * FS) : 0, PL = M.l + BAND;
     const sx = LOG ? v => PL + (Math.log10(v) - Math.log10(x0)) / (Math.log10(x1) - Math.log10(x0)) * (W - PL - M.r)
                    : v => PL + (v - x0) / (x1 - x0) * (W - PL - M.r);
@@ -578,17 +578,18 @@
     }
     if (BAND) {
       el("rect", { x: M.l, y: M.t, width: BAND - 10, height: H - M.t - M.b, fill: "var(--surface-2)", opacity: 0.6, rx: 4 }, g);
-      el("text", { x: M.l + (BAND - 10) / 2, y: H - M.b + 20, "text-anchor": "middle" }, g).textContent = "no price";
+      const bt = el("text", { x: M.l + (BAND - 10) / 2, y: H - M.b + 20, "text-anchor": "middle" }, g);  // two lines: the band is narrow
+      ["cost", "unavailable"].forEach((w, i) => { el("tspan", { x: M.l + (BAND - 10) / 2, dy: i ? "1.15em" : 0 }, bt).textContent = w; });
       const bx = M.l + BAND - 5, by = H - M.b;  // axis break: two short slashes between the band and the scale
       for (const dx of [-3, 3]) el("line", { x1: bx + dx - 3, y1: by + 6, x2: bx + dx + 3, y2: by - 6, stroke: "var(--text-muted)", "stroke-width": 1.4 }, g);
     }
     for (const v of (LOG ? logTicks(x0, x1) : linTicks(x1))) {
       el("line", { class: "gridline", x1: sx(v), x2: sx(v), y1: M.t, y2: H - M.b, "stroke-dasharray": "2 4" }, g);
-      if (BAND && sx(v) - (M.l + (BAND - 10) / 2) < (W < 600 ? 62 : 48)) continue;  // label too close to "no price"
+      if (BAND && sx(v) - (M.l + (BAND - 10) / 2) < (W < 600 ? 62 : 48)) continue;  // label too close to "cost unavailable"
       el("text", { x: sx(v), y: H - M.b + 20, "text-anchor": "middle" }, g).textContent =
         state.x === "cost" ? (v === 0 ? "$0" : fmtCost(v).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")) : (v === 0 ? "0" : Math.round(v * 1000).toLocaleString("en-US"));
     }
-    el("text", { class: "axis-title", x: (M.l + W - M.r) / 2, y: H - 14, "text-anchor": "middle" }, svg).textContent =
+    el("text", { class: "axis-title", x: (PL + W - M.r) / 2, y: H - 14, "text-anchor": "middle" }, svg).textContent =
       (state.x === "cost" ? "API cost per question (USD" + (LOG ? ", log scale)" : ")") : "Output tokens per question" + (LOG ? " (log scale)" : ""));
     if (W < 600) el("text", { class: "axis-title", x: M.l, y: M.t - 10, "text-anchor": "start" }, svg).textContent = scopeLabel() + " score";  // portrait: title above the plot
     else el("text", { class: "axis-title", x: 16, y: (M.t + H - M.b) / 2, "text-anchor": "middle", transform: `rotate(-90 16 ${(M.t + H - M.b) / 2})` }, svg).textContent = scopeLabel() + " score";
@@ -686,7 +687,7 @@
     tip.innerHTML = `<div class="tt-name" style="color:${nameColor(p.m)}">${esc(p.m.name)}</div><div class="tt-sub">${esc(sub)}</div>
       <div class="tt-row"><span>${esc(scopeLabel())}</span><b>${p.d.score.toFixed(1)}%${p.d.std != null ? ` <span class="pm">± ${p.d.std.toFixed(1)}</span>` : ""}${p.d.n_repeats && p.d.n_repeats < SITE.n_runs ? ` <span class="pm">(${p.d.n_repeats} attempts)</span>` : ""}</b></div>
       ${p.d.subset ? `<div class="tt-row"><span>* Text-only subset</span><b>${p.d.subset.n} of ${p.d.subset.of} questions</b></div>` : ""}
-      <div class="tt-row"><span>Cost / question</span><b>${p.d.cost != null ? fmtCostE(p.d) : "no price"}</b></div>
+      <div class="tt-row"><span>Cost / question</span><b>${p.d.cost != null ? fmtCostE(p.d) : "cost unavailable"}</b></div>
       <div class="tt-row"><span>Output tokens / question</span><b>${p.d.tok != null ? fmtTok(p.d.tok) : "–"}</b></div>`;
     placeTip(p);
   }
@@ -877,7 +878,7 @@
       tr.innerHTML = `<td><span class="mname">${logoHTML(r.m)}${esc(r.m.name)} <span class="effort-tag">${esc(effLabel(r.m, r.effort))}</span>${aliasTag(r.lvl)}</span></td>`
         + `<td class="barcol">${pct != null ? `<div class="sbar"><i style="width:${pct}%;background:${nameColor(r.m)}"></i>${whisk}</div>` : ""}</td>`
         + `<td class="hl overall">${d.score != null ? d.score.toFixed(1) : "–"}${d.subset ? `<sup class="subset" title="${esc(subsetTip(d))}">*</sup>` : ""}${d.std != null ? ` <span class="pm">± ${d.std.toFixed(1)}</span>` : ""}${d.n_repeats && d.n_repeats < SITE.n_runs ? ` <span class="pm" title="fewer attempts than the other configurations">(${d.n_repeats} attempts)</span>` : ""}</td>`
-        + `<td class="sep" ${d.cost_est ? 'title="estimate: the same model\'s API price x our tokens (row details)"' : d.cost == null ? 'title="no price: a self-served model with no API listing to price it"' : ""}>${d.cost != null ? fmtCostE(d) : "–"}</td><td>${d.tok != null ? fmtTok(d.tok) : "–"}</td>`
+        + `<td class="sep" ${d.cost_est ? 'title="estimate: the same model\'s API price x our tokens (row details)"' : d.cost == null ? 'title="cost unavailable: a self-served model with no API listing to price it"' : ""}>${d.cost != null ? fmtCostE(d) : "–"}</td><td>${d.tok != null ? fmtTok(d.tok) : "–"}</td>`
         + (rt => `<td class="sep" title="${esc(rt ? rt.cut_tip : "")}">${fmtRate(rt && rt.cut)}</td><td title="${esc(rt ? rt.refused_tip : "")}">${fmtRate(rt && rt.refused)}</td>`)(rates(r.lvl));
       const key = r.m.key + "|" + r.effort;
       tr.className = "has-settings" + (openRows.has(key) ? " open" : "");
@@ -957,7 +958,7 @@
       body += `<tr class="ar-cat-row"><th class="ar-task" colspan="${cols.length + 1}">${esc(cat)}</th></tr>`;
       for (const t of tasks.filter(t => t.category === cat)) {
         const best = bestOf(cols.map(c => (x => x && !x.subset ? x.score : null)(c.lvl.tasks[t.key])));
-        body += `<tr><th class="ar-task"><a href="explore/?view=tasks&amp;d=${encodeURIComponent(t.key)}" title="What it measures and how it is graded">${esc(t.label)}</a></th>` + cols.map(c => {
+        body += `<tr><th class="ar-task"><a href="explore/?view=tasks&amp;d=${encodeURIComponent(t.key)}" title="This benchmark in Explore">${esc(t.label)}</a></th>` + cols.map(c => {
           const x = c.lvl.tasks[t.key];
           if (!x) return (c.lvl.refused || {})[t.key] ? `<td class="ar-na">refused</td>` : `<td class="ar-na">–</td>`;
           return `<td${!x.subset && x.score === best ? ' class="ar-best"' : ""}>${x.score.toFixed(1)}${x.subset ? `<sup class="subset">*</sup>` : ""}</td>`;
@@ -967,7 +968,7 @@
     const tbl = document.getElementById("ar-table");
     tbl.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
     tbl.style.setProperty("--ar-head", tbl.tHead.offsetHeight + "px");  // the category rows stick right under the header
-    document.getElementById("ar-note").textContent = `% correct, mean over attempts; the best score of each row in bold. "–" = not evaluated; "refused" = left out by the site build. A benchmark's name links to what it measures and how it is graded.`
+    document.getElementById("ar-note").textContent = `% correct, mean over attempts; the best score of each row in bold. "–" = not evaluated; "refused" = left out by the site build. A benchmark's name opens it in Explore.`
       + (cols.some(c => tasks.some(t => (c.lvl.tasks[t.key] || {}).subset)) ? " * Text-only subset (questions without an image): not comparable, not in Overall." : "");
   }
   { const sel = document.getElementById("ar-cat");

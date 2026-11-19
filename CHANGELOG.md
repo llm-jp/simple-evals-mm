@@ -7,11 +7,11 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
-- Site, All results: no Overall row, no cell tooltips and no intro line; each benchmark's name links to its Explore
-  page, which now says what the benchmark measures and how it is graded (a `how` sentence per task in
-  site/leaderboard.yaml, also on the Benchmarks cards). Best / All, Configs and Category no longer move the page;
-  the Category list opens below its button. A model's `note` (Qwen3.8 Flash: the API model, open-weight base
-  Qwen3.8-Flash-Next) shows in its details. The Docs page no longer caches the main branch's contents list.
+- Site, All results: no Overall row, no cell tooltips and no intro line; each benchmark's name opens it in Explore,
+  whose Tasks view of one benchmark starts with what it is and how it is graded. Best / All, Configs and Category no
+  longer move the page; the Category list opens below its button. A model's `note` (Qwen3.8 Flash: the API model,
+  open-weight base Qwen3.8-Flash-Next) shows in its details. The cost chart says "cost unavailable" instead of "no
+  price". The Docs page no longer caches the main branch's contents list.
 - Docs and README write commands as `sem ...` (after `source .venv/bin/activate`, explained in Installation;
   `uv run --frozen sem ...` still works without activating).
 

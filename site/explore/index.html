@@ -634,11 +634,11 @@ async function task(p) {
 const META = Object.fromEntries(((window.LB || {}).tasks || []).map(t => [t.key, t]));
 const dlink = (label, url) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>` : "";
 const ddesc = t => esc(t.description || "").replace(/included in JAMMEval\./, `included in <a href="${esc((window.LB || {}).jammeval_paper || (window.LB || {}).jammeval_url || "#")}" target="_blank" rel="noopener">JAMMEval</a>.`);
-// the selected dataset at the top of Heatmap / Tasks / Trials: what it is, how it is graded, where it lives
+// the selected dataset at the top of Tasks: what it is, how it is graded, where it lives
 function dsHeader(d) {
   const t = META[d]; if (!d || d === "all" || !t) return "";
   return `<div class="dshead"><div><b>${esc(t.label)}</b> <span class="tag cat">${esc(t.category || "")}</span><span class="tag">${esc(t.lang || "")}</span>${t.n != null ? ` <span class="note">${t.n.toLocaleString()} questions</span>` : ""}</div>`
-    + `<p class="desc">${ddesc(t)}</p><div class="facts">${dlink("Dataset", t.dataset)}${dlink("Paper", t.paper)}<span class="grading">Grading: <b>${esc(t.grading || "")}</b></span></div>${t.how ? `<p class="desc how"><b>How it is graded:</b> ${esc(t.how)}</p>` : ""}</div>`;
+    + `<p class="desc">${ddesc(t)}</p><div class="facts">${dlink("Dataset", t.dataset)}${dlink("Paper", t.paper)}<span class="grading">Grading: <b>${esc(t.grading || "")}</b></span></div></div>`;
 }
 async function datasets(p) {
   const cat = p.category || "All";
@@ -663,8 +663,7 @@ async function datasets(p) {
         h += `<article class="task-card dscard">
       <h3>${esc(t.label)}</h3>
       <div class="dmeta">${[t.category, t.lang === "ja" ? "Japanese" : t.lang === "en" ? "English" : t.lang, (t.n ?? st.n) != null ? (t.n ?? st.n).toLocaleString() + " questions" : null].filter(Boolean).map(esc).join(" · ")}</div>
-      <p class="desc">${ddesc(t)}</p>${t.how ? `
-      <p class="desc how"><b>How it is graded:</b> ${esc(t.how)}</p>` : ""}
+      <p class="desc">${ddesc(t)}</p>
       <div class="dres">
         <div class="dgrid3">
           <div class="dc"><div class="dl">Average score</div><div class="dv">${pct(st.mean)}</div></div>
