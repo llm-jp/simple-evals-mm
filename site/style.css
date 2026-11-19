@@ -636,3 +636,21 @@ h2:hover > a.anchor, h3:hover > a.anchor, a.anchor:focus { opacity: 1; }
 .share-menu.open .share-pop { display: flex; flex-direction: column; }
 .share-pop button { border: 0; border-radius: 5px; width: 100%; justify-content: flex-start; padding: 6px 10px; }
 .share-pop button:hover { background: var(--border); color: var(--text-primary); }
+
+/* All results: settings x benchmarks */
+.ar-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
+.ar-cat { color: var(--text-secondary); font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+.ar-wrap { overflow: auto; max-height: 75vh; border: 1px solid var(--border); border-radius: 8px; }
+table.ar { border-collapse: separate; border-spacing: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+table.ar th, table.ar td { padding: 6px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+table.ar thead th { position: sticky; top: 0; background: var(--surface-2); color: var(--text-secondary); font-weight: 600; z-index: 2; }
+table.ar thead tr:nth-child(2) th { top: 31px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+table.ar th.ar-cat-h { text-align: center; border-left: 1px solid var(--border); }
+table.ar th.ar-sort { cursor: pointer; }
+table.ar th.ar-sort.sorted { color: var(--text-primary); }
+table.ar th.ar-sort.sorted::after { content: " \2193"; }
+table.ar .sep { border-left: 1px solid var(--border); }
+table.ar .ar-model { position: sticky; left: 0; text-align: left; background: var(--bg); z-index: 1; }
+table.ar thead .ar-model { z-index: 3; background: var(--surface-2); }
+table.ar td.ar-na { color: var(--text-muted); }
+table.ar sup.subset { color: var(--text-secondary); }
