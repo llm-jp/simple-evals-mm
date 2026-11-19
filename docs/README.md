@@ -25,6 +25,7 @@ another version are in its tag on GitHub (`https://github.com/llm-jp/simple-eval
   - [Overview](models/overview.md)
   - [API models](models/api-models.md)
   - [Local models (vLLM / SGLang)](models/local-models.md)
+  - [LLM-jp models](models/llm-jp.md)
   - [Adding a model preset](models/adding-a-preset.md)
   - [Adding an API format](models/adding-an-api-format.md)
   - [Model card parity](models/model-cards.md)
