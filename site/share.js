@@ -3,9 +3,11 @@
 //    copies it (with the page's current view state);
 //  * view state in the query string (?k=v&...), so a section anchor (#...) can follow it; links of the earlier
 //    #k=v form are still read;
-//  * a bar under each chart / table (as on Epoch AI's pages): Share (copy the link to that chart in its current
-//    state), PNG, SVG (charts) and CSV (the plotted / listed values).
+//  * two buttons under each chart / table (as on Epoch AI's ECI page): Share (X, Instagram, copy the link to that view
+//    in its current state) and Download (PNG / SVG of a chart, CSV of the values); a saved image carries the chart's
+//    title, the LLM-jp logo with "simple-evals-mm · CC BY 4.0" at the bottom left and the link and date at the right.
 (function () {
+  const BASE = new URL(".", document.currentScript.src).href;  // the site root (share.js lives there)
   const STATE_HASH = /^#[a-z]+=/;
   const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   const today = () => new Date().toISOString().slice(0, 10);
@@ -89,7 +91,7 @@
       const href = im.getAttribute("href") || im.getAttribute("xlink:href");
       if (href && !href.startsWith("data:")) { const d = await toDataURL(new URL(href, location.href).href); if (d) im.setAttribute("href", d); }
     }
-    const top = 34, bottom = 26, NS = "http://www.w3.org/2000/svg";
+    const top = 34, bottom = 36, NS = "http://www.w3.org/2000/svg";
     const cs = getComputedStyle(document.body), bg = cs.backgroundColor, fg = cs.color, font = cs.fontFamily;
     const out = document.createElementNS(NS, "svg");
     out.setAttribute("xmlns", NS); out.setAttribute("viewBox", `0 0 ${w} ${h + top + bottom}`);
@@ -102,7 +104,11 @@
     const g = document.createElementNS(NS, "g"); g.setAttribute("transform", `translate(0 ${top})`);
     clone.removeAttribute("width"); clone.removeAttribute("height"); clone.setAttribute("width", w); clone.setAttribute("height", h);
     g.appendChild(clone); out.appendChild(g);
-    text(w - 12, h + top + 18, `simple-evals-mm · ${location.host}${location.pathname} · ${today()}`, 11, "end");
+    const logo = await toDataURL(BASE + "assets/llm-jp-logo.png");
+    if (logo) { const im = document.createElementNS(NS, "image"); im.setAttribute("href", logo);
+      im.setAttribute("x", 12); im.setAttribute("y", h + top + 8); im.setAttribute("width", 20); im.setAttribute("height", 20); out.appendChild(im); }
+    text(logo ? 38 : 12, h + top + 23, "simple-evals-mm · CC BY 4.0", 12, "start", 600);
+    text(w - 12, h + top + 23, `${location.host}${location.pathname} · ${today()}`, 11, "end");
     return { svg: new XMLSerializer().serializeToString(out), w, h: h + top + bottom };
   }
   async function svgBlob(svg, title) { const s = await standalone(svg, title); return new Blob([s.svg], { type: "image/svg+xml" }); }
@@ -115,22 +121,71 @@
     return await new Promise(res => c.toBlob(res, "image/png"));
   }
 
-  // a bar under `after`: Share always; PNG / SVG with `svg`; CSV with `csv` (rows function) or `table`
+  const ICON = {
+    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg>',
+    download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4M7 10l5 5 5-5M12 15V3"/></svg>',
+    x: '<svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M17.8 3h3.1l-6.8 7.7 8 10.3h-6.3l-4.9-6.3L5.3 21H2.2l7.2-8.3L1.8 3h6.4l4.4 5.8L17.8 3Zm-1.1 16.2h1.7L7.3 4.7H5.5l11.2 14.5Z"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" class="fill"/></svg>',
+    link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+    image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg>',
+    table: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>',
+  };
+  // the readable anchor of the section a chart / table belongs to: the nearest heading before it (its "#" link)
+  function anchorFor(el, fallback) {
+    for (let e = el; e && e.tagName !== "MAIN" && e !== document.body; e = e.parentElement)
+      for (let p = e.previousElementSibling; p; p = p.previousElementSibling) {
+        const h = /^H[23]$/.test(p.tagName) ? p : null;
+        if (h) return h.dataset.anchor || h.id || (h.closest("section[id]") || {}).id || fallback;
+      }
+    return fallback;
+  }
+  function closeMenus(except) { document.querySelectorAll(".share-menu.open").forEach(m => m !== except && m.classList.remove("open")); }
+  document.addEventListener("click", e => { if (!e.target.closest(".share-menu")) closeMenus(null); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(null); });
+
+  // two buttons under `after`: Share (X, Instagram, copy link) and Download (PNG / SVG with `svg`; CSV with `csv`
+  // (rows function) or `table`). The image title is fixed per chart (no list of selections that could overflow).
   function bar(after, opt) {
-    const id = opt.id, nm = () => (typeof opt.name === "function" ? opt.name() : opt.name) || id;
+    const id = () => anchorFor(b, opt.id), nm = () => (typeof opt.name === "function" ? opt.name() : opt.name) || opt.id;
     const title = () => (typeof opt.title === "function" ? opt.title() : opt.title) || nm();
-    const b = document.createElement("div"); b.className = "share-bar";
-    const btn = (label, tip, fn) => { const x = document.createElement("button"); x.type = "button"; x.textContent = label; x.title = tip;
-      x.onclick = async () => { try { await fn(x); } catch (e) { x.textContent = "Failed"; setTimeout(() => { x.textContent = label; }, 1600); } }; b.appendChild(x); };
-    btn("Share", "Copy a link to this view (with the current selections)", x => copy(linkTo(id), x));
     const svg = () => typeof opt.svg === "string" ? document.getElementById(opt.svg) : opt.svg;
+    const png = async () => new File([await pngBlob(svg(), title(), 2)], `${nm()}-${today()}.png`, { type: "image/png" });
+    const b = document.createElement("div"); b.className = "share-bar";
+    const menu = (icon, label, items) => {
+      const w = document.createElement("div"); w.className = "share-menu";
+      w.innerHTML = `<button type="button" class="share-btn" aria-haspopup="menu" aria-expanded="false">${ICON[icon]}<span>${label}</span></button><div class="share-pop" role="menu"></div>`;
+      const pop = w.querySelector(".share-pop"), btn = w.querySelector(".share-btn");
+      for (const [ic, text, tip, fn] of items) {
+        const it = document.createElement("button"); it.type = "button"; it.setAttribute("role", "menuitem"); it.title = tip;
+        it.innerHTML = `${ICON[ic]}<span>${text}</span>`;
+        it.onclick = async () => { const sp = it.querySelector("span");
+          try { const msg = await fn(); if (msg) { sp.textContent = msg; setTimeout(() => { sp.textContent = text; }, 1600); } else w.classList.remove("open"); }
+          catch (e) { sp.textContent = "Failed"; setTimeout(() => { sp.textContent = text; }, 1600); } };
+        pop.appendChild(it);
+      }
+      btn.onclick = () => { const open = !w.classList.contains("open"); closeMenus(w); w.classList.toggle("open", open); btn.setAttribute("aria-expanded", String(open)); };
+      b.appendChild(w);
+    };
+    const copyLink = () => new Promise(res => { const tmp = document.createElement("button"); copy(linkTo(id()), tmp);
+      setTimeout(() => res(tmp.textContent === "Copy failed" ? "Copy failed" : "Link copied"), 300); });
+    const shareItems = [
+      ["x", "X", "Post the link on X", () => { window.open(`https://x.com/intent/post?${new URLSearchParams({ text: `${title()} (simple-evals-mm)`, url: linkTo(id()) })}`, "_blank", "noopener"); }],
+    ];
+    if (opt.svg) shareItems.push(["instagram", "Instagram", "Share the chart image (Instagram takes images, not links): the system share sheet on a phone, else the PNG is saved to post", async () => {
+      const f = await png();
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: title() }); return null; }
+      download(f.name, f); return "PNG saved"; }]);
+    shareItems.push(["link", "Copy link", "Copy a link to this view (with the current selections)", copyLink]);
+    menu("share", "Share", shareItems);
+    const dl = [];
     if (opt.svg) {
-      btn("PNG", "Download this chart as a PNG image", async () => download(`${nm()}-${today()}.png`, await pngBlob(svg(), title(), 2)));
-      btn("SVG", "Download this chart as an SVG image", async () => download(`${nm()}-${today()}.svg`, await svgBlob(svg(), title())));
+      dl.push(["image", "PNG", "Download this chart as a PNG image", async () => { const f = await png(); download(f.name, f); }]);
+      dl.push(["image", "SVG", "Download this chart as an SVG image", async () => download(`${nm()}-${today()}.svg`, await svgBlob(svg(), title()))]);
     }
-    if (opt.csv || opt.table) btn("CSV", "Download the values as CSV", () => {
+    if (opt.csv || opt.table) dl.push(["table", "CSV", "Download the values as CSV", () => {
       const rows = opt.csv ? opt.csv() : tableRows(typeof opt.table === "string" ? document.getElementById(opt.table) : opt.table);
-      download(`${nm()}-${today()}.csv`, new Blob([toCSV(rows)], { type: "text/csv" })); });
+      download(`${nm()}-${today()}.csv`, new Blob([toCSV(rows)], { type: "text/csv" })); }]);
+    menu("download", opt.svg ? "Download graph" : "Download", dl);
     after.insertAdjacentElement("afterend", b);
     return b;
   }
