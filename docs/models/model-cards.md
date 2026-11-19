@@ -4,7 +4,8 @@
 next to them:
 
 ```bash
-uv run --frozen sem job parity jobs/qwen35-9b__default__b131072__c2   # table + checklist; --json; --strict exits 1 on an unexplained ⚠
+# table + checklist; --json; --strict exits 1 on an unexplained ⚠
+uv run --frozen sem job parity jobs/qwen35-9b__default__b131072__c2
 ```
 
 ## Adding a card

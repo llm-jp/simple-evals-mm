@@ -4,10 +4,22 @@
 
 ## Scores and failures
 
+Per dataset: reward ± std, 95% CI, pass@k, majority, causes, cost:
+
 ```bash
-uv run --frozen sem job show jobs/NAME            # per dataset: reward ± std, 95% CI, pass@k, majority, causes, cost
-uv run --frozen sem job show jobs/NAME --json     # the same as JSON (per attempt, per category)
-uv run --frozen sem jobs compare jobs/A jobs/B    # several jobs side by side (+ comparability)
+uv run --frozen sem job show jobs/NAME
+```
+
+The same as JSON (per attempt, per category):
+
+```bash
+uv run --frozen sem job show jobs/NAME --json
+```
+
+Several jobs side by side (+ comparability):
+
+```bash
+uv run --frozen sem jobs compare jobs/A jobs/B
 ```
 
 `causes` counts the failed trials: many `budget_exhausted` mean the output limit cuts answers (raise
@@ -16,7 +28,8 @@ uv run --frozen sem jobs compare jobs/A jobs/B    # several jobs side by side (+
 ## Against the model card
 
 ```bash
-uv run --frozen sem job parity jobs/NAME          # our score next to the card's (references/model_cards.yaml)
+# our score next to the card's (references/model_cards.yaml)
+uv run --frozen sem job parity jobs/NAME
 ```
 
 ✓ within the tolerance, ⚠ outside it; `~` / `n/a` when the card used another split or tools. See
@@ -34,9 +47,16 @@ grading.
 
 ## Browse trials
 
+Write two jobs in Harbor's job layout, for one dataset:
+
 ```bash
 uv run --frozen sem jobs export jobs/A jobs/B -o harbor_jobs --name compare -d mmmu
-harbor view harbor_jobs --jobs                     # Harbor's viewer: per trial, side by side
+```
+
+Harbor's viewer: per trial, side by side:
+
+```bash
+harbor view harbor_jobs --jobs
 ```
 
 ## Your own analysis

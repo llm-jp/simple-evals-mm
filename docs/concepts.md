@@ -13,15 +13,28 @@ The terms follow [Harbor](https://harborframework.com/) where the concept is the
 
 ## What a job stores
 
+A job is a directory of plain files:
+
 ```
-jobs/<job>/config.json                          the requested settings (CLI + YAML, resolved defaults)
-jobs/<job>/lock.json                            what they resolved to: commit, library check, dataset revisions and
-                                                task digests, sampling values with their source, endpoint, sessions
-jobs/<job>/<dataset>/trials_a<k>.jsonl          one trial per line: the full trajectory (prompt, images by sha256,
-                                                answer, reasoning), usage, failure cause, the commit that generated it
-jobs/<job>/<dataset>/verifier/<id>/a<k>.jsonl   one verifier result per line (reward, extracted answer, judge reply)
-jobs/<job>/images/<sha256>.<ext>                images sent, stored once
+jobs/<job>/
+├── config.json              # the requested settings (CLI + YAML, with the defaults filled in)
+├── lock.json                # what they resolved to: commit, libraries, dataset revisions, sampling values, endpoint
+├── images/                  # every image sent, stored once by its hash
+└── <dataset>/               # one directory per dataset, e.g. gpqa/
+    ├── trials_a1.jsonl      # attempt 1: one trial per line (prompt, answer, reasoning, usage, failure cause)
+    ├── trials_a1.meta.json  # attempt 1 is complete: its hash
+    ├── trials_a2.jsonl      # attempt 2, ...
+    └── verifier/
+        ├── current          # the id of the current grading
+        └── <id>/            # one grading (a regrade adds another)
+            ├── a1.jsonl     # one result per trial of attempt 1: reward, extracted answer, judge reply
+            └── meta.json    # how it was graded: the judge, the code commit, the hashes of the graded trials
 ```
+
+- **Settings** (`config.json`, `lock.json`): what was asked for and what it resolved to; a resume compares them.
+- **Trials** (`trials_a<k>.jsonl`): the model's side, written as the answers come in.
+- **Verifier** (`verifier/<id>/`): the grading, kept apart from the trials, so the answers can be graded again
+  without new model calls.
 
 Scores are never stored: `sem job show` recomputes them from the trial and verifier files, and `sem job check`
 verifies the files' hashes. Generation and verification are separate: `--generate-only` stores trials, and

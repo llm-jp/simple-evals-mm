@@ -10,6 +10,12 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 - Site: each view has its controls right above it: the table gets the chart's set (score, Benchmarks, Best / All,
   Configs; one shared state), set apart from the chart; All results has Category, Best / All and Configs (narrowing
   its columns), and its category rows stay in view while scrolling.
+- Docs: code blocks have a header bar (language, Copy) and their own background, so the button no longer covers the
+  code; Quick start explains every column of `sem job show` (verified, causes, ...); Concepts shows a job as a file tree.
+- Docs: every shell example fits the Docs page without scrolling (at most 88 characters a line, as Harbor's docs):
+  long commands split before an option with ` \`, comments on their own line; `tests/test_docs.py` checks it.
+- Docs and README: one command per code box, each introduced by a sentence (as Harbor's docs); sequences that only
+  work together stay in one box; checked by `tests/test_docs.py`. Fixed a shell example that a comment line split in two.
 
 - Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
   of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
