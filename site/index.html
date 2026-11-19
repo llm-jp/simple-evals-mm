@@ -383,6 +383,7 @@
              std: ts.every(t => t.std != null) ? Math.sqrt(ts.reduce((a, t) => a + t.std ** 2, 0)) / ts.length : null,
              n_repeats: Math.min(...ts.map(t => t.n_repeats || SITE.n_runs)) };
   }
+  const ptName = p => p.m.name + (p.d && p.d.subset ? " *" : "");  // a chart label: "*" on a text-only subset
   const subsetTip = d => `scored on the text-only subset (${d.subset.n ?? "?"} of ${d.subset.of ?? "?"} questions, those without an image): a text-only model; not comparable with the full benchmark and not in Overall`;
   const pickVal = lvl => state.subject.startsWith("t:") ? lvl.tasks[state.subject.slice(2)] : isOverall() ? overallOf(lvl) : lvl.benchmarks[state.subject.slice(2)];
   // a configuration is plotted when it has a score; one without a cost goes to the "no price" band of the cost axis
@@ -492,6 +493,10 @@
       ? `<span><svg viewBox="-12 -12 24 24" width="18" height="18"><circle r="10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>billed cost</span>`
         + (pts.some(p => p.d.cost_est) ? `<span><svg viewBox="-12 -16 28 28" width="20" height="20"><circle r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="-9" r="6" fill="var(--bg)" stroke="currentColor"/><text x="9" y="-6" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor">≈</text></svg>estimated (API price × our tokens)</span>` : "")
         + (noX.length ? `<span><span class="lg-band"></span>no price</span>` : "") : "";
+    // a text-only model's text-only subset (HLE-Diamond, JFinBench): "*" on its label, explained here and in the tooltip
+    const sub = pts.find(p => p.d.subset);
+    if (sub) document.getElementById("chart-legend").insertAdjacentHTML("beforeend",
+      `<span title="${esc(subsetTip(sub.d))}">* text-only subset (${sub.d.subset.n} of ${sub.d.subset.of} questions): not comparable</span>`);
     const xs = withX.length ? withX.map(p => p.x) : [0.001, 0.01], ys = pts.map(p => p.y);
     const LOG = state.scale === "log";
     const x0 = LOG ? Math.min(...xs) / 1.8 : 0, x1 = LOG ? Math.max(...xs) * 1.8 : Math.max(...xs) * 1.08;
@@ -577,12 +582,12 @@
       const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2;
       const nx = -(b.cy - a.cy) / len, ny = (b.cx - a.cx) / len;
       const up = ny < 0 ? 1 : -1;
-      const ok = len > 90 && place("mlabel", a.m.name, mx, my, [[up * nx * 12, up * ny * 12 + 4, "middle"], [-up * nx * 14, -up * ny * 14 + 8, "middle"]], 12, nameColor(a.m), a.m.dev, a.m.key);
-      if (!ok) place("mlabel", a.m.name, b.cx, b.cy, NAME_CANDS, 12, nameColor(a.m), a.m.dev, a.m.key) || place("mlabel", a.m.name, a.cx, a.cy, NAME_CANDS, 12, nameColor(a.m), a.m.dev, a.m.key);
+      const ok = len > 90 && place("mlabel", ptName(a), mx, my, [[up * nx * 12, up * ny * 12 + 4, "middle"], [-up * nx * 14, -up * ny * 14 + 8, "middle"]], 12, nameColor(a.m), a.m.dev, a.m.key);
+      if (!ok) place("mlabel", ptName(a), b.cx, b.cy, NAME_CANDS, 12, nameColor(a.m), a.m.dev, a.m.key) || place("mlabel", ptName(a), a.cx, a.cy, NAME_CANDS, 12, nameColor(a.m), a.m.dev, a.m.key);
     }
     for (const p of pts) {
       if (byModel.get(p.m.key).length > 1) continue;
-      place("mlabel", p.m.name, p.cx, p.cy, NAME_CANDS, 12, nameColor(p.m), p.m.dev, p.m.key);
+      place("mlabel", ptName(p), p.cx, p.cy, NAME_CANDS, 12, nameColor(p.m), p.m.dev, p.m.key);
     }
     for (const p of pts) {
       if (byModel.get(p.m.key).length < 2) continue;
@@ -623,6 +628,7 @@
       + (lvl.provider ? ` · via ${lvl.provider}${lvl.quantization && lvl.quantization !== "unknown" ? " (" + lvl.quantization + ")" : ""}` : "");
     tip.innerHTML = `<div class="tt-name" style="color:${nameColor(p.m)}">${esc(p.m.name)}</div><div class="tt-sub">${esc(sub)}</div>
       <div class="tt-row"><span>${esc(scopeLabel())}</span><b>${p.d.score.toFixed(1)}%${p.d.std != null ? ` <span class="pm">± ${p.d.std.toFixed(1)}</span>` : ""}${p.d.n_repeats && p.d.n_repeats < SITE.n_runs ? ` <span class="pm">(${p.d.n_repeats} attempts)</span>` : ""}</b></div>
+      ${p.d.subset ? `<div class="tt-row"><span>* Text-only subset</span><b>${p.d.subset.n} of ${p.d.subset.of} questions</b></div>` : ""}
       <div class="tt-row"><span>Cost / question</span><b>${p.d.cost != null ? fmtCostE(p.d) : "no price"}</b></div>
       <div class="tt-row"><span>Output tokens / question</span><b>${p.d.tok != null ? fmtTok(p.d.tok) : "–"}</b></div>`;
     placeTip(p);
