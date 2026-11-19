@@ -16,6 +16,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
   long commands split before an option with ` \`, comments on their own line; `tests/test_docs.py` checks it.
 - Docs and README: one command per code box, each introduced by a sentence (as Harbor's docs); sequences that only
   work together stay in one box; checked by `tests/test_docs.py`. Fixed a shell example that a comment line split in two.
+- Docs page: the sidebar and "On this page" start where they stick, so scrolling never moves them; another docs page
+  opens in place (as Harbor's docs: the sidebar keeps its scroll, Back / Forward and new tabs work); on load the
+  current page's link is scrolled into view in the sidebar.
 
 - Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
   of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
