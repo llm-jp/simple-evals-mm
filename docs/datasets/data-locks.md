@@ -8,10 +8,22 @@ Two files in the repository pin what a dataset is, so that a result can be rerun
 (`tasks_sha256`), the pinned source revision, and the sha256 of every file fetched from a source without an immutable
 revision (a plain URL). A job checks its data against it before the first model call and records the result.
 
+The data here equals the lock (exit 1 otherwise):
+
 ```bash
-uv run --frozen sem datasets lock --check          # the data here equals the lock (exit 1 otherwise)
-uv run --frozen sem datasets lock -d mytask        # rewrite one dataset's entry after an intended data change
-uv run --frozen sem datasets check                 # newer upstream revisions (pins are never moved automatically)
+uv run --frozen sem datasets lock --check
+```
+
+Rewrite one dataset's entry after an intended data change:
+
+```bash
+uv run --frozen sem datasets lock -d mytask
+```
+
+Newer upstream revisions (pins are never moved automatically):
+
+```bash
+uv run --frozen sem datasets check
 ```
 
 ### What the lock holds

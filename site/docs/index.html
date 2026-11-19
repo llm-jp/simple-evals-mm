@@ -243,16 +243,21 @@
         if (lang && hljs.getLanguage(lang)) hljs.highlightElement(code);
         else code.classList.add("hljs");
       }
+      // a header bar above the code (the language and Copy), so the button never sits on the code
       const pre = code.parentElement;
       const wrap = document.createElement("div");
       wrap.className = "docs-code";
+      const head = document.createElement("div");
+      head.className = "docs-code-head";
+      head.innerHTML = `<span>${lang && lang !== "text" ? esc(lang) : ""}</span>`;
       pre.replaceWith(wrap);
+      wrap.appendChild(head);
       wrap.appendChild(pre);
       const btn = document.createElement("button");
       btn.type = "button"; btn.className = "docs-copy"; btn.title = "Copy"; btn.setAttribute("aria-label", "Copy code");
-      btn.innerHTML = ICON_COPY;
-      btn.onclick = () => copy(text.replace(/\n$/, ""), btn);
-      wrap.appendChild(btn);
+      btn.innerHTML = ICON_COPY + "<span>Copy</span>";
+      btn.onclick = () => copy(text.replace(/\n$/, ""), btn, "Copied");
+      head.appendChild(btn);
     }
     for (const t of body.querySelectorAll("table")) {  // wide tables scroll inside their box
       const w = document.createElement("div");

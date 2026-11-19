@@ -12,6 +12,7 @@
   --frontier-fill: rgba(43, 43, 42, 0.045);
   --accent: #2a78d6;
   --code-bg: #f4f3f0;
+  --pre-bg: #f3f5f8;  /* code blocks: a cool grey that stands apart from the white page */
 }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] {
@@ -28,6 +29,7 @@
   --frontier-fill: rgba(230, 229, 223, 0.05);
   --accent: #3987e5;
   --code-bg: #232321;
+  --pre-bg: #1d1f23;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -44,6 +46,7 @@
     --frontier-fill: rgba(230, 229, 223, 0.05);
     --accent: #3987e5;
     --code-bg: #232321;
+    --pre-bg: #1d1f23;
   }
 }
 /* shared design tokens (every page): LLM-jp's logo colours as the accents, one set of outcome colours, monospace
@@ -112,7 +115,7 @@ nav.links a[aria-current="page"]::after { content: ""; position: absolute; left:
 .cta:hover { border-color: var(--text-muted); }
 .cta.primary { color: var(--bg); background: var(--text-primary); border-color: var(--text-primary); }
 .cta.primary:hover { opacity: .88; }
-.controls.table-top { margin: 22px 0 10px; }
+.controls.table-top { margin: 40px 0 8px; }  /* clear of the chart above, close to its table (proximity) */
 .eyebrow { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin: 0 0 6px; }
 
 section { padding: 36px 0; }
@@ -333,7 +336,7 @@ table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-ri
 .lb-top { flex-wrap: nowrap; gap: 16px; }
 .lb-top .pick-wrap { flex: 0 1 auto; min-width: 0; }
 .lb-top select.pick { max-width: 100%; text-overflow: ellipsis; }
-.lb-top #lb-meta { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13px; text-align: center; }
+.lb-top #lb-meta, .lb-top .meta { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13px; text-align: center; }
 .lb-top .filter-wrap.right { margin-left: 0; flex: 0 0 auto; }
 @media (max-width: 760px) {
   .lb-top { flex-wrap: wrap; gap: 10px 12px; }
@@ -553,12 +556,14 @@ section#docs { padding-top: 0; }
 .docs-body a { color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--lj-blue); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
 .docs-body a:hover { text-decoration-color: var(--text-primary); }
 .docs-body code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); padding: .12em .38em; border-radius: 5px; color: var(--text-primary); }
-.docs-code { position: relative; margin: 14px 0 20px; }
-.docs-body pre { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 48px 14px 16px; overflow-x: auto; }
+.docs-code { margin: 14px 0 20px; background: var(--pre-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.docs-code-head { display: flex; justify-content: space-between; align-items: center; min-height: 30px; padding: 2px 6px 2px 14px;
+  border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); }
+.docs-body pre { margin: 0; background: transparent; border: 0; border-radius: 0; padding: 12px 16px 14px; overflow-x: auto; }
 .docs-body pre code { display: block; background: none; padding: 0; font-size: 13px; line-height: 1.6; white-space: pre; }
-.docs-copy { position: absolute; top: 8px; right: 8px; display: inline-flex; padding: 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text-muted); cursor: pointer; box-shadow: -8px 0 8px var(--bg); }
-.docs-code:hover .docs-copy { color: var(--text-secondary); }
-.docs-copy:hover { color: var(--text-primary); }
+.docs-copy { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); font: 12px var(--sans, inherit); cursor: pointer; }
+.docs-copy:focus-visible { outline: 2px solid var(--lj-blue); }
+.docs-copy:hover { color: var(--text-primary); background: var(--border); }
 /* highlight.js tokens in the site's palette */
 /* shell: only comments and strings (command names as keywords would color `cd`, `sync`, `jobs/` at random) */
 .docs-body .language-bash :is(.hljs-built_in, .hljs-keyword, .hljs-literal, .hljs-title), .docs-body .language-sh :is(.hljs-built_in, .hljs-keyword, .hljs-literal, .hljs-title) { color: inherit !important; }
@@ -645,8 +650,7 @@ h2:hover > a.anchor, h3:hover > a.anchor, a.anchor:focus { opacity: 1; }
 .share-pop button:hover { background: var(--border); color: var(--text-primary); }
 
 /* All results: benchmarks (rows) x settings (columns) */
-.ar-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
-.ar-cat { color: var(--text-secondary); font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+.controls.ar-top { margin: 6px 0 8px; }
 .ar-wrap { overflow: auto; max-height: 80vh; border: 1px solid var(--border); border-radius: 8px; }
 table.ar { border-collapse: separate; border-spacing: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 table.ar th, table.ar td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
@@ -656,7 +660,8 @@ table.ar th.ar-set .ar-name { display: flex; align-items: center; justify-conten
 table.ar th.ar-set .effort-tag { display: inline-block; margin-top: 3px; }
 table.ar .ar-task { position: sticky; left: 0; text-align: left; background: var(--bg); font-weight: 500; z-index: 1; }
 table.ar thead .ar-task { z-index: 3; background: var(--surface-2); }
-table.ar tr.ar-cat-row th { background: var(--surface-2); color: var(--text-secondary); font-size: 12px; font-weight: 600; text-align: left; }
+table.ar tr.ar-cat-row th { background: var(--surface-2); color: var(--text-secondary); font-size: 12px; font-weight: 600; text-align: left;
+  position: sticky; top: var(--ar-head, 56px); z-index: 2; }  /* the current category stays in view while scrolling */
 table.ar tr.ar-overall td, table.ar tr.ar-overall th { border-bottom: 2px solid var(--border); }
 table.ar td.ar-best { font-weight: 700; color: var(--text-primary); }
 table.ar td { color: var(--text-secondary); }
