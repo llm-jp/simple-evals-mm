@@ -1,10 +1,27 @@
 # View results
 
+Per dataset: reward ± std, 95% CI, pass@k, majority, causes, cost:
+
 ```bash
-uv run --frozen sem job show jobs/NAME            # per dataset: reward ± std, 95% CI, pass@k, majority, causes, cost
-uv run --frozen sem job show jobs/NAME --json     # the same as JSON (per attempt, per category)
-uv run --frozen sem jobs list                     # every job under jobs/
-uv run --frozen sem jobs watch                    # running jobs: progress, time left, cost so far, warnings
+uv run --frozen sem job show jobs/NAME
+```
+
+The same as JSON (per attempt, per category):
+
+```bash
+uv run --frozen sem job show jobs/NAME --json
+```
+
+Every job under jobs/:
+
+```bash
+uv run --frozen sem jobs list
+```
+
+Running jobs: progress, time left, cost so far, warnings:
+
+```bash
+uv run --frozen sem jobs watch
 ```
 
 Scores are never stored: `sem job show` recomputes them from the trial and verifier files every time (`sem job check`

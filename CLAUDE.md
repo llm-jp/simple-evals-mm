@@ -101,6 +101,9 @@ Rules that keep jobs reproducible:
   (and README / CONTRIBUTING where they mention it). A new page is added to the Contents list of `docs/README.md`
   (it drives the site's sidebar). `tests/test_docs.py` parses every `sem ...` command in the docs, checks every
   `--dataset-arg` key (one key per flag) and every relative link.
+- **Docs style.** One command per code box, introduced by a sentence (a sequence that only works together, such as
+  a variable set then used, stays in one box); shell lines at most 88 characters (split before an option with ` \`).
+  `tests/test_docs.py` checks both.
 - **Golden snapshots** for prompts, request bodies and rewards (`--update-golden`, review the diff). A dataset without
   one gets one (`sem jobs compare` / `sem datasets diff` judge prompts and rewards by them).
 - **Data**: `sem datasets lock -d <name>` after an intended data change; `sem datasets lock --check` must pass.

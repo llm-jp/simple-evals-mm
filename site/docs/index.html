@@ -189,6 +189,10 @@
     const cur = FLAT.find(x => x.p === page);
     document.getElementById("docs-menu-label").textContent = cur ? `${cur.group} · ${cur.label}` : "Contents";
     if (matchMedia("(max-width: 760px)").matches) document.getElementById("docs-menu").open = false;
+    // the current page's link in view (on the first load; a click comes from a visible link, so nothing moves)
+    const curA = document.querySelector("#docs-toc a[aria-current]");
+    if (curA) { const nav = document.querySelector(".docs-nav"), r = curA.getBoundingClientRect(), n = nav.getBoundingClientRect();
+      if (r.top < n.top || r.bottom > n.bottom) nav.scrollTop += r.top - n.top - n.height / 2; }  // the sidebar only, not the page
   }
 
   async function versions() {
@@ -239,16 +243,21 @@
         if (lang && hljs.getLanguage(lang)) hljs.highlightElement(code);
         else code.classList.add("hljs");
       }
+      // a header bar above the code (the language and Copy), so the button never sits on the code
       const pre = code.parentElement;
       const wrap = document.createElement("div");
       wrap.className = "docs-code";
+      const head = document.createElement("div");
+      head.className = "docs-code-head";
+      head.innerHTML = `<span>${lang && lang !== "text" ? esc(lang) : ""}</span>`;
       pre.replaceWith(wrap);
+      wrap.appendChild(head);
       wrap.appendChild(pre);
       const btn = document.createElement("button");
       btn.type = "button"; btn.className = "docs-copy"; btn.title = "Copy"; btn.setAttribute("aria-label", "Copy code");
-      btn.innerHTML = ICON_COPY;
-      btn.onclick = () => copy(text.replace(/\n$/, ""), btn);
-      wrap.appendChild(btn);
+      btn.innerHTML = ICON_COPY + "<span>Copy</span>";
+      btn.onclick = () => copy(text.replace(/\n$/, ""), btn, "Copied");
+      head.appendChild(btn);
     }
     for (const t of body.querySelectorAll("table")) {  // wide tables scroll inside their box
       const w = document.createElement("div");
@@ -402,7 +411,7 @@
       const j = (i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
       items.forEach((a, k) => a.classList.toggle("sel", k === j));
       items[j].scrollIntoView({ block: "nearest" });
-    } else if (e.key === "Enter" && items.length) { e.preventDefault(); location.href = items[Math.max(i, 0)].href; }
+    } else if (e.key === "Enter" && items.length) { e.preventDefault(); items[Math.max(i, 0)].click(); }
     else if (e.key === "Escape") { q.value = ""; search(""); q.blur(); }
   });
   document.addEventListener("keydown", e => {
@@ -413,6 +422,25 @@
     const el = document.getElementById(decodeURIComponent(location.hash.slice(1))); if (el) el.scrollIntoView();
     document.getElementById("docs-hits").hidden = true;
   });
+
+  // another docs page opens in place (as Harbor's docs): only the body changes, the sidebar keeps its scroll; the
+  // URL, Back / Forward and a new tab (Ctrl / Cmd-click) work as for a normal link
+  async function go(hash) {
+    document.getElementById("docs-hits").hidden = true;
+    await render();
+    if (!hash) window.scrollTo(0, 0);
+  }
+  document.addEventListener("click", e => {
+    const a = e.target.closest("a[href]");
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target === "_blank") return;
+    const u = new URL(a.href, location.href);
+    if (u.origin !== location.origin || u.pathname !== location.pathname || !u.searchParams.get("p")) return;
+    if (u.search === location.search) return;  // an anchor on this page: the browser scrolls (hashchange)
+    e.preventDefault();
+    history.pushState(null, "", u.href);
+    go(u.hash);
+  });
+  window.addEventListener("popstate", () => go(location.hash));
 
   versions().then(render);
 </script>

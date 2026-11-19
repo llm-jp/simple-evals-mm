@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="A reproducible, reliable evaluation framework for LLMs and VLMs on English and Japanese tasks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=2201b43e97">
+<link rel="stylesheet" href="style.css?v=e5b2d43e09">
 <!-- Google Analytics (the same GA4 property as speed1313.github.io) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-7X0Q0NSDB9"></script>
 <script>
@@ -128,7 +128,34 @@
         </div>
       </div>
 
-      <div class="controls table-top"><div class="pick-wrap" id="table-pick"></div></div>
+      <div class="controls lb-top table-top" role="toolbar" aria-label="Table options">
+        <div class="pick-wrap" id="table-pick"></div>
+        <div class="filter-wrap" data-filter="tasks" hidden>
+          <button class="filter-btn" aria-expanded="false" title="Benchmarks averaged into Overall">Benchmarks <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="panel" hidden>
+            <div class="presets">
+              <button data-preset="default" title="The benchmarks every model has">Default</button><button data-preset="all">All</button><button data-preset="ja">Japanese</button><button data-preset="en">English</button>
+              <button data-preset="multimodal" title="Benchmarks with images in the input">Multimodal</button><button data-preset="text">Text only</button><button data-preset="none">None</button>
+            </div>
+            <div class="task-list"></div>
+          </div>
+        </div>
+        <div class="meta" aria-hidden="true"></div>
+        <span class="seg" data-key="view" title="Best: each model at its higher-scoring effort level on this score (chart and table)">
+          <button data-v="best" aria-pressed="true">Best</button>
+          <button data-v="all" aria-pressed="false">All effort levels</button>
+        </span>
+        <div class="filter-wrap right" data-filter="cfg">
+          <button class="filter-btn" aria-expanded="false">Configs <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="panel" hidden>
+            <div class="presets">
+              <button data-preset="all">All</button><button data-preset="proprietary">Proprietary</button>
+              <button data-preset="open">Open-weight</button><button data-preset="small" title="Open-weight models with at most 100B total parameters">&le; 100B</button><button data-preset="none">None</button>
+            </div>
+            <div class="model-list"></div>
+          </div>
+        </div>
+      </div>
       <div class="table-wrap">
         <table class="lb" id="lb">
           <thead><tr></tr></thead>
@@ -143,10 +170,24 @@
   <section id="all-results">
     <div class="wrap">
       <h2>All results</h2>
-      <p class="intro">Every benchmark for every setting; the best score of each row in bold. Hover or tap a cell for details.</p>
-      <div class="controls ar-controls">
-        <span class="seg" id="ar-view" role="group" aria-label="Settings shown"><button data-v="best" aria-pressed="true">Best</button><button data-v="all" aria-pressed="false">All</button></span>
-        <label class="ar-cat">Category <select class="pick" id="ar-cat" aria-label="Benchmark category"></select></label>
+      <p class="intro">Every benchmark for every setting at once: % correct averaged over the attempts (hover a cell for the spread and the question count); the best score of each row in bold.</p>
+      <div class="controls lb-top ar-top" role="toolbar" aria-label="All results options">
+        <div class="pick-wrap"><select class="pick" id="ar-cat" aria-label="Benchmark category"></select></div>
+        <div class="meta" aria-hidden="true"></div>
+        <span class="seg" data-key="view" title="Best: each model at its higher-scoring effort level on this score (chart and table)">
+          <button data-v="best" aria-pressed="true">Best</button>
+          <button data-v="all" aria-pressed="false">All effort levels</button>
+        </span>
+        <div class="filter-wrap right" data-filter="cfg">
+          <button class="filter-btn" aria-expanded="false">Configs <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="panel" hidden>
+            <div class="presets">
+              <button data-preset="all">All</button><button data-preset="proprietary">Proprietary</button>
+              <button data-preset="open">Open-weight</button><button data-preset="small" title="Open-weight models with at most 100B total parameters">&le; 100B</button><button data-preset="none">None</button>
+            </div>
+            <div class="model-list"></div>
+          </div>
+        </div>
       </div>
       <div class="ar-wrap"><table class="ar" id="ar-table"></table></div>
       <p class="note" id="ar-note"></p>
@@ -156,12 +197,16 @@
   <section id="about">
     <div class="wrap">
       <h2>About simple-evals-mm</h2>
-      <p class="intro"><a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">simple-evals-mm</a> is the evaluation framework of the LLM-jp Multimodal WG for LLMs and VLMs, and this leaderboard is built with it.</p>
+      <p class="intro"><a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">simple-evals-mm</a> is the evaluation framework for LLMs and VLMs developed and used by the LLM-jp Multimodal WG, and this leaderboard is built with it. Beyond computing scores, it keeps evaluations reproducible and reliable, and helps you analyze and share the results.</p>
       <ul class="about-list">
-        <li><b>Any model.</b> API models (OpenRouter, OpenAI, Gemini, Azure) and your own checkpoints served with SGLang, vLLM or Hugging Face.</li>
-        <li><b>English and Japanese, text and vision.</b> 50+ benchmarks on one harness.</li>
-        <li><b>Reproducible and checked.</b> Every job pins its code, data, settings and endpoint and keeps every input and output; scores are compared with the model cards.</li>
-        <li><b>Easy to inspect and share.</b> Every answer in Explore, cut-off and refusal rates in the table, jobs that can be published; trajectories in Harbor's ATIF format.</li>
+        <li><b>Any model, API or local.</b> API models through OpenRouter, OpenAI, Gemini or Azure, and local models served with vLLM, SGLang or Hugging Face transformers. In-house models and inference backends plug in through presets, model args and serving patches.</li>
+        <li><b>Text and vision, English and Japanese.</b> 50+ benchmarks on one harness: hard English benchmarks such as MMMU-Pro, GPQA Diamond, MMLU-Redux, AIME 2026 and LiveCodeBench v6, and Japanese benchmarks such as MECHA-ja, JaWildText, HakushoBench, JamC-QA and JFinBench.</li>
+        <li><b>Reproducible.</b> A job pins the code, the data, the model files, the settings and the exact endpoint by hash, and keeps every input and output. It resumes only if none of them changed; otherwise a new job is started. <code>sem jobs compare</code> checks whether results from different runs, versions or people are comparable. Each row lists the jobs and the commands behind it.</li>
+        <li><b>Checked against model cards.</b> Each model runs at its card's recommended settings, and <code>sem job parity</code> compares our scores with the reported ones, so an underestimated baseline is caught and the gap to a model in development is measured correctly. A gap is looked into: for Gemma 4 it was an SGLang kernel bug (CountBenchQA 70 → 97 with <a href="https://github.com/sgl-project/sglang/pull/47809" target="_blank" rel="noopener">our fix</a>).</li>
+        <li><b>Results you can see and share.</b> The leaderboard covers frontier models such as GPT-6 Astra down to the main 30B and 9B open models. The Explore tab (a model output viewer) shows each question and model output; the same pages build from your own jobs for local error analysis, and jobs can be published for other researchers.</li>
+        <li><b>Built for reasoning models.</b> Every trial records its output tokens and whether it hit the output limit (the Cut off column), so the truncation ratio and errors such as overthinking, which matter when developing reasoning models, are easy to analyze.</li>
+        <li><b>Harbor-compatible.</b> Terms follow <a href="https://harborframework.com/" target="_blank" rel="noopener">Harbor</a>, and trajectories are stored in its ATIF format, so ATIF tools such as Harbor's viewer can read them.</li>
+        <li><b>Documented.</b> From installation to running, settings and analysis: <a href="docs/">Docs</a>. Feedback and contributions are welcome.</li>
       </ul>
       <figure class="about-fig"><picture><source media="(max-width: 600px)" srcset="assets/resume-narrow.svg" width="360" height="720"><img src="assets/resume.svg" width="960" height="440" alt="A job resumes only when nothing that affects its results has changed; otherwise sem run --from starts a new job. sem job parity compares the scores with the model card."></picture></figure>
     </div>
@@ -349,20 +394,22 @@
       changed();
     });
   }
-  const taskWrap = wraps.find(w => w.dataset.filter === "tasks");
-  taskWrap.querySelector(".task-list").innerHTML = (D.categories || []).map(c => {
+  const taskWraps = wraps.filter(w => w.dataset.filter === "tasks");  // above the chart and above the table
+  const TASK_LIST = (D.categories || []).map(c => {
     const ts = TASKS.filter(t => t.category === c).sort((a, b) => a.label.localeCompare(b.label));
     return ts.length ? `<div class="tgroup"><div class="tcat">${esc(c)}</div>${ts.map(t =>
       `<label class="trow"><input type="checkbox" data-t="${esc(t.key)}"><span>${esc(t.label)}</span><span class="tlang">${esc(t.lang || "")}</span></label>`).join("")}</div>` : "";
   }).join("");
-  function renderTaskPanel() {
+  for (const w of taskWraps) w.querySelector(".task-list").innerHTML = TASK_LIST;
+  function renderTaskPanel() { for (const taskWrap of taskWraps) {
     taskWrap.hidden = !isOverall();
     taskWrap.querySelectorAll("input[data-t]").forEach(cb => { cb.checked = state.ovTasks.has(cb.dataset.t); });
     taskWrap.querySelector(".filter-btn").innerHTML = `Benchmarks (${state.ovTasks.size}/${ALL_TASKS.length}) <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-left:2px" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
-  }
+  } }
   function tasksChanged() {
     renderTaskPanel(); state.sortKey = null; render();
   }
+  for (const taskWrap of taskWraps) {
   taskWrap.querySelector(".task-list").addEventListener("change", e => {
     const k = e.target.dataset.t; if (!k) return;
     e.target.checked ? state.ovTasks.add(k) : state.ovTasks.delete(k);
@@ -376,6 +423,7 @@
     state.ovTasks = new Set(pr === "none" ? [] : TASKS.filter(keep).map(t => t.key));
     tasksChanged();
   });
+  }
   pick.addEventListener("change", renderTaskPanel);
   document.addEventListener("click", e => { if (!e.composedPath().some(n => wraps.includes(n))) closePanels(null); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closePanels(null); });
@@ -483,13 +531,13 @@
     const off = ALL_CFG.filter(c => !state.cfg.has(c));
     if (off.length) kv.push("off=" + off.map(encodeURIComponent).join(","));
     if (openRows.size) kv.push("open=" + [...openRows].map(encodeURIComponent).join(","));  // expanded rows (model|effort)
-    if (AR.view !== "best") kv.push("mview=" + AR.view);  // the All results table
     if (AR.cat) kv.push("mcat=" + encodeURIComponent(AR.cat));
     SHARE.writeState(kv);  // the query string (?k=v&...); an in-page anchor stays after it
   }
 
   function render() {
     syncURL();
+    if (typeof renderAll === "function" && document.getElementById("ar-cat").options.length) renderAll();  // All results shares Best / All and Configs
     setDims();
     while (svg.lastChild && svg.lastChild.tagName !== "desc") svg.removeChild(svg.lastChild);
     const pts = points().map(p => ({ ...p, x: p.d[state.x], y: p.d.score }));
@@ -725,7 +773,7 @@
     const d = tVal(r.lvl); return d ? num(d[k]) : -1;
   }
   const openRows = new Set();  // rows whose settings panel is open (model key | effort)
-  const AR = { view: "best", cat: "" };  // the All results table: settings shown, benchmark category
+  const AR = { cat: "" };  // the All results table's benchmark category (settings: the shared Best / All and Configs)
   const CAUSES = D.causes || { zeroed: [], excluded: [] };
   const ALIAS_TIP = "the model id is not a dated snapshot, so the provider may move it to a newer one; the snapshot that answered is recorded (Served identity)";
   const aliasTag = () => "";  // the alias note lives in the row's details (Model)
@@ -804,7 +852,7 @@
       const ns = Object.keys(by).map(Number).sort((x, y) => by[y].length - by[x].length), main = ns[0];
       att = `each benchmark's mean over its attempts (${main}${ns.slice(1).map(n => `; ${by[n].join(", ")} ${n}`).join("")})`;
     }
-    document.getElementById("table-note").textContent = `% correct, ${att}, ± std; "–" = not evaluated; no tools. Cut-off answers, refusals and too-long inputs count as 0; transient failures are left out. Cut off / Refused: share of trials (hover for counts).`;
+    document.getElementById("table-note").textContent = `% correct, ${att}; ± standard deviation across attempts; "–" = not evaluated. All benchmarks are evaluated without tools. Cut-off answers, refused requests and inputs longer than the context count as 0; transient API, judge and verifier failures are excluded from the mean. Cut off / Refused: the share of trials over the same benchmarks that hit the output limit / were refused by the provider (incl. content filters); hover for the counts.`;
     const cs = cols();
     if (!state.sortKey || !cs.some(c => c.key === state.sortKey)) { state.sortKey = "score"; state.sortDir = -1; }
     thead.innerHTML = cs.map(c => `<th data-k="${esc(c.key)}" class="${c.key === state.sortKey ? "sorted" : ""} ${c.key === "score" ? "hl" : ""} ${c.cls === "sep" ? "sep" : ""}">${esc(c.label)}</th>`).join("");
@@ -871,7 +919,6 @@
     if (k === "models") { const keep = new Set(val_.split(",")); state.cfg = new Set(ALL_CFG.filter(c => keep.has(c.split(":")[0]))); }
     else if (k === "off") val_.split(",").forEach(c => state.cfg.delete(c));
     else if (k === "open") v.split(",").map(decodeURIComponent).filter(x => /^[^|]+\|[a-z]+$/.test(x)).forEach(x => openRows.add(x));
-    else if (k === "mview" && (val_ === "best" || val_ === "all")) AR.view = val_;
     else if (k === "mcat" && (D.categories || []).includes(val_)) AR.cat = val_;
     else if (k === "bench") state.subject = "b:" + val_;
     else if (k === "subject") state.subject = SCOPES.some(s => s.key === val_) ? val_ : (TASK_LABEL[val_] ? "t:" + val_ : state.subject);
@@ -897,10 +944,12 @@
   // the row's best; a refused cell says so (hover: why); a missing one is "–"
   function renderAll() {
     const tasks = TASKS.filter(t => !AR.cat || t.category === AR.cat);
-    const cols = [];
-    for (const m of D.models) for (const [eff, lvl] of [["max", m.max], ["low", m.low]])
-      if (lvl && (AR.view === "all" || eff === "max")) cols.push({ m, eff, lvl });
     const ov = c => ((c.lvl.benchmarks || {}).Overall || {}).score;
+    const cols = [];  // the settings the Configs filter keeps; Best: one per model, its higher Overall (else its highest)
+    for (const m of D.models) {
+      const lv = [["max", m.max], ["low", m.low]].filter(([e, l]) => l && on(m, e)).map(([eff, lvl]) => ({ m, eff, lvl }));
+      if (state.view === "best" && lv.length > 1) cols.push((ov(lv[1]) ?? -1) > (ov(lv[0]) ?? -1) ? lv[1] : lv[0]); else cols.push(...lv);
+    }
     const head = `<tr><th class="ar-task">Benchmark</th>` + cols.map(c => `<th class="ar-set" title="${esc(c.m.name + " (" + effLabel(c.m, c.eff) + ")")}">`
       + `<span class="ar-name">${logoHTML(c.m)}${esc(c.m.name)}</span><span class="effort-tag">${esc(effLabel(c.m, c.eff))}</span></th>`).join("") + "</tr>";
     const bestOf = vals => { const v = vals.filter(x => x != null); return v.length ? Math.max(...v) : null; };
@@ -913,34 +962,22 @@
         const best = bestOf(cols.map(c => (x => x && !x.subset ? x.score : null)(c.lvl.tasks[t.key])));
         body += `<tr><th class="ar-task" title="${esc(t.label)}">${esc(t.label)}</th>` + cols.map(c => {
           const x = c.lvl.tasks[t.key];
-          if (!x) return (c.lvl.refused || {})[t.key] ? `<td class="ar-na" data-tip="${esc(c.lvl.refused[t.key])}">refused</td>` : `<td class="ar-na">–</td>`;
+          if (!x) return (c.lvl.refused || {})[t.key] ? `<td class="ar-na" title="${esc(c.lvl.refused[t.key])}">refused</td>` : `<td class="ar-na">–</td>`;
           const tip = `${c.m.name} (${effLabel(c.m, c.eff)}), ${t.label}: ${x.score.toFixed(1)}%` + (x.std != null ? ` ± ${x.std.toFixed(1)}` : "")
             + (x.n ? `, ${x.n} questions` : "") + (x.subset ? ` (${subsetTip(x)})` : "");
-          return `<td${!x.subset && x.score === best ? ' class="ar-best"' : ""} data-tip="${esc(tip)}">${x.score.toFixed(1)}${x.subset ? `<sup class="subset">*</sup>` : ""}</td>`;
+          return `<td${!x.subset && x.score === best ? ' class="ar-best"' : ""} title="${esc(tip)}">${x.score.toFixed(1)}${x.subset ? `<sup class="subset">*</sup>` : ""}</td>`;
         }).join("") + "</tr>";
       }
     }
-    document.getElementById("ar-table").innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
-    document.getElementById("ar-note").textContent = `% correct, mean over attempts. "–" = not evaluated; "refused" = left out by the site build.`
-      + (cols.some(c => tasks.some(t => (c.lvl.tasks[t.key] || {}).subset)) ? " * Text-only subset (questions without an image): not comparable, not in Overall." : "");
-  }
-  // the cell's details at once on hover, or on tap (the browser's own title tooltip is slow and absent on touch)
-  { const tip = document.createElement("div"); tip.className = "ar-tip"; tip.hidden = true; document.body.appendChild(tip);
     const tbl = document.getElementById("ar-table");
-    const show = td => { tip.textContent = td.dataset.tip; tip.hidden = false;
-      const r = td.getBoundingClientRect(), w = tip.offsetWidth;
-      tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
-      tip.style.top = (r.top - tip.offsetHeight - 6 < 8 ? r.bottom + 6 : r.top - tip.offsetHeight - 6) + "px"; };
-    tbl.addEventListener("mouseover", e => { const td = e.target.closest("td[data-tip]"); if (td) show(td); });
-    tbl.addEventListener("mouseout", e => { if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest("td[data-tip]")) tip.hidden = true; });
-    tbl.addEventListener("click", e => { const td = e.target.closest("td[data-tip]"); if (td) show(td); });
-    document.querySelector(".ar-wrap").addEventListener("scroll", () => { tip.hidden = true; });
-    window.addEventListener("scroll", () => { tip.hidden = true; }, { passive: true }); }
+    tbl.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+    tbl.style.setProperty("--ar-head", tbl.tHead.offsetHeight + "px");  // the category rows stick right under the header
+    document.getElementById("ar-note").textContent = `${tasks.length} benchmarks × ${cols.length} settings. % correct, mean over attempts (hover a cell for ± std and the question count); the best score of each row in bold. "–" = not evaluated; "refused" = left out by the site build (hover for why).`
+      + (cols.some(c => tasks.some(t => (c.lvl.tasks[t.key] || {}).subset)) ? " * Text-only subset of a text-only model (questions without an image): not comparable, not in Overall." : "");
+  }
   { const sel = document.getElementById("ar-cat");
     sel.innerHTML = `<option value="">All categories</option>` + (D.categories || []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
     sel.value = AR.cat; sel.onchange = () => { AR.cat = sel.value; renderAll(); syncURL(); };
-    document.querySelectorAll("#ar-view button").forEach(b => { b.setAttribute("aria-pressed", String(b.dataset.v === AR.view));
-      b.onclick = () => { AR.view = b.dataset.v; document.querySelectorAll("#ar-view button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); renderAll(); syncURL(); }; });
     renderAll();
     SHARE.bar(document.getElementById("ar-note"), { id: "ar-table" }); }
 
@@ -952,9 +989,10 @@
     if (!rows.length) { document.getElementById("parity").remove(); return; }
     const isCmp = r => r.p.result === "✓" || r.p.result === "⚠";
     const cmp = rows.filter(isCmp), ok = cmp.filter(r => r.p.result === "✓").length;
-    document.getElementById("parity-intro").innerHTML = `Our score on each model's highest setting next to its model card (the card value links to its source): `
+    document.getElementById("parity-intro").innerHTML = `Our score on each model's highest setting next to the score its developers report (<code>sem job parity</code>; the card value links to its source). `
       + `<b>${ok} of ${cmp.length}</b> comparable results are within the tolerance, min(5, max(2, 2 × the card's standard error)) points. `
-      + `Grey cells use another protocol or split (hover for why); each ⚠ has a note below.`;
+      + `A benchmark that matches on most models suggests its task code is right; a model that matches on most benchmarks, that it is served right. `
+      + `Grey cells use another protocol, split or dataset (hover for why). Each ⚠ carries what we know about it; if you know a cause, an <a href="${esc((SITE.code_url || "https://github.com/llm-jp/simple-evals-mm") + "/issues")}" target="_blank" rel="noopener">issue</a> or a pull request is welcome.`;
     const models = D.models.filter(m => rows.some(r => r.m === m)), tasks = TASKS.filter(t => rows.some(r => r.t === t));
     const at = (m, t) => rows.find(r => r.m === m && r.t === t);
     const warns = cmp.filter(r => r.p.result === "⚠").sort((a, b) => TASKS.indexOf(a.t) - TASKS.indexOf(b.t) || D.models.indexOf(a.m) - D.models.indexOf(b.m));
