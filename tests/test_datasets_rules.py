@@ -1264,7 +1264,7 @@ def test_program_output_starting_with_bwrap_is_not_a_sandbox_failure(monkeypatch
 
     calls = []
 
-    def run(files, argv, cpu, allow_unsafe):
+    def run(files, argv, cpu, allow_unsafe, python=None):
         calls.append(files)
         return (0, "45\n", "") if files is sandbox.SELF_TEST[0] else (1, "", "bwrap: fake")
 
