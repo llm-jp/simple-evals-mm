@@ -2,6 +2,14 @@
 // Benchmarks, Models, Reporting. `draft: true`: not published yet (changelog.html shows drafts only with #drafts).
 const CHANGELOG = [
   {
+    date: "2026-11-20",
+    items: [
+      { category: "Benchmarks", text: "SimpleQA Verified: short factual questions answered from the model's own knowledge, for every model; Overall now averages 27 benchmarks." },
+      { category: "Reporting", text: "Trends: SEM-ECI has three indices, All, Multimodal (questions with images) and Text (questions without), as some models are much stronger on one than the other; text-only models appear in Text only." },
+      { category: "Reporting", text: "All results: no Overall row; a benchmark's name opens it in Explore." },
+    ],
+  },
+  {
     date: "2026-11-19",
     version: "0.7.0",
     items: [
