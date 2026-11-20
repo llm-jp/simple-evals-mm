@@ -6,7 +6,7 @@ release tag for results you will compare with others ([Versioning](../versioning
 Clone a release and enter it:
 
 ```bash
-git clone --branch v0.7.0 https://github.com/llm-jp/simple-evals-mm.git
+git clone --branch v0.7.1 https://github.com/llm-jp/simple-evals-mm.git
 cd simple-evals-mm
 ```
 

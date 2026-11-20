@@ -7,72 +7,29 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
-- Explore links SimpleQA Verified's questions to their rows in the dataset viewer (`original_index`).
-- SEM-ECI has three indices, fitted separately: All (every question), Multimodal (the questions with images) and
-  Text (the questions without; HLE-Diamond's and JFinBench's text questions included). A benchmark takes part in an
-  index when at least 20% of its questions are of that kind. Text-only models are placed in the Text index only. The
-  Trends page switches between them (`?idx=multimodal|text`). `sem site results` records which questions have images
-  (`images/<dataset>.json`; counted over every user turn, so HLE's images, after a system message, are counted too).
-- Site, All results: no Overall row, no cell tooltips and no intro line; each benchmark's name opens it in Explore,
-  whose Tasks view of one benchmark starts with what it is and how it is graded. Best / All, Configs and Category no
-  longer move the page; the Category list opens below its button. A model's `note` (Qwen3.8 Flash: the API model,
-  open-weight base Qwen3.8-Flash-Next) shows in its details. The cost chart says "cost unavailable" instead of "no
-  price". The Docs page no longer caches the main branch's contents list.
-- Docs and README write commands as `sem ...` (after `source .venv/bin/activate`, explained in Installation;
-  `uv run --frozen sem ...` still works without activating).
+## v0.7.1 - 2026-11-20
 
-- Site: each view has its controls right above it: the table gets the chart's set (score, Benchmarks, Best / All,
-  Configs; one shared state), set apart from the chart; All results has Category, Best / All and Configs (narrowing
-  its columns), and its category rows stay in view while scrolling.
-- Docs trimmed for users: implementation internals, incident history and dataset-specific details left out of the
-  guides and reference pages (OmniDocBench's evaluator in Regrade, the leaderboard's refusal rules, the job-file and
-  resume internals, serving and inference-setting internals); Analysis merged into
-  [View and analyze results](docs/results/view.md); the README shortened to an intro, installation, one example and
-  the citation, its benchmark table moved to [Datasets](docs/datasets/overview.md) and its resume figure to
-  [Concepts](docs/concepts.md); CONTRIBUTING's test list and release check condensed.
-- Docs: code blocks have a header bar (language, Copy) and their own background, so the button no longer covers the
-  code; Quick start explains every column of `sem job show` (verified, causes, ...); Concepts shows a job as a file tree.
-- Docs: every shell example fits the Docs page without scrolling (at most 88 characters a line, as Harbor's docs):
-  long commands split before an option with ` \`, comments on their own line; `tests/test_docs.py` checks it.
-- Docs and README: one command per code box, each introduced by a sentence (as Harbor's docs); sequences that only
-  work together stay in one box; checked by `tests/test_docs.py`. Fixed a shell example that a comment line split in two.
-- Docs page: the sidebar and "On this page" start where they stick, so scrolling never moves them; another docs page
-  opens in place (as Harbor's docs: the sidebar keeps its scroll, Back / Forward and new tabs work); on load the
-  current page's link is scrolled into view in the sidebar.
-- Site: shorter texts (About in 4 bullets, the table note, the parity and Trends intros, All results); All results
-  shows a cell's details at once on hover or tap (the browser's own tooltip was slow and absent on touch screens).
+A patch release: the SEM-ECI split into All / Multimodal / Text, SimpleQA Verified on the leaderboard, and a cleanup of
+the docs and the site. No dataset, prompt, request or reward changed, so jobs compare with v0.7.0's as before.
 
-- Site: All results has the benchmarks as rows and the settings as columns, no shading or sorting, the best score
-  of each row in bold; the Share / Download menus open downward (not over the table); the citation section is the
-  BibTeX alone; the site changelog's 2026-11-19 entry.
-- Docs page: wider (up to 1440px, the header aligned): the text column grows from 460px to 712px at a 1280px window
-  (at most 820px), "On this page" at the right edge.
+- **SEM-ECI** (`sem site trends`): three indices fitted separately: All (every question), Multimodal (the questions
+  with images) and Text (the questions without; HLE-Diamond's and JFinBench's text questions included); a benchmark
+  takes part in an index when at least 20% of its questions are of that kind, and text-only models are placed in the
+  Text index only (#226). Renamed from SEMI to SEM-ECI, on its own scale (#211).
+- **Explore data** (`sem site results`): `images/<dataset>.json` records which questions have images, counted over
+  every user turn (HLE's images, after a system message, were not counted before) (#226); SimpleQA Verified's
+  questions link to their rows in the dataset viewer (#227).
+- **Docs**: commands written as plain `sem ...` after activating the environment (#224); trimmed to what users need,
+  Analysis merged into View and analyze results, a shorter README (#223); one command per code box, shell lines that
+  fit without scrolling, a header bar on code blocks, checked by `tests/test_docs.py` (#220); the Docs page keeps its
+  sidebars in place and opens pages in place, wider text, versions from v0.7.0 (#221, #218); a page for the LLM-jp
+  models (#215).
+- **Site**: SimpleQA Verified for every setting (#227); All results, one table of every benchmark for every setting
+  (#216, #218, #219, #225); controls next to the view they change (#219); Share (X, LinkedIn, link) and Download
+  graph (PNG / SVG) under each chart and table, the view in the URL (#209, #210, #212, #213); text-only subsets marked
+  on the cost chart (#214); shorter texts (#222); "cost unavailable" for settings without a price (#225).
 
-- Docs: [LLM-jp models](docs/models/llm-jp.md): serving and running LLM-jp-4-VL and LLM-jp-4.1 thinking on SGLang,
-  vLLM or the HF server (patch, presets, Harmony, vLLM 0.30's output limit, text-only subsets).
-- Site: an "All results" section on the leaderboard: every setting on every benchmark in one table (Best / All, a
-  category filter, sort by any column, a shade per column; text-only subsets marked, refused / missing cells shown);
-  its view is in the URL (`mview`, `mcat`, `msort`).
-- Site: a saved chart image has no link / date at the bottom right (the logo and "simple-evals-mm · CC BY 4.0" stay
-  at the left); JFinBench's description says how its score differs from the paper's (question mean vs exam mean).
-- Docs page of the site: versions from v0.7.0 (and main); v0.6.0 is no longer listed.
-
-- Site: on the score-vs-cost / tokens chart a text-only subset is marked too ("*" on the model's label, a legend line,
-  the question count in the tooltip).
-
-- Site: Share offers LinkedIn instead of Instagram (LinkedIn shares links; Instagram takes only images).
-
-- Site: no CSV export (Share and Download graph only, as on Epoch AI's pages; the data is on Hugging Face and in the
-  jobs).
-
-- Trends: the index is renamed **SEM-ECI** (simple-evals-mm ECI), a simple-evals-mm version of the Epoch Capabilities
-  Index (as OpenAI ECI is OpenAI's); its own scale (GPT-6 Astra max 150, Qwen3.5-9B 100), not comparable with Epoch's
-  ECI. Was SEMI (#201).
-
-- Site: every section title has a link (#); under each chart and table, Share (X, Instagram, copy link) and Download
-  (PNG / SVG with a fixed title, the LLM-jp logo and "simple-evals-mm · CC BY 4.0" at the bottom left; CSV), as on
-  Epoch AI's pages; the view state moved to the
-  query string (?k=v), so a section anchor can follow it (old #k=v links still open the same view).
+Datasets changed since v0.7.0 (`sem datasets diff v0.7.0 v0.7.1`): none.
 
 ## v0.7.0 - 2026-11-19
 
