@@ -7,6 +7,7 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Explore links SimpleQA Verified's questions to their rows in the dataset viewer (`original_index`).
 - SEM-ECI has three indices, fitted separately: All (every question), Multimodal (the questions with images) and
   Text (the questions without; HLE-Diamond's and JFinBench's text questions included). A benchmark takes part in an
   index when at least 20% of its questions are of that kind. Text-only models are placed in the Text index only. The
