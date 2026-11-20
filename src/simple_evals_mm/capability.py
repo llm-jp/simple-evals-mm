@@ -12,6 +12,10 @@ in the design of Artificial Analysis' Progress Index (https://artificialanalysis
   * scale: two anchor settings fixed (default GPT-6 Astra (max) = 150, Qwen3.5-9B (thinking) = 100)
   * uncertainty: bootstrap over questions within each benchmark (90% intervals)
 
+Three indices are fitted separately (INDICES): every question ("all"), the questions with images ("multimodal") and
+the questions without ("text"); a benchmark takes part in an index when at least MIN_SHARE of its questions are of
+that kind. Text-only models are placed in the text index only.
+
 Approach "A" (one score per benchmark, as Epoch's ECI) is fitted the same way with each benchmark as a single item, as
 a cross-check. Input: the Explore build's per-benchmark matrices (site/results/matrix/<benchmark>.json).
 """
@@ -28,8 +32,25 @@ import numpy as np
 GUESS = {"gpqa": 0.25, "cvqaja": 0.25, "mechaja_v2_mini": 0.25, "mmmu": 0.25, "mmmu_pro": 0.1, "countbenchqa": 1 / 11}
 
 
-def load(results_dir: str, benchmarks: list[str]) -> dict:
-    """{settings, bench (per cell), item (per cell), setting (per cell), y (per cell), items per benchmark}."""
+# the indices: key -> (label, questions: None = every question, "image" = with images, "text" = without)
+INDICES = {"all": ("All", None), "multimodal": ("Multimodal", "image"), "text": ("Text", "text")}
+MIN_SHARE = 0.2  # a benchmark takes part in an index when at least this share of its questions are of the kind
+
+
+def with_images(results_dir: str, name: str) -> set[str]:
+    """The benchmark's tasks that have images (site/results/images/<name>.json, written by `sem site results`)."""
+    p = os.path.join(results_dir, "images", f"{name}.json")
+    if not os.path.exists(p):
+        raise FileNotFoundError(f"{p}: rebuild the results with `sem site results` (it records which questions "
+                                f"have images)")
+    with open(p, encoding="utf-8") as f:
+        return set(json.load(f))
+
+
+def load(results_dir: str, benchmarks: list[str], kind: str | None = None, exclude: set[str] = frozenset()) -> dict:
+    """{settings, bench (per cell), item (per cell), setting (per cell), y (per cell), items per benchmark}.
+    `kind`: "image" / "text" keeps the questions with / without images (benchmarks with less than MIN_SHARE of them
+    are left out); `exclude`: setting keys left out."""
     with open(os.path.join(results_dir, "index.json"), encoding="utf-8") as f:
         idx = json.load(f)
     keys = [s["key"] for s in idx["settings"]]
@@ -40,6 +61,12 @@ def load(results_dir: str, benchmarks: list[str]) -> dict:
             continue
         with open(p, encoding="utf-8") as f:
             mat = json.load(f)
+        keep = None
+        if kind is not None:
+            img = with_images(results_dir, name)
+            keep = {t for t in mat["tasks"] if (t in img) == (kind == "image")}
+            if len(keep) < MIN_SHARE * len(mat["tasks"]):
+                continue
         cols = [keys.index(k) for k in mat["settings"]]
         gp = os.path.join(results_dir, "guess", f"{name}.json")
         per_q = None
@@ -47,12 +74,14 @@ def load(results_dir: str, benchmarks: list[str]) -> dict:
             with open(gp, encoding="utf-8") as f:
                 per_q = json.load(f)
         for ti, row in enumerate(mat["cells"]):
+            if keep is not None and mat["tasks"][ti] not in keep:
+                continue
             g = per_q.get(mat["tasks"][ti], 0.0) if per_q is not None else GUESS.get(name, 0.0)
             item = len(item_bench)
             item_bench.append(b)
             item_guess.append(g)
             for ci, c in enumerate(row):
-                if c is None or c[0] is None:
+                if c is None or c[0] is None or mat["settings"][ci] in exclude:
                     continue
                 cells_b.append(b), cells_i.append(item), cells_m.append(cols[ci])
                 ys.append(min(1.0, max(0.0, (c[0] - g) / (1 - g))))
@@ -136,8 +165,9 @@ def benchmark_level(data: dict) -> dict:
 
 
 def run(results_dir: str, benchmarks: list[str], anchors: tuple[str, str], n_boot: int = 50, seed: int = 0,
-        steps: int = 3000) -> dict:
-    data = load(results_dir, benchmarks)
+        steps: int = 3000, kind: str | None = None, exclude: set[str] = frozenset()) -> dict:
+    """One index: the settings that answered its questions, with 90% intervals; benchmark curves."""
+    data = load(results_dir, benchmarks, kind, exclude)
     keys = [s["key"] for s in data["settings"]]
     hi, lo = keys.index(anchors[0]), keys.index(anchors[1])
     base = fit(data, steps=steps)
@@ -162,11 +192,12 @@ def run(results_dir: str, benchmarks: list[str], anchors: tuple[str, str], n_boo
             continue
         cy = benchmark_curve(base, data, b, thetas_raw)
         curves[name] = [[round(float(x), 2), round(float(v) * 100, 2)] for x, v in zip(to_idx(thetas_raw), cy, strict=True)]
+    answered = set(data["m"].tolist())  # a setting without a question of this index is not placed
     return {"settings": [{"key": s["key"], "model": s["model"], "label": s["label"], "index": round(float(idx[k]), 2),
                           "lo": round(float(np.percentile(boots[:, k], 5)), 2) if n_boot else None,
                           "hi": round(float(np.percentile(boots[:, k], 95)), 2) if n_boot else None,
                           "index_benchmark_level": round(float(idx_a[k]), 2)}
-                         for k, s in enumerate(data["settings"])],
+                         for k, s in enumerate(data["settings"]) if k in answered],
             "anchors": {"high": [anchors[0], 150], "low": [anchors[1], 100]}, "curves": curves,
             "n_questions": len(ib), "n_bootstrap": n_boot,
             # the benchmark's guessing rate: the mean of its questions' 1 / (options) (0 for free-form answers)
@@ -204,29 +235,42 @@ def scores(data: dict) -> dict:
 
 
 def build_js(spec_path: str, results_dir: str, out: str, anchors: tuple[str, str], n_boot: int = 100) -> dict:
-    """site/trends.js: the simple-evals-mm ECI (SEM-ECI) of every setting (90% interval), release dates, benchmark curves and scores."""
+    """site/trends.js: the simple-evals-mm ECI (SEM-ECI) indices (INDICES), each with every setting's value (90%
+    interval), release dates, benchmark curves and scores."""
     from simple_evals_mm import leaderboard as lb
 
     spec = lb.load_spec(spec_path)
     benches = list(spec["tasks"])
-    res = run(results_dir, benches, anchors, n_boot=n_boot)
     models = {m["key"]: m for m in spec.get("models") or []}
-    for s in res["settings"]:
-        mk = s["key"].split("__")[0]
-        m = models.get(mk, {})
-        s.update(model_key=mk, released=m.get("released"), type=m.get("type"), logo=m.get("logo"), dev=m.get("dev"))
-        if m.get("text_only"):  # estimated from the text benchmarks only (the questions it did not answer are left out)
-            s["text_only"] = True
     with open(os.path.join(results_dir, "index.json"), encoding="utf-8") as f:
-        subsets = {s["key"]: set(s.get("subsets") or {}) for s in json.load(f)["settings"]}
-    # benchmark scores against the index: a text-only subset is not the benchmark's score (left out of that chart)
-    res["scores"] = {b: {k: v for k, v in sc.items() if b not in subsets.get(k, ())}
-                     for b, sc in scores(load(results_dir, benches)).items()}
-    res["fits"] = {k: {**logistic_summary(c, res["guess"].get(k, 0.0)), "guess": res["guess"].get(k, 0.0)} for k, c in res["curves"].items()}
-    res["benchmarks"] = [{"key": k, "label": v.get("label", k), "category": v.get("category")} for k, v in spec["tasks"].items()
-                         if k in res["curves"]]
+        settings = json.load(f)["settings"]
+    subsets = {s["key"]: set(s.get("subsets") or {}) for s in settings}
+    # text-only models: in the text index only (their HLE-Diamond / JFinBench are those benchmarks' text questions)
+    text_only = {s["key"] for s in settings if models.get(s["key"].split("__")[0], {}).get("text_only")}
+    indices = {}
+    for ik, (label, kind) in INDICES.items():
+        exclude = set() if kind == "text" else text_only
+        res = run(results_dir, benches, anchors, n_boot=n_boot, kind=kind, exclude=exclude)
+        for s in res["settings"]:
+            mk = s["key"].split("__")[0]
+            m = models.get(mk, {})
+            s.update(model_key=mk, released=m.get("released"), type=m.get("type"), logo=m.get("logo"), dev=m.get("dev"))
+            if s["key"] in text_only:
+                s["text_only"] = True
+        # benchmark scores against the index, on the index's questions; a text-only subset is not the whole
+        # benchmark's score (outside the text index)
+        sc = scores(load(results_dir, benches, kind, exclude))
+        res["scores"] = {b: {k: v for k, v in x.items() if kind == "text" or b not in subsets.get(k, ())}
+                         for b, x in sc.items()}
+        res["fits"] = {k: {**logistic_summary(c, res["guess"].get(k, 0.0)), "guess": res["guess"].get(k, 0.0)}
+                       for k, c in res["curves"].items()}
+        res["benchmarks"] = [{"key": k, "label": v.get("label", k), "category": v.get("category")}
+                             for k, v in spec["tasks"].items() if k in res["curves"]]
+        res["label"] = label
+        indices[ik] = res
+    doc = {"default": "all", "indices": indices}
     with open(out, "w", encoding="utf-8") as f:
         f.write("window.TRENDS = ")
-        json.dump(res, f, ensure_ascii=False, separators=(",", ":"))
+        json.dump(doc, f, ensure_ascii=False, separators=(",", ":"))
         f.write(";\n")
-    return res
+    return doc

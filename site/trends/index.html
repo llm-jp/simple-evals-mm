@@ -88,6 +88,10 @@ table.bt { width: 100%; border-collapse: collapse; font-size: 14px; font-variant
 table.bt th, table.bt td { padding: 6px 10px; text-align: right; border-top: 1px solid var(--border); white-space: nowrap; }
 table.bt th { background: var(--surface-2); color: var(--text-secondary); font-size: 13px; }
 table.bt td.l, table.bt th.l { text-align: left; }
+.idx-bar { position: sticky; top: var(--hdr, 57px); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 0; margin: 4px 0 8px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.idx-bar .lab { font-weight: 600; font-size: 14px; }
+.idx-bar .seg button { white-space: nowrap; }
+.idx-bar .scope { color: var(--text-muted); font-size: 13px; }
 .b-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; }
 .b-ctl .seg { margin-left: auto; }
 .b-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; font-size: 14px; cursor: pointer; }
@@ -112,7 +116,8 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
   <section id="trends">
     <div class="wrap">
       <h2>Trends</h2>
-      <p class="intro">The <b>simple-evals-mm ECI (SEM-ECI)</b> puts every model on one capability scale, estimated from all <span id="i-nq"></span> questions of the <span id="i-nb"></span> leaderboard benchmarks with item response theory, as <a href="https://epoch.ai/benchmarks/eci" target="_blank" rel="noopener">Epoch AI's Capabilities Index</a> does. Unlike a mean of scores, it weighs each question by how well it separates the models, so saturated benchmarks do not squeeze the differences together. <a href="#method">How it is computed</a>.</p>
+      <p class="intro">The <b>simple-evals-mm ECI (SEM-ECI)</b> puts every model on one capability scale, estimated from the questions of the leaderboard benchmarks with item response theory, as <a href="https://epoch.ai/benchmarks/eci" target="_blank" rel="noopener">Epoch AI's Capabilities Index</a> does. Unlike a mean of scores, it weighs each question by how well it separates the models, so saturated benchmarks do not squeeze the differences together. Models can be much stronger on text than on images or the other way round, so there are three indices: <b>All</b> questions, <b>Multimodal</b> (the questions with images) and <b>Text</b> (the questions without; text-only models appear here only). <a href="#method">How it is computed</a>.</p>
+      <div class="idx-bar" id="idx-bar"><span class="lab">Index</span><div class="seg" id="idx" role="group" aria-label="SEM-ECI index"><button data-v="all" aria-pressed="true">All</button><button data-v="multimodal" aria-pressed="false">Multimodal</button><button data-v="text" aria-pressed="false">Text</button></div><span class="scope"><span id="i-nq"></span> questions of <span id="i-nb"></span> benchmarks</span></div>
 
       <div class="tr-sec"><h3>SEM-ECI over time</h3>
         <svg class="tr-chart" id="c-time" viewBox="0 0 960 460" role="img" aria-label="SEM-ECI (simple-evals-mm ECI) by release date"></svg>
@@ -148,7 +153,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
         <div class="method">
           <p><b>The idea.</b> Think of a standardized test. Each model has one hidden number, its capability <math><mi>θ</mi></math> (each effort level of a model counts as a model of its own). Each question has a difficulty <math><mi>d</mi></math> and a discrimination <math><mi>a</mi></math>: how sharply it separates weaker from stronger models. The chance that a model answers a question correctly rises smoothly with the gap between its capability and the question's difficulty:</p>
           <div class="eqb"><math display="block"><mi mathvariant="normal">P</mi><mo>(</mo><mtext>model&#xA0;</mtext><mi>m</mi><mtext>&#xA0;answers question&#xA0;</mtext><mi>i</mi><mtext>&#xA0;correctly</mtext><mo>)</mo><mo>=</mo><mi>σ</mi><mo>(</mo><msub><mi>a</mi><mi>i</mi></msub><mo>·</mo><mo>(</mo><msub><mi>θ</mi><mi>m</mi></msub><mo>−</mo><msub><mi>d</mi><mi>i</mi></msub><mo>)</mo><mo>)</mo></math></div>
-          <p>A model far above a question's difficulty almost always solves it, one far below almost never; <math><mi>a</mi></math> sets how steep that change is. Fitting this to every attempt of every model on all <span id="m-nq"></span> questions gives the capabilities and the difficulties together. A model earns credit for solving questions that others miss, and little for questions everyone solves. The design follows <a href="https://artificialanalysis.ai/methodology/progress-index" target="_blank" rel="noopener">Artificial Analysis' Progress Index</a> and is close to <a href="https://epoch.ai/data/eci-documentation/methodology" target="_blank" rel="noopener">Epoch AI's ECI</a>.</p>
+          <p>A model far above a question's difficulty almost always solves it, one far below almost never; <math><mi>a</mi></math> sets how steep that change is. Fitting this to every attempt of every model on the index's questions (<span id="m-nq"></span> in the one shown) gives the capabilities and the difficulties together. A model earns credit for solving questions that others miss, and little for questions everyone solves. The design follows <a href="https://artificialanalysis.ai/methodology/progress-index" target="_blank" rel="noopener">Artificial Analysis' Progress Index</a> and is close to <a href="https://epoch.ai/data/eci-documentation/methodology" target="_blank" rel="noopener">Epoch AI's ECI</a>.</p>
           <p><b>Keeping it fair.</b> Three adjustments make the comparison fair.</p>
           <ul>
             <li>A lucky guess is not capability, so multiple-choice scores are rescaled so that random guessing counts as 0. Each question is rescaled by its own number of options.</li>
@@ -156,7 +161,8 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
             <li>Each benchmark's share of the fit is divided by its number of questions, so a 2,000-question benchmark weighs no more than a 30-question one.</li>
           </ul>
           <p><b>Reading the numbers.</b> The scale has no natural zero; only differences matter. Two anchors fix it: GPT-6 Astra (max) at 150 and Qwen3.5-9B (thinking) at 100. The values are on our own scale: they are not comparable with Epoch's ECI or another ECI version (such as OpenAI ECI), whose benchmarks and anchors differ. Adding models leaves the anchors in place, so values stay comparable across updates. The bars are 90% intervals from <span id="m-nb"></span> refits on resampled questions, resampled within each benchmark. As a check, fitting one score per benchmark instead of every question (as ECI does with published scores) gives nearly the same SEM-ECI; the largest difference is <span id="m-diff"></span> points.</p>
-          <p><b>Text-only models.</b> A question a setting did not answer is left out, not counted as wrong, so a text-only model (LLM-jp-4.1 8B thinking) is placed on the same scale from its text benchmarks alone, its HLE-Diamond and JFinBench from their questions without an image. Its estimate rests on fewer benchmarks (a wider interval) and says nothing about images.</p>
+          <p><b>Three indices.</b> One number assumes a model that is strong on one kind of question is about as strong on another. Between text and images that does not hold well here: some models score 15 to 25 points higher on the text questions than on the image questions. So each index is fitted on its own questions: <b>All</b> every question; <b>Multimodal</b> the questions with images; <b>Text</b> the questions without (including HLE-Diamond's and JFinBench's text questions). A benchmark takes part in an index when at least 20% of its questions are of that kind, and counts there with those questions only. Each index has the same two anchors, but its values are its own: compare models within an index, not across indices.</p>
+          <p><b>Text-only models.</b> A text-only model (LLM-jp-4.1 8B thinking) answered the text questions only, so it is placed in the Text index alone, on the same questions as every other model there.</p>
           <p>The fit is <code>sem site trends</code> in <a href="https://github.com/llm-jp/simple-evals-mm" target="_blank" rel="noopener">simple-evals-mm</a> (<code>src/simple_evals_mm/capability.py</code>).</p>
         </div></div>
     </div>
@@ -172,14 +178,19 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
 <script src="../share.js"></script>
 <script>
 (function () {
-  const T = window.TRENDS, NS = "http://www.w3.org/2000/svg", LOGOS = window.LB_LOGOS || {logos: {}, logoColors: {}, images: {}};
+  const TR = window.TRENDS, IDXS = TR.indices || {all: TR}, NS = "http://www.w3.org/2000/svg", LOGOS = window.LB_LOGOS || {logos: {}, logoColors: {}, images: {}};
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   const el = (tag, attrs, parent, text) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; };
-  const S = T.settings, name = s => `${s.model} (${s.label})`;
+  // the index shown (All / Multimodal / Text): T its data, S its settings; switched by setIndex()
+  const urlIdx = (SHARE.stateString().match(/(?:^|&)idx=([^&]+)/) || [])[1];
+  let ik = IDXS[urlIdx] ? urlIdx : IDXS[TR.default] ? TR.default : Object.keys(IDXS)[0], T = IDXS[ik], S = T.settings;
+  const ALLS = Object.values(IDXS).flatMap(x => x.settings);  // every setting of every index (organizations, colours)
+  const name = s => `${s.model} (${s.label})`;
+  const idxName = () => ik === "all" ? "SEM-ECI" : `SEM-ECI (${T.label})`;
   // organization colours: the brand colour of its logo; others from a fixed palette
   const PAL = ["#0d9488", "#b45309", "#7c3aed", "#be123c", "#0369a1"];
-  const orgs = [...new Set(S.map(s => s.dev))];
-  const orgColor = {}; orgs.forEach(o => { const s = S.find(x => x.dev === o); orgColor[o] = (s.logo && LOGOS.logoColors[s.logo]) || PAL[Object.keys(orgColor).filter(k => !LOGOS.logoColors[(S.find(x => x.dev === k) || {}).logo]).length % PAL.length]; });
+  const orgs = [...new Set(ALLS.map(s => s.dev))];
+  const orgColor = {}; orgs.forEach(o => { const s = ALLS.find(x => x.dev === o); orgColor[o] = (s.logo && LOGOS.logoColors[s.logo]) || PAL[Object.keys(orgColor).filter(k => !LOGOS.logoColors[(ALLS.find(x => x.dev === k) || {}).logo]).length % PAL.length]; });
   const colorOf = s => orgColor[s.dev];
   // a logo marker (as on the leaderboard chart): white disc, organization-coloured ring, logo inside
   function marker(parent, x, y, s, r = 11) {
@@ -199,10 +210,10 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     g.style.cursor = "default";
     g.addEventListener("mousemove", e => {
       tip.innerHTML = `<div class="tt-name">${esc(name(s))}</div><div class="tt-sub">${esc(s.dev || "")}</div>`
-        + `<div class="tt-row"><span>SEM-ECI</span><b>${s.index.toFixed(1)}</b></div>`
+        + `<div class="tt-row"><span>${esc(idxName())}</span><b>${s.index.toFixed(1)}</b></div>`
         + (s.lo != null ? `<div class="tt-row"><span>90% interval</span><b>${s.lo.toFixed(1)} – ${s.hi.toFixed(1)}</b></div>` : "")
         + `<div class="tt-row"><span>Released</span><b>${esc(s.released || "–")}</b></div>`
-        + (s.text_only ? `<div class="tt-row"><span>Text-only model</span><b>from its text benchmarks only</b></div>` : "") + (extra || "");
+        + (s.text_only ? `<div class="tt-row"><span>Text-only model</span><b>Text index only</b></div>` : "") + (extra || "");
       tip.style.opacity = 1; tip.style.left = Math.min(e.clientX + 14, innerWidth - 240) + "px"; tip.style.top = (e.clientY + 14 + scrollY) + "px";
     });
     if (byModel) {  // the model's other points stay dark
@@ -231,13 +242,18 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
       }
     }
   }
-  document.getElementById("m-nq").textContent = T.n_questions.toLocaleString();
-  document.getElementById("i-nq").textContent = T.n_questions.toLocaleString();
-  document.getElementById("i-nb").textContent = T.benchmarks.length;
-  document.getElementById("m-nb").textContent = T.n_bootstrap;
-  document.getElementById("m-diff").textContent = Math.max(...S.map(s => Math.abs(s.index - s.index_benchmark_level))).toFixed(1);
+  // the counts in the text, for the index shown
+  function idxText() {
+    document.getElementById("m-nq").textContent = T.n_questions.toLocaleString();
+    document.getElementById("i-nq").textContent = T.n_questions.toLocaleString();
+    document.getElementById("i-nb").textContent = T.benchmarks.length;
+    document.getElementById("m-nb").textContent = T.n_bootstrap;
+    document.getElementById("m-diff").textContent = Math.max(...S.map(s => Math.abs(s.index - s.index_benchmark_level))).toFixed(1);
+    document.querySelectorAll("#idx button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === ik));
+  }
+  idxText();
   // legend: the organizations, with their logos
-  document.getElementById("tr-legend").innerHTML = orgs.map(o => { const s = S.find(x => x.dev === o);
+  document.getElementById("tr-legend").innerHTML = orgs.map(o => { const s = ALLS.find(x => x.dev === o);
     const svg = `<svg viewBox="-12 -12 24 24" width="18" height="18"><circle r="10" fill="#fff" stroke="${orgColor[o]}" stroke-width="2"/>${s.logo && (LOGOS.images || {})[s.logo] ? `<image href="../${LOGOS.images[s.logo]}" x="-6.5" y="-6.5" width="13" height="13"/>` : s.logo && LOGOS.logos[s.logo] ? `<path d="${LOGOS.logos[s.logo]}" transform="translate(-6.5 -6.5) scale(0.5417)" fill="${orgColor[o]}"/>` : `<text text-anchor="middle" y="4" font-size="11" font-weight="700" fill="${orgColor[o]}">${esc(o[0])}</text>`}</svg>`;
     return `<button type="button" class="org-btn" data-org="${esc(o)}" aria-pressed="false">${svg}${esc(o)}</button>`; }).join("");
   let hoverModel = null;  // hovering a point keeps only its model
@@ -251,7 +267,8 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     picked.has(b.dataset.org) ? picked.delete(b.dataset.org) : picked.add(b.dataset.org); applyPick(); syncURL(); };
   document.getElementById("tr-legend").onmouseover = e => { const b = e.target.closest(".org-btn"); if (b && hovered !== b.dataset.org) { hovered = b.dataset.org; applyPick(); } };
   document.getElementById("tr-legend").onmouseleave = () => { hovered = null; applyPick(); };
-  const ymin = Math.floor((Math.min(...S.map(s => s.lo ?? s.index)) - 5) / 10) * 10, ymax = Math.ceil((Math.max(...S.map(s => s.hi ?? s.index)) + 5) / 10) * 10;
+  // one range for every index, so the anchors (100, 150) stay in place when the index changes
+  const ymin = Math.floor((Math.min(...ALLS.map(s => s.lo ?? s.index)) - 5) / 10) * 10, ymax = Math.ceil((Math.max(...ALLS.map(s => s.hi ?? s.index)) + 5) / 10) * 10;
 
   // charts are drawn at their container's width on phones (as Epoch AI's ECI: readable text, taller plots, fewer ticks
   // and labels) and at the 960-wide layout, scaled, elsewhere; they are redrawn when the width class changes
@@ -278,7 +295,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     const d0 = new Date(t0); for (let d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 1)); d.getTime() < t1; d.setUTCMonth(d.getUTCMonth() + step))
       el("text", {x: sx(d.getTime()), y: H - M.b + 20, "text-anchor": "middle"}, svg, d.toISOString().slice(0, 7));
     const ay = nw ? 11 : 14;
-    el("text", {x: ay, y: (M.t + H - M.b) / 2, transform: `rotate(-90 ${ay} ${(M.t + H - M.b) / 2})`, "text-anchor": "middle"}, svg, "SEM-ECI (simple-evals-mm ECI)");
+    el("text", {x: ay, y: (M.t + H - M.b) / 2, transform: `rotate(-90 ${ay} ${(M.t + H - M.b) / 2})`, "text-anchor": "middle"}, svg, idxName());
     el("text", {x: (M.l + W - M.r) / 2, y: H - 6, "text-anchor": "middle"}, svg, "Release date");
     const pts = best.map(s => ({s, x: sx(Date.parse(s.released)), y: sy(s.index)}));
     for (const {s, x} of pts) if (s.lo != null) el("line", {x1: x, x2: x, y1: sy(s.lo), y2: sy(s.hi), stroke: colorOf(s), "stroke-width": 2, opacity: 0.45, "data-org": s.dev, "data-model": s.model_key}, svg);
@@ -309,7 +326,11 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
 
   // 3. benchmark curves (several at once) + the models' scores when one is picked; the fitted logistic per benchmark
   const BPAL = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#be185d", "#4d7c0f", "#7c2d12", "#1e3a8a"];
-  const pickedB = new Set(["jgraphqa", "hakushobench", "mmmu_pro", "zerobench"].filter(k => T.curves[k]));
+  // each index's default benchmarks for chart 3 (spread over the difficulty range)
+  const DEF_B = {all: ["jgraphqa", "hakushobench", "mmmu_pro", "zerobench"], multimodal: ["jgraphqa", "hakushobench", "mmmu_pro", "zerobench"],
+                 text: ["jamcqa", "gpqa", "livecodebench", "hle_diamond"]};
+  const defB = () => (DEF_B[ik] || DEF_B.all).filter(k => T.curves[k]);
+  const pickedB = new Set(defB());
   const bColor = {}; let nextC = 0;
   const colorB = k => bColor[k] || (bColor[k] = BPAL[nextC++ % BPAL.length]);
   const blabel = k => (T.benchmarks.find(b => b.key === k) || {}).label || k;
@@ -321,7 +342,6 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
           + `<td>${f.D < ymin ? `< ${ymin} <span style="color:var(--text-muted)">(saturated)</span>` : f.D.toFixed(1)}</td><td>${f.alpha.toFixed(3)}</td><td>${f.guess ? (100 * f.guess).toFixed(0) + "%" : "–"}</td><td>${f.rmse.toFixed(1)} pt</td></tr>`; }).join("") + `</tbody>`;
     document.querySelectorAll("#b-table tr.brow").forEach(tr => tr.onclick = () => { const k = tr.dataset.b; pickedB.has(k) ? pickedB.delete(k) : pickedB.add(k); bench(); });
   }
-  const DEFAULT_B = ["jgraphqa", "hakushobench", "mmmu_pro", "zerobench"].filter(k => T.curves[k]);
   function benchChips() {
     const rows = T.benchmarks.filter(b => T.fits[b.key]).sort((a, b) => T.fits[a.key].D - T.fits[b.key].D);
     const wrap = document.getElementById("b-pick"), btn = wrap.querySelector(".filter-btn"), panel = wrap.querySelector(".panel");
@@ -332,11 +352,11 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     panel.onclick = e => e.stopPropagation();
     panel.onchange = e => { const k = e.target.dataset.b; if (!k) return; e.target.checked ? pickedB.add(k) : pickedB.delete(k); bench(); };
     panel.querySelector(".presets").onclick = e => { const a = e.target.dataset.act; if (!a) return;
-      pickedB.clear(); if (a === "reset") DEFAULT_B.forEach(k => pickedB.add(k)); else if (a === "all") rows.forEach(b => pickedB.add(b.key)); bench(); };
+      pickedB.clear(); if (a === "reset") defB().forEach(k => pickedB.add(k)); else if (a === "all") rows.forEach(b => pickedB.add(b.key)); bench(); };
   }
   document.addEventListener("click", () => { const w = document.getElementById("b-pick"); w.querySelector(".panel").hidden = true; w.querySelector(".filter-btn").setAttribute("aria-expanded", "false"); });
   let effAll = false;  // dots: each model's best setting (highest index), or every effort level
-  const BEST = new Set(Object.values(S.reduce((a, s) => { if (!a[s.model_key] || s.index > a[s.model_key].index) a[s.model_key] = s; return a; }, {})).map(s => s.key));
+  let BEST = new Set(Object.values(S.reduce((a, s) => { if (!a[s.model_key] || s.index > a[s.model_key].index) a[s.model_key] = s; return a; }, {})).map(s => s.key));
   const shown = s => effAll || BEST.has(s.key);
   document.getElementById("b-eff").onclick = e => { const b = e.target.closest("button"); if (!b) return; effAll = b.dataset.v === "all";
     document.querySelectorAll("#b-eff button").forEach(x => x.setAttribute("aria-pressed", x === b)); bench(); };
@@ -348,7 +368,7 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     const sx = v => M.l + (v - ymin) / (ymax - ymin) * (W - M.l - M.r), sy = v => H - M.b - v / 100 * (H - M.t - M.b);
     for (let v = 0; v <= 100; v += 20) { el("line", {class: "grid", x1: M.l, x2: W - M.r, y1: sy(v), y2: sy(v)}, svg); el("text", {x: M.l - 8, y: sy(v) + 4, "text-anchor": "end"}, svg, v + "%"); }
     for (let v = ymin; v <= ymax; v += 10) if (!nw || (v - ymin) % 20 === 0) el("text", {x: sx(v), y: H - M.b + 20, "text-anchor": "middle"}, svg, v);
-    el("text", {x: (M.l + W - M.r) / 2, y: H - 6, "text-anchor": "middle"}, svg, "SEM-ECI (simple-evals-mm ECI)");
+    el("text", {x: (M.l + W - M.r) / 2, y: H - 6, "text-anchor": "middle"}, svg, idxName());
     const keys = [...pickedB], ends = [];
     for (const k of keys) {
       const cur = (T.curves[k] || []).filter(([x]) => x >= ymin && x <= ymax); if (!cur.length) continue;
@@ -412,7 +432,8 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
   function syncURL() {
     const kv = [];
     if (picked.size) kv.push("org=" + [...picked].map(encodeURIComponent).join(","));
-    if ([...pickedB].join(",") !== DEFAULT_B.join(",")) kv.push("b=" + [...pickedB].map(encodeURIComponent).join(","));
+    if (ik !== (TR.default || "all")) kv.push("idx=" + ik);
+    if ([...pickedB].join(",") !== defB().join(",")) kv.push("b=" + [...pickedB].map(encodeURIComponent).join(","));
     if (effAll) kv.push("eff=all");
     SHARE.writeState(kv);  // the query string; an in-page anchor such as #method stays after it
   }
@@ -425,6 +446,15 @@ math { font-family: "STIX Two Math", "Latin Modern Math", "Cambria Math", math; 
     else if (k === "eff" && v === "all") { effAll = true;
       document.querySelectorAll("#b-eff button").forEach(x => x.setAttribute("aria-pressed", x.dataset.v === "all")); }
   }
+  // the index selector: every chart and the counts follow it; chart 3 goes back to the index's default benchmarks
+  function setIndex(k) {
+    if (!IDXS[k] || k === ik) return;
+    ik = k; T = IDXS[k]; S = T.settings;
+    BEST = new Set(Object.values(S.reduce((a, s) => { if (!a[s.model_key] || s.index > a[s.model_key].index) a[s.model_key] = s; return a; }, {})).map(s => s.key));
+    pickedB.clear(); defB().forEach(x => pickedB.add(x));
+    tip.style.opacity = 0; idxText(); drawTime(); drawRank(); bench();
+  }
+  document.getElementById("idx").onclick = e => { const b = e.target.closest("button"); if (b) setIndex(b.dataset.v); };
   applyPick();
   bench();
   // Share and Download graph (PNG / SVG) under each chart, section links (share.js)
