@@ -7,6 +7,8 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Trends: an Index selector (All / Multimodal / Text) at the top left of every chart, all in sync, instead of one bar
+  under the intro.
 - Site, All results: the category bands' and model groups' labels stay at the left when the table scrolls sideways
   (they scrolled out of view).
 - Site, All results: laid out as a model card's results table: the models grouped (Proprietary / Open weights) under
