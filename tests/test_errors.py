@@ -38,3 +38,15 @@ def test_endpoint_unavailable_policy():
     p = errors.POLICY[errors.ENDPOINT_UNAVAILABLE]
     assert (p.retry, p.counts_in_score, p.reward) == (False, False, None)
     assert not errors.retryable(errors.ENDPOINT_UNAVAILABLE) and not errors.counts_in_score(errors.ENDPOINT_UNAVAILABLE)
+
+
+def test_config_errors_are_told_from_refusals_and_transient_failures():
+    for msg in ("Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}",
+                "Incorrect API key provided: sk-...", "400 API key not valid. Please pass a valid API key.",
+                "Error code: 402 - Insufficient credits", "No auth credentials found"):
+        assert errors.classify_error(msg) == errors.CONFIG_ERROR, msg
+    assert errors.classify_error("Error code: 403 - Your input was flagged by moderation (requires moderation)") == errors.REFUSED
+    assert errors.classify_error("Error code: 503 - upstream unavailable") == errors.PROVIDER_FAILED
+    p = errors.POLICY[errors.CONFIG_ERROR]
+    assert not p.retry and not p.counts_in_score and errors.CONFIG_ERROR in errors.NEXT_STEP
+    assert set(errors.NEXT_STEP) == set(errors.POLICY)  # every cause explains itself in `sem job show`

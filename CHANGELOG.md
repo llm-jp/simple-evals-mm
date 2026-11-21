@@ -7,6 +7,11 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- New failure cause `config_error` (an invalid or missing API key, no credits, no permission for the model; after
+  Harbor's error classification): excluded, not retried, and the job stops at the first one instead of failing every
+  trial; `sem job resume` continues once it is fixed. A 401 / 402 / 403 that is not a content refusal is one.
+  `sem job show` explains each cause under its table (counted as 0 or excluded, and what to do).
+
 - Trends: an Index selector (All / Multimodal / Text) at the top left of every chart, all in sync, instead of one bar
   under the intro.
 - Site, All results: the category bands' and model groups' labels stay at the left when the table scrolls sideways

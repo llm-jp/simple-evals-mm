@@ -19,6 +19,10 @@ ENDPOINT_UNAVAILABLE = "endpoint_unavailable"  # pinned provider / model gone, s
 SANDBOX_FAILED = "sandbox_failed"  # container start failure: excluded, retried
 JUDGE_FAILED = "judge_failed"  # judge error / unparseable verdict: excluded, retried
 VERIFIER_FAILED = "verifier_failed"  # the trajectory lacks what the verifier needs (e.g. the sent image size): excluded
+# the request cannot succeed until the user fixes something (invalid / missing API key, no credits, no permission for
+# the model): excluded, not retried, and the job stops at the first one (Harbor: AgentAuthenticationError,
+# PermissionDeniedError are neither retried nor graded)
+CONFIG_ERROR = "config_error"
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,21 @@ POLICY: dict[str, Policy] = {
     SANDBOX_FAILED: Policy(retry=True, counts_in_score=False, reward=None),
     JUDGE_FAILED: Policy(retry=True, counts_in_score=False, reward=None),
     VERIFIER_FAILED: Policy(retry=False, counts_in_score=False, reward=None),
+    CONFIG_ERROR: Policy(retry=False, counts_in_score=False, reward=None),
+}
+
+# what a cause means and what to do about it (`sem job show` prints it under the table; docs/jobs/failures.md)
+NEXT_STEP: dict[str, str] = {
+    BUDGET_EXHAUSTED: "the answer was cut off at the output limit; a larger --max-output-tokens needs a new job (sem run --from)",
+    REFUSED: "the provider refused the request (content filter, moderation)",
+    CONTEXT_OVERFLOW: "the input is longer than the model's context",
+    REQUEST_REJECTED: "the API answered every retry of this request with an error while other requests went through",
+    PROVIDER_FAILED: "a transient API failure (rate limit, 5xx, timeout); regenerate: sem job resume -p JOB -f provider_failed",
+    ENDPOINT_UNAVAILABLE: "the model / pinned provider / server is gone; resume when it is back, or pin another provider in a new job",
+    SANDBOX_FAILED: "the code sandbox failed; verify again: sem job regrade JOB",
+    JUDGE_FAILED: "the judge failed or its verdict did not parse; verify again: sem job regrade JOB",
+    VERIFIER_FAILED: "the trajectory lacks what the verifier needs",
+    CONFIG_ERROR: "the API key / credits / permission is wrong; fix it (.env), then sem job resume -p JOB",
 }
 
 # Substrings of an API error (lower-cased) that mean the request itself was refused or cannot fit.
@@ -51,6 +70,13 @@ CONTEXT_MARKERS = ("longer than the model", "maximum context length", "context l
 # does not exist", Azure "DeploymentNotFound", Gemini "models/x is not found").
 ENDPOINT_MARKERS = ("no endpoints found", "no allowed providers", "model_not_found", "model not found",
                     "deploymentnotfound", "does not exist or you do not have access", "is not found for api version")
+
+# The request cannot succeed until the user fixes something (lower-cased substrings): an invalid / missing key
+# (OpenAI "Incorrect API key", "invalid_api_key"; OpenRouter "User not found." / "No auth credentials found"; Gemini
+# "API key not valid"), no credits ("insufficient credits", "insufficient_quota") or no permission for the model.
+CONFIG_MARKERS = ("invalid api key", "incorrect api key", "invalid_api_key", "api key not valid", "user not found",
+                  "no auth credentials", "unauthorized", "authentication", "insufficient credits", "insufficient_quota",
+                  "permission denied", "permission_denied")
 
 
 class UserError(Exception):
@@ -100,8 +126,8 @@ def is_connection_error(e: BaseException) -> bool:
 
 
 def classify_error(message: str | None) -> str:
-    """Cause of a sampler failure from its error text: endpoint_unavailable / refused / context_overflow, else
-    provider_failed (transient, including account-level blocks such as user_blocked)."""
+    """Cause of a sampler failure from its error text: endpoint_unavailable / context_overflow / refused /
+    config_error, else provider_failed (transient, including account-level blocks such as user_blocked)."""
     e = (message or "").lower()
     if "user_blocked" in e:
         return PROVIDER_FAILED
@@ -111,6 +137,8 @@ def classify_error(message: str | None) -> str:
         return CONTEXT_OVERFLOW
     if any(m in e for m in REFUSAL_MARKERS):
         return REFUSED
+    if any(m in e for m in CONFIG_MARKERS):
+        return CONFIG_ERROR
     return PROVIDER_FAILED
 
 
