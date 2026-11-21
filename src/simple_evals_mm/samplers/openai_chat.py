@@ -595,8 +595,11 @@ class OpenAIChatSampler(Sampler):
             except openai.APIStatusError as e:
                 if e.status_code == 404:  # the model / pinned endpoint / deployment is gone
                     raise errors.SamplerError(str(e), errors.ENDPOINT_UNAVAILABLE, exc_type=type(e).__name__) from e
-                if e.status_code in (401, 402, 403):  # key / credits: retrying cannot help
-                    raise errors.SamplerError(str(e), exc_type=type(e).__name__) from e
+                if e.status_code in (401, 402, 403):  # key / credits / permission: retrying cannot help
+                    # a 403 can also be a content refusal (OpenRouter moderation): the text decides first
+                    cause = errors.classify_error(str(e))
+                    raise errors.SamplerError(str(e), errors.CONFIG_ERROR if cause == errors.PROVIDER_FAILED else cause,
+                                              exc_type=type(e).__name__) from e
                 if e.status_code == 413 and shrinks < 8:  # provider body limit: shrink the images, not the retry budget
                     api_messages = self._shrink_images(api_messages, 0.8)
                     shrinks += 1
