@@ -49,7 +49,7 @@ MAX_IMAGES = 50
 MAX_SIDE = 2000
 PAGES_PER_IMAGE = (1, 2, 4)
 LABEL_PX = 40
-PREP_VERSION = "1"  # part of the cache key of the prepared documents
+PREP_VERSION = "1"  # bump when prepare() changes (its settings below are in the cache key already)
 MAX_RETRIES = 4
 N_CRITERIA = 30
 CRITERION_FIELDS = ("type", "severity", "implicitness", "subjectiveness", "failure_mode")
@@ -156,6 +156,16 @@ def prepare(pdf_path: str, tessdata_dir: str) -> dict:
             "images": images}
 
 
+def prep_key() -> str:
+    """The prepared documents' cache key: every setting that shapes them, and the LiteParse version."""
+    import importlib.metadata
+
+    settings = {"v": PREP_VERSION, "dpi": DPI, "max_images": MAX_IMAGES, "max_side": MAX_SIDE,
+                "pages_per_image": PAGES_PER_IMAGE, "label_px": LABEL_PX, "tessdata": TESSDATA_URL,
+                "liteparse": importlib.metadata.version("liteparse")}
+    return hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()[:12]
+
+
 def document_text(task: Task) -> str:
     """The note on the images, then (after the task) every page's text."""
     d = task.data
@@ -202,7 +212,7 @@ class GDPPdf(Dataset):
         """prepare(), cached under data/gdp_pdf/ by the PDF's sha256 (the images as content-addressed files)."""
         with open(pdf_path, "rb") as f:
             sha = hashlib.sha256(f.read()).hexdigest()
-        cache = sources.data_path(os.path.join("data", "gdp_pdf", f"{sha}.v{PREP_VERSION}.json"))
+        cache = sources.data_path(os.path.join("data", "gdp_pdf", f"{sha}.{prep_key()}.json"))
         if not os.path.exists(cache):
             tessdata = os.path.dirname(sources.fetch(TESSDATA_URL, self.name))
             doc = prepare(pdf_path, tessdata)
