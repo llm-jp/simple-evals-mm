@@ -653,21 +653,29 @@ h2:hover > a.anchor, h3:hover > a.anchor, a.anchor:focus { opacity: 1; }
 /* All results: benchmarks (rows) x settings (columns) */
 .controls.ar-top { margin: 6px 0 8px; }
 .ar-wrap { overflow: auto; max-height: 80vh; border: 1px solid var(--border); border-radius: 8px; }
-table.ar { border-collapse: separate; border-spacing: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-table.ar th, table.ar td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
-table.ar thead th { position: sticky; top: 0; background: var(--surface-2); color: var(--text-secondary); font-weight: 600; z-index: 2; vertical-align: bottom; }
-table.ar th.ar-set { text-align: center; }
+table.ar { border-collapse: separate; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+table.ar th, table.ar td { padding: 7px 12px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--border); }
+/* the header (model groups, then models) stays at the top of the scroll box as one block; nothing else sticks
+   vertically, so the category bands never move */
+table.ar thead { position: sticky; top: 0; z-index: 3; }
+table.ar thead th { background: var(--bg); color: var(--text-secondary); font-weight: 600; vertical-align: bottom; }
+table.ar thead th.ar-group { font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--border); text-align: left; }
+table.ar thead tr:last-child th { border-bottom: 1px solid var(--text-muted); }
 table.ar th.ar-set .ar-name { display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--text-primary); }
 table.ar th.ar-set .effort-tag { display: inline-block; margin-top: 3px; }
-table.ar .ar-task { position: sticky; left: 0; text-align: left; background: var(--bg); font-weight: 500; z-index: 1; }
-table.ar thead .ar-task { z-index: 3; background: var(--surface-2); }
-table.ar tr.ar-cat-row th { background: var(--surface-2); color: var(--text-secondary); font-size: 12px; font-weight: 600; text-align: left;
-  position: sticky; top: var(--ar-head, 56px); z-index: 2; }  /* the current category stays in view while scrolling */
-table.ar tr.ar-overall td, table.ar tr.ar-overall th { border-bottom: 2px solid var(--border); }
-table.ar td.ar-best { font-weight: 700; color: var(--text-primary); }
+table.ar .ar-sep { border-left: 1px solid var(--text-muted); }
+/* the benchmark column stays at the left when the table scrolls sideways */
+table.ar .ar-task { position: sticky; left: 0; text-align: left; background: var(--bg); font-weight: 500; z-index: 1; color: var(--text-primary); }
+table.ar thead .ar-task { z-index: 4; }
+table.ar .ar-task .ar-sub { display: block; font-size: 11px; font-weight: 400; color: var(--text-muted); margin-top: 1px; }
+table.ar tr.ar-cat-row th { background: var(--surface-2); color: var(--text-primary); font-size: 13px; font-weight: 600; text-align: left; }
 table.ar td { color: var(--text-secondary); }
+table.ar td.ar-info { color: var(--text-primary); }
 table.ar td.ar-na { color: var(--text-muted); }
-table.ar sup.subset { color: var(--text-secondary); }
-
+table.ar td .v { display: inline-block; min-width: 3.4em; padding: 2px 6px; border-radius: 3px; }
+table.ar td.ar-best .v { background: rgba(255, 206, 82, 0.75); color: #282828; font-weight: 600; }
+table.ar td.ar-second .v { background: rgba(255, 206, 82, 0.28); color: var(--text-primary); }
+[data-theme="dark"] table.ar td.ar-second .v { background: rgba(255, 206, 82, 0.2); }
+table.ar sup.subset { color: inherit; }
 table.ar th.ar-task a { color: inherit; text-decoration: none; }
 table.ar th.ar-task a:hover { text-decoration: underline; }

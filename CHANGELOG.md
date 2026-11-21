@@ -7,6 +7,13 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site, All results: laid out as a model card's results table: the models grouped (Proprietary / Open weights) under
+  a header that stays at the top, a "Model info" section (parameters activated / total, release date), the
+  categories as bands that no longer move while scrolling, a benchmark's variant under its name, and the best and
+  second-best score of each row highlighted (ties at the shown precision count as one). The spec's `params`
+  (activated / total, from each model card) replaces `params_b` (safetensors totals, misleading for quantized
+  weights). Logos keep their brand colour in dark mode (black logos were invisible on their white disc).
+
 ## v0.7.1 - 2026-11-20
 
 A patch release: the SEM-ECI split into All / Multimodal / Text, SimpleQA Verified on the leaderboard, and a cleanup of
