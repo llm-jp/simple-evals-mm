@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="A reproducible, reliable evaluation framework for LLMs and VLMs on English and Japanese tasks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=3fab7c7788">
+<link rel="stylesheet" href="style.css?v=e9c58de9ef">
 <!-- Google Analytics (the same GA4 property as speed1313.github.io) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-7X0Q0NSDB9"></script>
 <script>
@@ -957,12 +957,13 @@
     for (const c of cols) { const g = GROUP[c.m.type] || "Other"; if (groups.length && groups[groups.length - 1].g === g) groups[groups.length - 1].n++; else groups.push({ g, n: 1 }); }
     const startsGroup = new Set(); { let k = 0; for (const g of groups) { startsGroup.add(k); k += g.n; } }
     const sep = i => startsGroup.has(i) && i > 0 ? " ar-sep" : "";
-    const head = `<tr><th class="ar-task ar-corner" rowspan="2"></th>` + groups.map((g, gi) => `<th class="ar-group${gi ? " ar-sep" : ""}" colspan="${g.n}">${esc(g.g)}</th>`).join("") + "</tr>"
+    const head = `<tr><th class="ar-task ar-corner" rowspan="2"></th>` + groups.map((g, gi) => `<th class="ar-group${gi ? " ar-sep" : ""}" colspan="${g.n}"><span class="ar-glabel">${esc(g.g)}</span></th>`).join("") + "</tr>"
       + `<tr>` + cols.map((c, i) => `<th class="ar-set${sep(i)}" title="${esc(c.m.name + " (" + effLabel(c.m, c.eff) + ")" + (c.m.note ? "\n" + c.m.note : ""))}">`
       + `<span class="ar-name">${logoHTML(c.m)}${esc(c.m.name)}</span><span class="effort-tag">${esc(effLabel(c.m, c.eff))}</span></th>`).join("") + "</tr>";
     const split = label => { const m = /^(.*?)\s*\(([^()]*)\)$/.exec(label); return m ? [m[1], m[2]] : [label, ""]; };
     const nameCell = (name, sub, href) => `<th class="ar-task">${href ? `<a href="${href}" title="This benchmark in Explore">${esc(name)}</a>` : esc(name)}${sub ? `<span class="ar-sub">${esc(sub)}</span>` : ""}</th>`;
-    const band = label => `<tr class="ar-cat-row"><th class="ar-task" colspan="${cols.length + 1}">${esc(label)}</th></tr>`;
+    // the band spans every column; its label (not the wide cell) sticks at the left, as the benchmark names do
+    const band = label => `<tr class="ar-cat-row"><th colspan="${cols.length + 1}"><span class="ar-band">${esc(label)}</span></th></tr>`;
     let body = band("Model info")
       + `<tr>${nameCell("Params (B)", "activated / total")}` + cols.map((c, i) => { const p = c.m.params;
         return `<td class="ar-info${sep(i)}">${p ? `${esc(p.active)}/${esc(p.total)}` : "–"}</td>`; }).join("") + "</tr>"
@@ -986,6 +987,8 @@
     }
     const tbl = document.getElementById("ar-table");
     tbl.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+    // a group's label sticks just right of the benchmark column (which stays at the left over it)
+    tbl.style.setProperty("--ar-first", tbl.querySelector("th.ar-task").offsetWidth + "px");
     document.getElementById("ar-note").textContent = `% correct, mean over attempts; the best score of each row highlighted dark, the second best light. Params: billions, activated / total (open-weight models). "–" = not evaluated; "refused" = left out by the site build. A benchmark's name opens it in Explore.`
       + (cols.some(c => tasks.some(t => (c.lvl.tasks[t.key] || {}).subset)) ? " * Text-only subset (questions without an image): not comparable, not in Overall." : "");
   }
