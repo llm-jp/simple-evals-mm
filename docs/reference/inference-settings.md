@@ -11,11 +11,13 @@ backend. It is always sent explicitly, never left to the server's or API's defau
 
 | backend | endpoint maximum |
 |---|---|
-| OpenRouter | the pinned endpoint's `max_completion_tokens` (its context length when unset); unpinned (`--preset none` without `--provider`) needs `--max-output-tokens` |
+| OpenRouter | the pinned endpoint's `max_completion_tokens` (its context length when unset); unpinned (`--preset none` without `--provider`) needs `--max-output-tokens`. Some endpoints set it to the whole context, and the provider rejects input + max_tokens over the window: such a request is re-sent with the room left, like the served engines below (the input length the error names, else the endpoint's context length and a high estimate of the input: UTF-8 bytes / 3, 4096 per image) |
 | sglang / vLLM / hf | the server's context length. As the input length is not known client-side, a request that overflows is re-sent once with the room left (context - input - 16; under 256 tokens of room: `context_overflow`) |
 | OpenAI / Azure / Gemini | the model's documented output limit, in its preset (e.g. gpt-5.1 128000, gemini-3.1-pro 65536) |
 
-A larger `--max-output-tokens` is clamped to the endpoint maximum; both values are recorded. The judge follows the
+A refitted request records the max_tokens it really sent in the trial (`max_tokens_sent`, at most 3 refits, each
+lower than the last); only an input longer than the context stays `context_overflow`. A larger `--max-output-tokens`
+is clamped to the endpoint maximum; both values are recorded. The judge follows the
 same rule (a cut-off verdict is `judge_failed`).
 
 ## Sampling
