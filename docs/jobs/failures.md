@@ -5,7 +5,7 @@ Every failed trial gets one cause; one table decides whether it is retried and w
 | Cause | Example | Score | Retried | What to do |
 |---|---|---|---|---|
 | `budget_exhausted` | the answer was cut off at the output limit | 0 | no | a larger `--max-output-tokens` needs a new job (`sem run --from`) |
-| `refused` | a provider / content-filter refusal (StrongREJECT: the safe outcome, scored 1) | 0 | no | – |
+| `refused` | a provider / content-filter refusal, including Gemini stopping on a content filter (finish reason `SAFETY`, `RECITATION`, `PROHIBITED_CONTENT`, `BLOCKLIST`, `SPII`, natively or through OpenRouter) (StrongREJECT: the safe outcome, scored 1) | 0 | no | – |
 | `context_overflow` | the input is longer than the model's context, or over OpenRouter's 8 MB text limit (input + output limit over the context is re-sent with a smaller output limit first: [Output limit](../reference/inference-settings.md#output-limit)) | 0 | no | – |
 | `request_rejected` | the API answered every retry of this one request with an error | 0 | no | – |
 | `provider_failed` | rate limit, 5xx, timeout | excluded | `sem job resume -f provider_failed` | regenerate them |

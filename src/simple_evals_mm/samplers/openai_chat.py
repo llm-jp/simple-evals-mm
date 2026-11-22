@@ -15,7 +15,8 @@ Retry behaviour is ported from the v0.4 samplers (sampler/openrouter_sampler.py,
     over the window. The same refit applies: the input length named in the error (the provider's, else OpenRouter's
     estimate), else the endpoint's context length and a conservative estimate of the input (UTF-8 bytes / 3, 4096 per
     image); at most 3 refits, each lower than the last. An input longer than the context stays context_overflow;
-  * an upstream content refusal inside a 200 (OpenRouter error_type "content_policy_violation"): refused, not retried;
+  * an upstream content refusal inside a 200 (OpenRouter error_type "content_policy_violation", or finish_reason
+    "error" with a Gemini content stop as native_finish_reason, e.g. RECITATION): refused, not retried;
   * the endpoint is gone (404, OpenRouter "No endpoints found" / "No allowed providers", an upstream model-not-found
     inside a 200, a served engine refusing connections after every retry): endpoint_unavailable, not retried.
 Per-request timeout: spec.request_timeout_s (served engines 6 h, APIs 3600 s; `--request-timeout-s`), passed to the
@@ -662,6 +663,10 @@ class OpenAIChatSampler(Sampler):
                     upstream_cause = errors.classify_error(str(err)) if err else None
                     if upstream_cause == errors.ENDPOINT_UNAVAILABLE:  # the provider lost the model
                         raise errors.SamplerError(last, errors.ENDPOINT_UNAVAILABLE, exc_type="UpstreamError")
+                    native = str(_extra(choices[0], "native_finish_reason") or "") if choices else ""
+                    if native.lower() in errors.GEMINI_CONTENT_STOPS:  # Gemini stopped it (RECITATION, SAFETY, ...)
+                        last = f"upstream error: {finish or 'error'} (native_finish_reason {native})"
+                        upstream_cause = errors.REFUSED
                     if upstream_cause == errors.REFUSED:  # a content refusal (Gemini "content_policy_violation")
                         raise errors.SamplerError(last, errors.REFUSED, exc_type="UpstreamError")
                 else:

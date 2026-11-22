@@ -59,6 +59,14 @@ NEXT_STEP: dict[str, str] = {
     CONFIG_ERROR: "the API key / credits / permission is wrong; fix it (.env), then sem job resume -p JOB",
 }
 
+# Gemini's content-policy finish reasons (google.genai types.FinishReason, lower-cased): generation was stopped by a
+# safety / recitation (copyright) / blocklist / prohibited-content / sensitive-PII filter. A stop the model cannot get
+# past by retrying; not MAX_TOKENS (budget_exhausted), OTHER / LANGUAGE / MALFORMED_FUNCTION_CALL / NO_IMAGE / tool-call
+# reasons (no content policy named). The native sampler maps them to content_filter; through OpenRouter they arrive as
+# finish_reason "error" with native_finish_reason e.g. "RECITATION" inside a 200.
+GEMINI_CONTENT_STOPS = frozenset({"safety", "recitation", "blocklist", "prohibited_content", "spii", "image_safety",
+                                  "image_prohibited_content", "image_recitation"})
+
 # Substrings of an API error (lower-cased) that mean the request itself was refused or cannot fit. "blocked the
 # request": Gemini through OpenRouter (Google AI Studio) answers a blocked prompt with a 403 "Gemini blocked the request:
 # OTHER" that names no policy (it is not a permission problem: config_error would stop the job).

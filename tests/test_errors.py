@@ -54,3 +54,15 @@ def test_config_errors_are_told_from_refusals_and_transient_failures():
     p = errors.POLICY[errors.CONFIG_ERROR]
     assert not p.retry and not p.counts_in_score and errors.CONFIG_ERROR in errors.NEXT_STEP
     assert set(errors.NEXT_STEP) == set(errors.POLICY)  # every cause explains itself in `sem job show`
+
+
+def test_gemini_content_stops_match_the_finish_reason_enum():
+    """The content-policy finish reasons of Gemini (refused through OpenRouter and the native sampler) are members of
+    google-genai's FinishReason; every other member is named here as not a content stop, so a new member fails."""
+    from google.genai import types
+
+    names = {m.name.lower() for m in types.FinishReason}
+    not_content = {"finish_reason_unspecified", "stop", "max_tokens", "language", "other", "malformed_function_call",
+                   "unexpected_tool_call", "too_many_tool_calls", "no_image", "image_other"}
+    assert errors.GEMINI_CONTENT_STOPS <= names
+    assert names - errors.GEMINI_CONTENT_STOPS <= not_content

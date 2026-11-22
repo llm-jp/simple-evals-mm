@@ -313,6 +313,12 @@ def test_gemini_parse_and_tools(clean_env):
     assert (r.text, r.reasoning, r.tool_calls[0].name, r.tool_calls[0].arguments, r.finish_reason) == ("ok", "plan", "f", {"a": 1}, "tool_calls")
     blocked = s._parse(types.GenerateContentResponse.model_validate({"candidates": [{"finish_reason": "SAFETY"}]}))
     assert blocked.finish_reason == "content_filter" and errors.classify_finish(blocked.finish_reason) == errors.REFUSED
+    for native in ("RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"):  # the same stops as through OpenRouter
+        r = s._parse(types.GenerateContentResponse.model_validate({"candidates": [{"finish_reason": native}]}))
+        assert errors.classify_finish(r.finish_reason) == errors.REFUSED
+    for native in ("OTHER", "MALFORMED_FUNCTION_CALL", "LANGUAGE"):
+        r = s._parse(types.GenerateContentResponse.model_validate({"candidates": [{"finish_reason": native}]}))
+        assert errors.classify_finish(r.finish_reason) is None
     cfg = s.build_config("be brief", [{"type": "function", "function": {"name": "f", "parameters": {"type": "object"}}}])
     assert cfg.system_instruction == "be brief" and cfg.tools[0].function_declarations[0].name == "f"
 
@@ -792,6 +798,34 @@ def test_request_rejected_after_every_retry_errors(clean_env, endpoints, monkeyp
     with pytest.raises(errors.SamplerError) as e:
         s([user("q")])
     assert e.value.cause == errors.REFUSED
+    # Gemini stopping on a content filter (RECITATION, the copyright-recitation filter) through OpenRouter: a 200 with
+    # finish_reason "error", native_finish_reason "RECITATION", the partial text and zero usage (the shape OpenRouter
+    # returned for MDPBench page it_magazine_19 on gemini-3.8-flash); refused at once, not retried. The SDK builds the
+    # reply without validation (finish_reason "error" is not in its Literal), as construct_type does here.
+    from openai._models import construct_type
+
+    def native_stop(native):
+        return construct_type(type_=ChatCompletion, value={
+            "id": "gen-1", "object": "chat.completion", "created": 0, "model": "google/gemini-3.8-flash",
+            "provider": "Google AI Studio", "service_tier": "default",
+            "choices": [{"index": 0, "logprobs": None, "finish_reason": "error", "native_finish_reason": native,
+                         "message": {"role": "assistant", "content": "# GENTE Sanremo 2026\n\n## I FESTIVALIERI",
+                                     "refusal": None, "reasoning": "**Analyzing Image Structure**"}}],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0, "is_byok": False}})
+
+    for native in ("RECITATION", "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"):
+        s._client = answering([native_stop(native)])  # a second try would raise StopIteration
+        with pytest.raises(errors.SamplerError) as e:
+            s([user("q")])
+        assert e.value.cause == errors.REFUSED and f"native_finish_reason {native}" in str(e.value)
+    # other native reasons inside an error stay upstream errors (retried, then request_rejected)
+    s._client = answering([native_stop("OTHER")] * 4)
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.cause == errors.REQUEST_REJECTED
+    # a non-content native reason is retried: an answer on the next try is returned
+    s._client = answering([native_stop("MALFORMED_FUNCTION_CALL"), ChatCompletion.model_validate(CHAT_REPLY)])
+    assert s([user("q")]).text == "42"
 
 
 def _dropping_server(mode: str):
