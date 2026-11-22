@@ -3,12 +3,18 @@ in the design of Artificial Analysis' Progress Index (https://artificialanalysis
 
   p(setting m solves question i) = sigmoid(a_i * (theta_m - d_i))      after the guessing floor is removed
 
+which is Epoch AI's ECI form sigmoid(alpha_b (C_m - D_b)) per question instead of per benchmark (the site writes
+C_m = theta_m, D_i = d_i, alpha_i = a_i; a benchmark's summary curve (logistic_summary) has D_b, alpha_b and a guessing
+rate g, which Epoch's does not have).
+
   * theta_m: one capability per setting (each effort level is a setting of its own)
   * d_i, a_i: the question's difficulty and discrimination; partial pooling: d_i is pulled toward its benchmark's
-    mean difficulty and log a_i toward 0 (each prior divided by the benchmark's number of questions)
+    mean difficulty and log a_i toward 0 (a_i toward 1) (each prior divided by the benchmark's number of questions)
   * every benchmark counts equally for a setting: its per-question loss is weighted by 1 / (questions it answered there)
   * observed y_mi = the share of the setting's attempts on the question that were correct, rescaled so that the
-    benchmark's random-guess rate is 0
+    benchmark's random-guess rate is 0; compared with p by cross-entropy
+  * estimation: penalized maximum likelihood (the priors above as penalties), every parameter together, by Adam: a
+    point estimate, not a posterior (Epoch reports posterior means and credible intervals)
   * scale: two anchor settings fixed (default GPT-6 Astra (max) = 150, Qwen3.5-9B (thinking) = 100)
   * uncertainty: bootstrap over questions within each benchmark (90% intervals)
 
