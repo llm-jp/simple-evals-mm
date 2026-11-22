@@ -517,6 +517,106 @@ def test_served_overflow_refit():
     assert _fit_max_tokens(vl.replace("1000 input", "32700 input"), 32768) is None  # no room: context_overflow
 
 
+# OpenRouter error texts for google/gemma-4-31b-it pinned to crusoe/bf16 (context 262144, max_completion_tokens 262141),
+# LongBench v2, 2026-11-22: the provider's (sglang wording, inside OpenRouter's "Provider returned error"), vLLM's input
+# alone over the window, and OpenRouter's own check by its estimate of the input
+OR_PROVIDER_OVERFLOW = (
+    "Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': "
+    "'{\"object\":\"error\",\"message\":\"Requested token count exceeds the model\\'s maximum context length of 262144 "
+    "tokens. You requested a total of 308232 tokens: 150042 tokens from the input messages and 158190 tokens for the "
+    "completion. Please reduce the number of tokens in the input messages or the completion to fit within the limit."
+    "\",\"type\":\"BadRequestError\",\"param\":null,\"code\":400}', 'provider_name': 'Crusoe', 'is_byok': False, "
+    "'provider_code': 'BadRequestError'}}}")
+OR_INPUT_TOO_LONG = (
+    "Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': "
+    "'{\"object\":\"error\",\"message\":\"The input (293266 tokens) is longer than the model\\'s context length "
+    "(262144 tokens).\",\"type\":\"BadRequestError\",\"param\":null,\"code\":400}', 'provider_name': 'Crusoe', "
+    "'is_byok': False, 'provider_code': 'BadRequestError'}}}")
+OR_OWN_CHECK = (
+    "Error code: 400 - {'error': {'message': \"This endpoint's maximum context length is 262144 tokens. However, you "
+    "requested about 568372 tokens (306231 of text input, 262141 in the output). Please reduce the length of the input, "
+    "or use the context-compression plugin to compress your prompt automatically.\", 'code': 400, "
+    "'metadata': {'provider_name': None}}}")
+
+
+def test_openrouter_overflow_texts():
+    """The input length a provider (or OpenRouter) names decides the refit; an input over the window is never refitted
+    and stays context_overflow; an overflow error naming no length falls back to the context and an estimate."""
+    from simple_evals_mm.samplers.openai_chat import (
+        _estimate_input_tokens,
+        _fit_max_tokens,
+    )
+
+    for err in (OR_PROVIDER_OVERFLOW, OR_INPUT_TOO_LONG, OR_OWN_CHECK):
+        assert errors.classify_error(err) == errors.CONTEXT_OVERFLOW
+    assert _fit_max_tokens(OR_PROVIDER_OVERFLOW, 262141) == 262144 - 150042 - 16
+    # the numbers in the text win over the fallback estimate
+    assert _fit_max_tokens(OR_PROVIDER_OVERFLOW, 262141, context=262144, estimate=10) == 262144 - 150042 - 16
+    assert _fit_max_tokens(OR_INPUT_TOO_LONG, 262141, context=262144, estimate=10) is None
+    assert _fit_max_tokens(OR_OWN_CHECK, 262141, context=262144, estimate=10) is None
+    assert _fit_max_tokens(OR_OWN_CHECK.replace("306231 of", "200000 of"), 262141) == 262144 - 200000 - 16
+    bare = "Error code: 400 - {'error': {'message': 'prompt is too long for the context window'}}"
+    assert _fit_max_tokens(bare, 262141) is None  # no context known: no refit
+    assert _fit_max_tokens(bare, 262141, context=262144, estimate=100000) == 262144 - 100000 - 16
+    assert _fit_max_tokens(bare, 262141, context=262144, estimate=262000) is None  # no room
+    assert _fit_max_tokens("Error code: 400 - invalid image", 262141, context=262144, estimate=1) is None
+    msgs = [{"role": "user", "content": [{"type": "text", "text": "x" * 3000},
+                                         {"type": "image_url", "image_url": {"url": "data:"}}]}]
+    assert _estimate_input_tokens(msgs) == 1000 + 1 + 4096 + 16 + 0
+
+
+def test_openrouter_overflow_refit(clean_env, endpoints, monkeypatch):
+    """OpenRouter: an endpoint whose max_completion_tokens is the whole context gets the served engines' refit; the
+    max_tokens actually sent is recorded; an input over the window stays context_overflow after no extra request."""
+    import httpx
+    import openai
+
+    from simple_evals_mm.samplers import openai_chat
+
+    clean_env.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr(openai_chat.time, "sleep", lambda s: None)
+    endpoints["row"].update(context_length=262144, max_completion_tokens=262141)
+    req = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+
+    def bad(text):
+        return openai.BadRequestError(text, response=httpx.Response(400, request=req), body=None)
+
+    def run(errs, msgs=None):
+        s = registry.make_sampler(registry.resolve("openrouter/google/gemma-4-31b-it"))
+        calls, queue = [], list(errs)
+
+        def create(**kw):
+            calls.append(kw["extra_body"]["max_tokens"])
+            if queue:
+                raise bad(queue.pop(0))
+            return _chat_reply()
+
+        s._client = NS(chat=NS(completions=NS(create=create)))
+        return s, calls, (lambda: s(msgs or [user("q")]))
+
+    s, calls, go = run([OR_PROVIDER_OVERFLOW])
+    r = go()
+    assert calls == [262141, 262144 - 150042 - 16] and r.extra["max_tokens_sent"] == 262144 - 150042 - 16
+    assert s.request_body()["max_tokens"] == 262141  # the recorded default is unchanged
+
+    for err in (OR_INPUT_TOO_LONG, OR_OWN_CHECK):
+        _, calls, go = run([err])
+        with pytest.raises(errors.SamplerError) as ei:
+            go()
+        assert ei.value.cause == errors.CONTEXT_OVERFLOW and calls == [262141]
+
+    # no input length in the text: the endpoint's context length and the estimate
+    _, calls, go = run(["Error code: 400 - prompt is too long"], [user("y" * 30000)])
+    r = go()
+    assert calls == [262141, 262144 - (10000 + 1 + 16) - 16] and r.extra["max_tokens_sent"] == calls[-1]
+
+    # at most 3 refits, each lower than the last
+    _, calls, go = run([OR_PROVIDER_OVERFLOW.replace("150042 tokens", f"{n} tokens") for n in (1000, 2000, 3000, 4000)])
+    with pytest.raises(errors.SamplerError) as ei:
+        go()
+    assert ei.value.cause == errors.CONTEXT_OVERFLOW and calls == [262141, 261128, 260128, 259128]
+
+
 # ---------------------------------------------------------------- resolved settings: value + source per field
 def test_settings_precedence_cli_preset_provider(clean_env, endpoints):
     """CLI beats the preset beats the provider's declared defaults (OpenRouter default_parameters, sent explicitly);
