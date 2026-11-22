@@ -149,3 +149,13 @@ def test_a_text_only_model_gets_a_text_value_only(tmp_path):
     # ability 1.0 on text: between "lo" (0) and "m2" (0.5) / "m1" (2.5)
     assert tx["m2"]["index"] < tx["t"]["index"] < tx["m1"]["index"]
     assert out["multimodal"]["n_questions"] == 12 + 4 and out["text"]["n_questions"] == 12 + 4
+
+
+def test_a_domain_value_needs_questions_of_min_domain_benchmarks(tmp_path, monkeypatch):
+    r = _domains(tmp_path)
+    out = capability.run(r, ["vis", "txt", "mix"], ("hi", "lo"), n_boot=0, steps=600, indices=PLAN)
+    assert "t" in _by_key(out["text"])  # txt and mix's text questions: 2 benchmarks
+    monkeypatch.setattr(capability, "MIN_DOMAIN_BENCHMARKS", 3)
+    out = capability.run(r, ["vis", "txt", "mix"], ("hi", "lo"), n_boot=0, steps=600, indices=PLAN)
+    assert out["multimodal"]["settings"] == [] and out["text"]["settings"] == []
+    assert len(out["all"]["settings"]) == 4  # "all" has no such rule
