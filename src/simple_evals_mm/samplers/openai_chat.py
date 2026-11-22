@@ -10,6 +10,7 @@ Retry behaviour is ported from the v0.4 samplers (sampler/openrouter_sampler.py,
   * served engines: max_tokens is the server's context length unless --max-output-tokens is smaller; the server
     rejects a request whose input leaves less room (sglang / vLLM name the input length in the error), so it is re-sent
     once with max_tokens = context - input - 16 (below 256 tokens of room: context_overflow);
+  * an upstream content refusal inside a 200 (OpenRouter error_type "content_policy_violation"): refused, not retried;
   * the endpoint is gone (404, OpenRouter "No endpoints found" / "No allowed providers", an upstream model-not-found
     inside a 200, a served engine refusing connections after every retry): endpoint_unavailable, not retried.
 Per-request timeout: spec.request_timeout_s (served engines 6 h, APIs 3600 s; `--request-timeout-s`), passed to the
@@ -615,8 +616,11 @@ class OpenAIChatSampler(Sampler):
                 finish = (choices[0].finish_reason or "") if choices else ""
                 if err or not choices or finish == "error":  # OpenRouter reports upstream failures inside a 200
                     last = f"upstream error: {err or finish or 'no choices'}"
-                    if errors.classify_error(str(err)) == errors.ENDPOINT_UNAVAILABLE:  # the provider lost the model
+                    upstream_cause = errors.classify_error(str(err)) if err else None
+                    if upstream_cause == errors.ENDPOINT_UNAVAILABLE:  # the provider lost the model
                         raise errors.SamplerError(last, errors.ENDPOINT_UNAVAILABLE, exc_type="UpstreamError")
+                    if upstream_cause == errors.REFUSED:  # a content refusal (Gemini "content_policy_violation")
+                        raise errors.SamplerError(last, errors.REFUSED, exc_type="UpstreamError")
                 else:
                     r = self._parse(resp)
                     r.extra = {"sent_images": self._sent_images(api_messages), "max_tokens_sent": body[s.max_tokens_field],

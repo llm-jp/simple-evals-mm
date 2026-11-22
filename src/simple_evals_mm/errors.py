@@ -59,8 +59,11 @@ NEXT_STEP: dict[str, str] = {
     CONFIG_ERROR: "the API key / credits / permission is wrong; fix it (.env), then sem job resume -p JOB",
 }
 
-# Substrings of an API error (lower-cased) that mean the request itself was refused or cannot fit.
-REFUSAL_MARKERS = ("data_inspection_failed", "requires moderation", "was flagged", "content_policy", "content policy")
+# Substrings of an API error (lower-cased) that mean the request itself was refused or cannot fit. "blocked the
+# request": Gemini through OpenRouter (Google AI Studio) answers a blocked prompt with a 403 "Gemini blocked the request:
+# OTHER" that names no policy (it is not a permission problem: config_error would stop the job).
+REFUSAL_MARKERS = ("data_inspection_failed", "requires moderation", "was flagged", "content_policy", "content policy",
+                   "blocked the request")
 CONTEXT_MARKERS = ("longer than the model", "maximum context length", "context length", "context window",
                    "requested token count exceeds", "prompt is too long", "input is too long")
 

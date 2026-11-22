@@ -684,6 +684,14 @@ def test_request_rejected_after_every_retry_errors(clean_env, endpoints, monkeyp
     with pytest.raises(errors.SamplerError) as e:
         s([user("q")])
     assert e.value.cause == errors.PROVIDER_FAILED
+    # an upstream content refusal inside a 200 (Gemini through OpenRouter) is refused at once, not retried
+    blocked = ChatCompletion.model_validate({**json.loads(json.dumps(CHAT_REPLY)), "choices": [], "error": {
+        "message": "Gemini blocked the request: OTHER", "code": 403,
+        "metadata": {"error_type": "content_policy_violation", "provider_code": "OTHER"}}})
+    s._client = answering([blocked])
+    with pytest.raises(errors.SamplerError) as e:
+        s([user("q")])
+    assert e.value.cause == errors.REFUSED
 
 
 def _dropping_server(mode: str):
