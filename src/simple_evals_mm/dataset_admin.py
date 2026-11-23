@@ -323,13 +323,17 @@ def _jammeval_api() -> str:
     return f"{JAMMEVAL_GITLAB.replace('/datasets/jammeval', '')}/api/v4/projects/datasets%2Fjammeval/repository"
 
 
-def latest_jammeval(subset: str, pinned: str) -> tuple[str, bool]:
-    """(latest commit touching data/JAMMEval/<subset> on main, newer than the pinned commit?)."""
+def latest_jammeval(subset: str, pinned: str) -> tuple[str, bool, dict]:
+    """(the head of main, whether data/JAMMEval/<subset> changed after the pinned commit, the last commit touching
+    data/JAMMEval/<subset>: {id, committed_date}). The pin is a commit of the whole repository, so a newer head that
+    does not touch the subset (e.g. README edits) leaves the pinned data current."""
     api = _jammeval_api()
     path = urllib.parse.quote(f"data/JAMMEval/{subset}")
-    latest = _get_json(f"{api}/commits?ref_name=main&path={path}&per_page=1")[0]
+    last = _get_json(f"{api}/commits?ref_name=main&path={path}&per_page=1")[0]
+    head = _get_json(f"{api}/commits?ref_name=main&per_page=1")[0]
     pin = _get_json(f"{api}/commits/{pinned}")
-    return latest["id"], latest["id"] != pinned and latest["committed_date"] > pin["committed_date"]
+    newer = last["id"] != pinned and last["committed_date"] > pin["committed_date"]
+    return head["id"], newer, {"id": last["id"], "committed_date": last["committed_date"]}
 
 
 def latest_git(repo: str) -> str:
@@ -396,8 +400,14 @@ def check(names: list[str] | None = None, lookup=None, sources_check=None) -> tu
                         elif own:
                             row["changed_files"] = own
                 elif p["kind"] == "jammeval":
-                    latest, newer = latest_jammeval(p["repo"], p["revision"])
-                    row.update(latest=latest, status="outdated" if newer else "current")
+                    head, newer, last = latest_jammeval(p["repo"], p["revision"])
+                    row.update(latest=head, status="outdated" if newer else "current")
+                    if newer:
+                        row["changed_files"] = [f"data/JAMMEval/{p['repo']}/"]
+                        row["note"] = f"data/JAMMEval/{p['repo']} changed in {last['id'][:12]} ({last['committed_date'][:10]})"
+                    elif head != p["revision"]:
+                        row["note"] = (f"newer commit(s) do not touch data/JAMMEval/{p['repo']} (its last change: "
+                                       f"{last['id'][:12]}, {last['committed_date'][:10]})")
                 elif p["kind"] == "git":
                     latest = latest_git(p["repo"])
                     row.update(latest=latest, status="current" if latest == p["revision"] else "outdated")

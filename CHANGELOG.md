@@ -7,6 +7,9 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- `sem datasets check`: a JAMMEval subset's upstream revision is now the head of JAMMEval's main (it showed the last
+  commit touching the subset's folder, older than the pin, which looked like a mismatch); when newer commits do
+  not touch the subset, a note gives its last data change. The status logic is unchanged.
 - `sem datasets check` compares only the files a dataset reads: `dataset_admin.UPSTREAM_PATHS` (mechaja, mechaja_v2_mini,
   mmmu_pro, mmmu_pro_vision, zerobench, zerobench_sub) narrows a repo shared by several datasets, so `mechaja` is no
   longer reported outdated by a change to MECHA-ja v2. New `--markdown` for `sem datasets check` and
