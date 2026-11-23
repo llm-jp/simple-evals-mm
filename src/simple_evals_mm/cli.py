@@ -297,6 +297,10 @@ def _print_summary(st: store_mod.JobStore) -> None:
         rows.append([name, reward, ci, kk.strip() or "—", trials, ver, ", ".join(f"{c}={n}" for c, n in sorted(causes.items())) or "—",
                      _dash(s["model_cost_usd"], "${:.4f}"), _dash(s["judge_cost_usd"], "${:.4f}")])
     print("\n".join(_table(rows)))
+    seen = sorted({c for r in rows[1:] for c in (x.split("=")[0] for x in r[6].split(", ")) if c in errors.POLICY})
+    for i, c in enumerate(seen):  # what each cause shown means (errors.POLICY / NEXT_STEP, docs/jobs/failures.md)
+        how = "counted as 0" if errors.POLICY[c].counts_in_score else "excluded from the score"
+        print(f"{'causes' if i == 0 else '':8}  {c} ({how}): {errors.NEXT_STEP[c].replace('JOB', str(st.dir))}")
 
 
 def print_resume_decision(rep: dict) -> None:

@@ -630,7 +630,7 @@ def run_trials(job: Job) -> None:
 
     limit = int((job.cfg.get("retry") or {}).get("abort_after_consecutive", DEFAULTS["retry"]["abort_after_consecutive"]) or 0)
     streak: list[tuple[str, TrialResult]] = []  # the current run of breaker causes, not written yet
-    tripped, dropped, endpoint_change = False, 0, None
+    tripped, dropped, endpoint_change, config_error = False, 0, None, None
 
     def write(name: str, trial: TrialResult) -> None:
         k = trial.attempt
@@ -659,6 +659,15 @@ def run_trials(job: Job) -> None:
                     name = running.pop(f)
                     trial = f.result()  # a fatal error (bug, ThinkLeakError) stops the job; finished trials are kept
                     bar.update(1)
+                    if (trial.exception_info or {}).get("cause") == errors.CONFIG_ERROR:
+                        # a key / credits / permission problem fails every trial: stop at the first one, not written
+                        # (sem job resume regenerates it once fixed)
+                        if not tripped:
+                            config_error = (trial.exception_info or {}).get("message", "")
+                            tripped = True
+                            print(f"[job] configuration error: {config_error[:200]}; no new trials", flush=True)
+                        dropped += 1
+                        continue
                     if _breaker(trial):
                         if tripped:
                             dropped += 1
@@ -689,6 +698,9 @@ def run_trials(job: Job) -> None:
             raise
         finally:
             bar.close()
+    if tripped and config_error is not None:
+        raise JobError(f"configuration error (API key / credits / permission): {config_error[:300]}; {dropped} "
+                       f"trial(s) not written. Fix it (.env), then: sem job resume -p {st.dir}")
     if tripped and endpoint_change:
         raise JobError(f"endpoint change: {endpoint_change}; {dropped} trial(s) not written. {BREAKER_TRIPPED}")
     if tripped:
