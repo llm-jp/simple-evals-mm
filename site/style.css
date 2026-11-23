@@ -669,6 +669,8 @@ table.ar .ar-task { position: sticky; left: 0; text-align: left; background: var
 table.ar thead .ar-task { z-index: 4; }
 table.ar .ar-task .ar-sub { display: block; font-size: 11px; font-weight: 400; color: var(--text-muted); margin-top: 1px; }
 table.ar tr.ar-cat-row th { background: var(--surface-2); color: var(--text-primary); font-size: 13px; font-weight: 600; text-align: left; }
+table.ar tr.ar-cat-row .ar-band { position: sticky; left: 12px; display: inline-block; }
+table.ar thead .ar-glabel { position: sticky; left: calc(var(--ar-first, 0px) + 12px); display: inline-block; }
 table.ar td { color: var(--text-secondary); }
 table.ar td.ar-info { color: var(--text-primary); }
 table.ar td.ar-na { color: var(--text-muted); }
