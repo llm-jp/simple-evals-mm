@@ -7,6 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: the leaderboard table is restyled (after SWE-Sweep): the rank in its own column with the top three in gold /
+  silver / bronze, the organization after the model name, monospace numbers with the score in one accent colour (the %
+  and ± std small and muted), a small uppercase header; the score-bar column is gone. Phones show the same table,
+  scrolled sideways with the rank and model columns kept in view, instead of the card list.
 - Site: the leaderboard shows each row's rank (by the score shown; equal scores share a rank); the third rate is
   named **Input too long** (an input over the model's context window), and the rate headers explain themselves on
   hover; on phones a card's five stats sit on one row.

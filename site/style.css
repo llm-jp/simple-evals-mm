@@ -200,23 +200,46 @@ svg.chart { width: 100%; height: auto; display: block; font-family: inherit; }
 .logo svg { width: 11px; height: 11px; }
 .logo b { font-size: 10px; line-height: 1; }
 
-/* table */
-.table-wrap { overflow-x: auto; margin-top: 18px; border: 1px solid var(--border); border-radius: 12px; }
+/* table (like SWE-Sweep): monospace numbers, the score in one accent colour, a small uppercase header on a tinted row,
+   thin row dividers; on phones the rank and model columns stay on the left while the table scrolls sideways */
+:root { --score: #c2410c; --rank1: #9a6b00; --rank2: #5f6b78; --rank3: #9c4f22; }
+:root[data-theme-shown="dark"] { --score: #f0a060; --rank1: #e3b341; --rank2: #b8c0cc; --rank3: #d99a6c; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
 table.lb { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
-table.lb th, table.lb td { padding: 9px 12px; text-align: right; white-space: nowrap; }
-table.lb th:first-child, table.lb td:first-child { text-align: left; }
-table.lb thead th { background: var(--surface-2); color: var(--text-secondary); font-weight: 600; font-size: 13px; cursor: pointer; user-select: none; position: sticky; top: 0; }
-table.lb thead th.sorted::after { content: " \2193"; }
-table.lb thead th.sep, table.lb td.sep { border-left: 1px solid var(--border); }
+table.lb th, table.lb td { padding: 12px 12px; text-align: right; white-space: nowrap; }
+table.lb th.mcell, table.lb td.mcell { text-align: left; }
+table.lb > thead > tr > th { background: var(--surface-2); color: var(--text-muted); font-family: var(--mono); font-weight: 500; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .08em; line-height: 1.3; vertical-align: bottom; cursor: pointer; user-select: none;
+  position: sticky; top: 0; border-bottom: 1px solid var(--border); }
+table.lb > thead > tr > th.sorted { color: var(--text-secondary); }
+table.lb > thead > tr > th.sorted::after { content: " \2193"; }
+table.lb thead th.rk { cursor: default; }
 table.lb tbody tr { border-top: 1px solid var(--border); }
-table.lb tbody tr:hover { background: var(--surface-2); }
+table.lb tbody tr:first-child { border-top: 0; }
+table.lb tbody tr:hover, table.lb tbody tr:hover td.rk, table.lb tbody tr:hover td.mcell { background: var(--surface-1); }
 table.lb .logo { border: none; background: none; width: 16px; height: 16px; }
 table.lb .logo svg { width: 15px; height: 15px; }
 table.lb .logo b { font-size: 13px; font-weight: 800; }
-td.hl, th.hl { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+/* dark theme: the brand marks (several are black) sit on the white disc the other pages use */
+:root[data-theme-shown="dark"] table.lb .logo { background: #ffffff; width: 20px; height: 20px; }
+:root[data-theme-shown="dark"] table.lb .logo svg { width: 13px; height: 13px; }
+:root[data-theme-shown="dark"] table.lb .logo b { font-size: 11px; }
+/* rank: its own column (by the score shown, ties share a rank), the top three in gold / silver / bronze */
+table.lb th.rk, table.lb td.rk { width: 44px; min-width: 44px; max-width: 44px; box-sizing: border-box; padding-left: 6px; padding-right: 6px; text-align: center; }
+table.lb td.rk { font-family: var(--mono); font-size: 13px; color: var(--text-muted); }
+table.lb td.rk.top1 { color: var(--rank1); font-weight: 700; }
+table.lb td.rk.top2 { color: var(--rank2); font-weight: 700; }
+table.lb td.rk.top3 { color: var(--rank3); font-weight: 700; }
+/* the score: monospace in the accent colour; the % and the std small and muted */
+table.lb td.overall { font-family: var(--mono); }
+table.lb td.overall .sc { color: var(--score); font-weight: 600; font-size: 15px; }
+table.lb td.overall .sc small { font-size: 11px; font-weight: 400; margin-left: 1px; opacity: .75; }
+table.lb td.overall sup.subset { color: var(--score); }
+/* the other numbers: monospace, muted */
+table.lb td.num { font-family: var(--mono); font-size: 13px; color: var(--text-muted); }
 .mname { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.mname .dev { font-weight: 400; font-size: 12px; color: var(--text-muted); margin-left: -2px; }
 .effort-tag { font-family: var(--mono); font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-weight: 500; }
-.overall { font-weight: 700; }
 .pm { color: var(--text-muted); font-size: 11px; }
 
 /* about */
@@ -260,8 +283,8 @@ footer a { color: var(--text-secondary); }
 
 /* per-configuration inference settings (click a table row) */
 table.lb tbody tr.has-settings { cursor: pointer; }
-table.lb tbody tr.has-settings td:first-child .mname::after { content: "\25B8"; color: var(--text-muted); font-size: 11px; margin-left: 2px; }
-table.lb tbody tr.has-settings.open td:first-child .mname::after { content: "\25BE"; }
+table.lb tbody tr.has-settings td.mcell .mname::after { content: "\25B8"; color: var(--text-muted); font-size: 11px; margin-left: 2px; }
+table.lb tbody tr.has-settings.open td.mcell .mname::after { content: "\25BE"; }
 table.lb tbody tr.settings-row, table.lb tbody tr.settings-row:hover { background: var(--surface-2); border-top: none; }
 table.lb tbody tr.settings-row td { white-space: normal; text-align: left; padding: 4px 16px 14px; }
 dl.settings { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
@@ -291,41 +314,37 @@ table.prov tr.sel td { font-weight: 600; }
 
 /* narrow phones: the header's sizes are set further below (every link, the logo and the toggle fit 390 px) */
 
-/* phones: results as cards instead of the table (like DeepSWE) */
-.lb-list { display: none; }
+/* phones: the same table, scrolled sideways inside its box; rank and model stay on the left (opaque), a long model
+   name wraps so the sticky part stays narrow, the organization is left out; the settings row stays in view */
 @media (max-width: 760px) {
-  .table-wrap { display: none; }
-  .lb-list { display: block; border: 1px solid var(--border); border-radius: 10px; padding: 4px 14px; background: var(--surface-1); }
-  .lb-card { padding: 12px 0; border-top: 1px solid var(--border); cursor: pointer; }
-  .lb-card:first-child { border-top: 0; }
-  .lc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .lc-head .mname { font-size: 15px; }
-  .lc-score { font-weight: 700; font-size: 16px; white-space: nowrap; }
-  .lc-bar { height: 8px; margin: 8px 0 6px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
-  .lc-bar i { display: block; height: 100%; border-radius: 4px; opacity: 0.85; }
-  /* a stat grid on one row: Cost / Q, Output tokens / Q, Cut off, Refused, Input too long (equal columns); label above
-     value (a label may wrap to two lines, the same on every card), tabular digits: every card has the same layout */
-  .lc-meta { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0 8px; line-height: 1.2; }
-  .lc-stat { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
-  .lc-stat span { font-size: 11px; color: var(--text-muted); min-height: 2.4em; overflow-wrap: anywhere; }
-  .lc-stat b { font-size: 13px; color: var(--text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .lc-settings { margin-top: 10px; cursor: auto; }
-  .lc-settings dl.settings { grid-template-columns: 1fr; gap: 2px; }
-  .lc-settings dl.settings dd { margin-bottom: 6px; }
+  table.lb { min-width: 640px; font-size: 13.5px; }
+  table.lb th, table.lb td { padding: 11px 9px; }
+  table.lb th.rk, table.lb td.rk { position: sticky; left: 0; z-index: 2; background: var(--bg); width: 34px; min-width: 34px; max-width: 34px; padding-left: 4px; padding-right: 4px; }
+  table.lb th.mcell, table.lb td.mcell { position: sticky; left: 34px; z-index: 2; background: var(--bg); white-space: normal; width: 172px; min-width: 172px; max-width: 172px; box-sizing: border-box;
+    box-shadow: inset -1px 0 0 var(--border); }
+  table.lb thead th.rk, table.lb thead th.mcell { z-index: 3; background: var(--surface-2); }
+  /* every row the same two-line shape: logo + name (wraps only if the name itself is very long), the effort tag on
+     its own line under the name; no expand arrow (the whole row is tappable) */
+  table.lb td.mcell .mname { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 7px; line-height: 1.3; }
+  table.lb td.mcell .mname .logo { grid-column: 1; grid-row: 1; align-self: start; margin-top: 1px; }
+  table.lb td.mcell .mname .mn { grid-column: 2; grid-row: 1; overflow-wrap: anywhere; }
+  table.lb td.mcell .mname .effort-tag { grid-column: 2; grid-row: 2; justify-self: start; white-space: nowrap; }
+  table.lb tbody tr.has-settings td.mcell .mname::after, table.lb tbody tr.has-settings.open td.mcell .mname::after { content: none; display: none; }
+  .mname .dev { display: none; }
+  table.lb tbody tr.settings-row td { padding: 4px 0 14px; }
+  table.lb tbody tr.settings-row dl.settings { position: sticky; left: 0; box-sizing: border-box; width: calc(100vw - 50px); padding: 0 12px;
+    grid-template-columns: 1fr; gap: 2px; }
+  table.lb tbody tr.settings-row dl.settings > * { min-width: 0; }
+  table.lb tbody tr.settings-row dl.settings dd { margin-bottom: 6px; }
+  table.lb tbody tr.settings-row dl.settings > dd > code { overflow-wrap: anywhere; word-break: break-all; }
+  /* the job / per-dataset tables keep their rows on one line and scroll inside their box */
+  table.lb tbody tr.settings-row table.prov th, table.lb tbody tr.settings-row table.prov td { white-space: nowrap; overflow-wrap: normal; }
 }
 
-/* desktop table: score bar column (0-100%) with a +/- std whisker, like DeepSWE */
-table.lb th.barcol { cursor: default; }
-table.lb td.barcol { width: 40%; min-width: 120px; padding-left: 4px; padding-right: 4px; }
 /* the three rate columns: narrow padding, so the table keeps its width with Input too long */
 table.lb th.rate, table.lb td.rate { padding-left: 7px; padding-right: 7px; }
 /* their headers may wrap to two lines ("Input too / long"), so the table fits its container in every view */
 table.lb th.rate { white-space: normal; min-width: 52px; max-width: 76px; line-height: 1.2; vertical-align: bottom; }
-.sbar { position: relative; height: 10px; background: var(--surface-2); border-radius: 3px; }
-.sbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; opacity: 0.85; }
-.sbar .err { position: absolute; top: 50%; height: 0; border-top: 1px solid var(--text-secondary); }
-.sbar .err::before, .sbar .err::after { content: ""; position: absolute; top: -5px; height: 9px; border-left: 1px solid var(--text-secondary); }
-.sbar .err::before { left: 0; } .sbar .err::after { right: 0; }
 
 /* x-axis controls sit under the chart, next to the axis; the legend on the left */
 .chart-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 16px; margin-top: 6px; }
@@ -477,8 +496,7 @@ table.parity-m sup a { font-size: 10px; margin-left: 1px; }
 /* phones: a scrolling box (provenance, parity, the trends fit table) scrolls inside the page instead of widening it;
    grid / flex items default to min-width: auto (as wide as their content), so they get 0 */
 .prov-wrap, .parity-wrap, .scroll-x { max-width: 100%; }
-.lc-settings, .lc-settings dl.settings, .lc-settings dl.settings > *, .tr-sec, .fit-details, .method { min-width: 0; }
-.lc-settings code { overflow-wrap: anywhere; word-break: break-all; }
+.tr-sec, .fit-details, .method { min-width: 0; }
 /* phones: the chart legend packs its entries (as on Epoch AI's chart) */
 @media (max-width: 600px) { .chart-legend { gap: 4px 10px; font-size: 12.5px; } }
 /* parity on phones: a list by model instead of the benchmarks x models table */
@@ -690,6 +708,3 @@ table.ar sup.subset { color: inherit; }
 table.ar th.ar-task a { color: inherit; text-decoration: none; }
 table.ar th.ar-task a:hover { text-decoration: underline; }
 
-/* the rank before a model's name (by the score shown): fixed width, so names stay aligned */
-.mname .rank { display: inline-block; min-width: 1.6em; margin-right: 6px; text-align: right; color: var(--text-muted);
-  font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
