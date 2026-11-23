@@ -27,7 +27,7 @@ import os
 import threading
 from io import BytesIO
 
-from simple_evals_mm.errors import SetupError
+from simple_evals_mm.errors import GEMINI_CONTENT_STOPS, SetupError
 from simple_evals_mm.models import Image, Message, Response, Text, ToolCall
 from simple_evals_mm.samplers.base import Sampler, describe_image, retry_call
 from simple_evals_mm.samplers.openai_chat import (
@@ -36,8 +36,6 @@ from simple_evals_mm.samplers.openai_chat import (
     _encode_pil,
 )
 
-REFUSAL_FINISH = {"safety", "recitation", "blocklist", "prohibited_content", "spii", "image_safety",
-                  "image_prohibited_content", "image_recitation"}
 RETRY_CODES = (429, 500, 503, 504)
 
 
@@ -255,7 +253,7 @@ class GeminiSampler(Sampler):
             finish = "content_filter"  # the prompt itself was blocked
         if finish == "max_tokens":
             finish = "length"
-        elif finish in REFUSAL_FINISH:
+        elif finish in GEMINI_CONTENT_STOPS:
             finish = "content_filter"
         elif finish == "stop" and tool_calls:
             finish = "tool_calls"

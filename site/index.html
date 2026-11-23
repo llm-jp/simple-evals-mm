@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="A reproducible, reliable evaluation framework for LLMs and VLMs on English and Japanese tasks.">
 <meta name="twitter:image" content="https://llm-jp.github.io/simple-evals-mm/assets/og-image.png?v=fa1caa9ccb">
 <script>/* saved theme before first paint */ const r = document.documentElement; let t = null; try { t = localStorage.getItem("theme"); } catch (e) {} if (t === "dark" || t === "light") r.dataset.theme = t; r.dataset.themeShown = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");</script>
-<link rel="stylesheet" href="style.css?v=1daea1d4b9">
+<link rel="stylesheet" href="style.css?v=e9c58de9ef">
 <!-- Google Analytics (the same GA4 property as speed1313.github.io) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-7X0Q0NSDB9"></script>
 <script>
@@ -241,7 +241,7 @@
 </footer>
 
 <script src="logos.js?v=95862aac74"></script>
-<script src="data.js?v=643b3229a3"></script>
+<script src="data.js?v=7d44ec6d57"></script>
 <script src="share.js?v=4f2f258deb"></script>
 <script>
 (function () {
@@ -487,7 +487,7 @@
   }
   const logoHTML = m => `<span class="logo" style="border-color:var(--border)">${m.logo && (LOGOS.images || {})[m.logo]
     ? `<img src="${esc(LOGOS.images[m.logo])}" alt="" style="width:100%;height:100%;object-fit:contain">` : m.logo && LOGOS.logos[m.logo]
-    ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="${nameColor(m)}" d="${LOGOS.logos[m.logo]}"/></svg>` : `<b style="color:${nameColor(m)}">${esc(m.dev[0])}</b>`}</span>`;  // nameColor: near-black logos follow the theme
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="${logoColor(m)}" d="${LOGOS.logos[m.logo]}"/></svg>` : `<b style="color:${logoColor(m)}">${esc(m.dev[0])}</b>`}</span>`;  // the brand colour: the disc is always white (in dark mode too)
 
   // ---- chart ----
   const svg = document.getElementById("chart");
@@ -950,25 +950,46 @@
       const lv = [["max", m.max], ["low", m.low]].filter(([e, l]) => l && on(m, e)).map(([eff, lvl]) => ({ m, eff, lvl }));
       if (state.view === "best" && lv.length > 1) cols.push((ov(lv[1]) ?? -1) > (ov(lv[0]) ?? -1) ? lv[1] : lv[0]); else cols.push(...lv);
     }
-    const head = `<tr><th class="ar-task">Benchmark</th>` + cols.map(c => `<th class="ar-set" title="${esc(c.m.name + " (" + effLabel(c.m, c.eff) + ")" + (c.m.note ? "\n" + c.m.note : ""))}">`
+    // as the results table of a model card: model groups over the columns, a model-info section, the categories as
+    // bands, a benchmark's variant under its name, the best and second-best score of each row highlighted
+    const GROUP = { proprietary: "Proprietary", open: "Open weights" };
+    const groups = [];
+    for (const c of cols) { const g = GROUP[c.m.type] || "Other"; if (groups.length && groups[groups.length - 1].g === g) groups[groups.length - 1].n++; else groups.push({ g, n: 1 }); }
+    const startsGroup = new Set(); { let k = 0; for (const g of groups) { startsGroup.add(k); k += g.n; } }
+    const sep = i => startsGroup.has(i) && i > 0 ? " ar-sep" : "";
+    const head = `<tr><th class="ar-task ar-corner" rowspan="2"></th>` + groups.map((g, gi) => `<th class="ar-group${gi ? " ar-sep" : ""}" colspan="${g.n}"><span class="ar-glabel">${esc(g.g)}</span></th>`).join("") + "</tr>"
+      + `<tr>` + cols.map((c, i) => `<th class="ar-set${sep(i)}" title="${esc(c.m.name + " (" + effLabel(c.m, c.eff) + ")" + (c.m.note ? "\n" + c.m.note : ""))}">`
       + `<span class="ar-name">${logoHTML(c.m)}${esc(c.m.name)}</span><span class="effort-tag">${esc(effLabel(c.m, c.eff))}</span></th>`).join("") + "</tr>";
-    const bestOf = vals => { const v = vals.filter(x => x != null); return v.length ? Math.max(...v) : null; };
-    let body = "";
+    const split = label => { const m = /^(.*?)\s*\(([^()]*)\)$/.exec(label); return m ? [m[1], m[2]] : [label, ""]; };
+    const nameCell = (name, sub, href) => `<th class="ar-task">${href ? `<a href="${href}" title="This benchmark in Explore">${esc(name)}</a>` : esc(name)}${sub ? `<span class="ar-sub">${esc(sub)}</span>` : ""}</th>`;
+    // the band spans every column; its label (not the wide cell) sticks at the left, as the benchmark names do
+    const band = label => `<tr class="ar-cat-row"><th colspan="${cols.length + 1}"><span class="ar-band">${esc(label)}</span></th></tr>`;
+    let body = band("Model info")
+      + `<tr>${nameCell("Params (B)", "activated / total")}` + cols.map((c, i) => { const p = c.m.params;
+        return `<td class="ar-info${sep(i)}">${p ? `${esc(p.active)}/${esc(p.total)}` : "–"}</td>`; }).join("") + "</tr>"
+      + `<tr>${nameCell("Released")}` + cols.map((c, i) => `<td class="ar-info${sep(i)}">${esc(c.m.released || "–")}</td>`).join("") + "</tr>";
     for (const cat of (D.categories || []).filter(c => tasks.some(t => t.category === c))) {
-      body += `<tr class="ar-cat-row"><th class="ar-task" colspan="${cols.length + 1}">${esc(cat)}</th></tr>`;
+      body += band(cat);
       for (const t of tasks.filter(t => t.category === cat)) {
-        const best = bestOf(cols.map(c => (x => x && !x.subset ? x.score : null)(c.lvl.tasks[t.key])));
-        body += `<tr><th class="ar-task"><a href="explore/?view=tasks&amp;d=${encodeURIComponent(t.key)}" title="This benchmark in Explore">${esc(t.label)}</a></th>` + cols.map(c => {
+        // ranked by the shown value (one decimal), so equal-looking scores tie
+        const vals = cols.map(c => (x => x && !x.subset ? +x.score.toFixed(1) : null)(c.lvl.tasks[t.key]));
+        const ranked = [...new Set(vals.filter(v => v != null))].sort((a, b) => b - a);
+        const tied = vals.filter(v => v === ranked[0]).length > 1;  // first place tied: no second best (as the model card)
+        const [name, sub] = split(t.label);
+        body += `<tr>${nameCell(name, sub, `explore/?view=tasks&amp;d=${encodeURIComponent(t.key)}`)}` + cols.map((c, i) => {
           const x = c.lvl.tasks[t.key];
-          if (!x) return (c.lvl.refused || {})[t.key] ? `<td class="ar-na">refused</td>` : `<td class="ar-na">–</td>`;
-          return `<td${!x.subset && x.score === best ? ' class="ar-best"' : ""}>${x.score.toFixed(1)}${x.subset ? `<sup class="subset">*</sup>` : ""}</td>`;
+          if (!x) return `<td class="ar-na${sep(i)}">${(c.lvl.refused || {})[t.key] ? "refused" : "–"}</td>`;
+          const rank = x.subset ? -1 : ranked.indexOf(+x.score.toFixed(1));
+          const cls = rank === 0 ? " ar-best" : rank === 1 && !tied ? " ar-second" : "";
+          return `<td class="${(cls + sep(i)).trim()}"><span class="v">${x.score.toFixed(1)}${x.subset ? `<sup class="subset">*</sup>` : ""}</span></td>`;
         }).join("") + "</tr>";
       }
     }
     const tbl = document.getElementById("ar-table");
     tbl.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
-    tbl.style.setProperty("--ar-head", tbl.tHead.offsetHeight + "px");  // the category rows stick right under the header
-    document.getElementById("ar-note").textContent = `% correct, mean over attempts; the best score of each row in bold. "–" = not evaluated; "refused" = left out by the site build. A benchmark's name opens it in Explore.`
+    // a group's label sticks just right of the benchmark column (which stays at the left over it)
+    tbl.style.setProperty("--ar-first", tbl.querySelector("th.ar-task").offsetWidth + "px");
+    document.getElementById("ar-note").textContent = `% correct, mean over attempts; the best score of each row highlighted dark, the second best light. Params: billions, activated / total (open-weight models). "–" = not evaluated; "refused" = left out by the site build. A benchmark's name opens it in Explore.`
       + (cols.some(c => tasks.some(t => (c.lvl.tasks[t.key] || {}).subset)) ? " * Text-only subset (questions without an image): not comparable, not in Overall." : "");
   }
   { const sel = document.getElementById("ar-cat");

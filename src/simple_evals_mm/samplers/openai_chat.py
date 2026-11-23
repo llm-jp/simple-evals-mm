@@ -10,6 +10,13 @@ Retry behaviour is ported from the v0.4 samplers (sampler/openrouter_sampler.py,
   * served engines: max_tokens is the server's context length unless --max-output-tokens is smaller; the server
     rejects a request whose input leaves less room (sglang / vLLM name the input length in the error), so it is re-sent
     once with max_tokens = context - input - 16 (below 256 tokens of room: context_overflow);
+  * OpenRouter: max_tokens is the pinned endpoint's max_completion_tokens, which some endpoints set to the whole
+    context; OpenRouter lowers it only by its own (low) estimate of the input, and the provider rejects input + max_tokens
+    over the window. The same refit applies: the input length named in the error (the provider's, else OpenRouter's
+    estimate), else the endpoint's context length and a conservative estimate of the input (UTF-8 bytes / 3, 4096 per
+    image); at most 3 refits, each lower than the last. An input longer than the context stays context_overflow;
+  * an upstream content refusal inside a 200 (OpenRouter error_type "content_policy_violation", or finish_reason
+    "error" with a Gemini content stop as native_finish_reason, e.g. RECITATION): refused, not retried;
   * the endpoint is gone (404, OpenRouter "No endpoints found" / "No allowed providers", an upstream model-not-found
     inside a 200, a served engine refusing connections after every retry): endpoint_unavailable, not retried.
 Per-request timeout: spec.request_timeout_s (served engines 6 h, APIs 3600 s; `--request-timeout-s`), passed to the
@@ -61,15 +68,44 @@ _CTX_RES = (
     # prompt contains 1000 input tokens, for a total of 9192 tokens."
     re.compile(r"maximum context length is (?P<ctx>\d+) tokens\. However, you requested \d+ output tokens and your "
                r"prompt contains (?:at least )?(?P<inp>\d+) input tokens"),
+    # vLLM, the input alone is too long (never refitted): "The input (293266 tokens) is longer than the model's context
+    # length (262144 tokens)."
+    re.compile(r"The input \((?P<inp>\d+) tokens\) is longer than the model\W{1,3}s context length \((?P<ctx>\d+) tokens\)"),
+    # OpenRouter's own check, by its estimate of the input: "This endpoint's maximum context length is 262144 tokens.
+    # However, you requested about 568372 tokens (306231 of text input, 262141 in the output)."
+    re.compile(r"maximum context length is (?P<ctx>\d+) tokens\. However, you requested about \d+ tokens "
+               r"\((?P<inp>\d+) of text input"),
 )
+ESTIMATE_BYTES_PER_TOKEN = 3  # conservative: English ~4.5, Japanese ~3.6, code ~3.5 UTF-8 bytes per token
+ESTIMATE_IMAGE_TOKENS = 4096
 
 
-def _fit_max_tokens(err: str, max_tokens: int, margin: int = 16, floor: int = 256):
-    """max_tokens that fits the context given a served engine's overflow error text, or None."""
+def _estimate_input_tokens(api_messages: list[dict]) -> int:
+    """A conservative (high) estimate of a request's input tokens, for an overflow error that names no input length."""
+    n = 0
+    for m in api_messages:
+        c = m.get("content")
+        parts = c if isinstance(c, list) else [{"type": "text", "text": c or ""}]
+        for p in parts:
+            if p.get("type") == "text":
+                n += len((p.get("text") or "").encode()) // ESTIMATE_BYTES_PER_TOKEN + 1
+            elif p.get("type") == "image_url":
+                n += ESTIMATE_IMAGE_TOKENS
+        n += 16 + len(json.dumps(m.get("tool_calls") or "").encode()) // ESTIMATE_BYTES_PER_TOKEN
+    return n
+
+
+def _fit_max_tokens(err: str, max_tokens: int, margin: int = 16, floor: int = 256, context: int | None = None,
+                    estimate: int | None = None):
+    """max_tokens that fits the context given an overflow error text, or None (no room, not an overflow). The input
+    length is the one the error names; an overflow error that names none uses `context` and `estimate` (when given)."""
     m = next((m for r in _CTX_RES if (m := r.search(err))), None)
-    if not m:
+    if m:
+        ctx, inp = int(m["ctx"]), int(m["inp"])
+    elif context and estimate is not None and errors.classify_error(err) == errors.CONTEXT_OVERFLOW:
+        ctx, inp = int(context), estimate
+    else:
         return None
-    ctx, inp = int(m["ctx"]), int(m["inp"])
     fit = ctx - inp - margin
     if fit < floor or fit >= max_tokens:
         return None
@@ -571,6 +607,9 @@ class OpenAIChatSampler(Sampler):
             api_messages = self._shrink_images(api_messages, 0.8)
             shrinks += 1
         served = self.served
+        # the context-overflow refit: served engines and OpenRouter (whose endpoints may default max_tokens to the context)
+        refit = served or s.provider == "openrouter"
+        refits = 0
         last, refused_conn = "", False
         answered = True  # every failed try so far was an error answer from the provider (no timeout / connection error)
         trial = rl = conn = 0
@@ -580,10 +619,16 @@ class OpenAIChatSampler(Sampler):
             try:
                 resp = self.client.chat.completions.create(model=s.request_model, messages=api_messages, extra_body=body)
             except openai.BadRequestError as e:
-                fitted = _fit_max_tokens(str(e), body[s.max_tokens_field]) if served else None
+                fitted = None
+                if refit and refits < 3:
+                    ep = self.endpoint_info or {}
+                    ctx = None if served else (ep.get("context_length") or ep.get("catalog_context_length"))
+                    fitted = _fit_max_tokens(str(e), body[s.max_tokens_field], context=ctx,
+                                             estimate=_estimate_input_tokens(api_messages) if ctx else None)
                 if fitted is not None:
                     print(f"[WARN] context overflow: max_tokens {body[s.max_tokens_field]} -> {fitted}")
                     body[s.max_tokens_field] = fitted
+                    refits += 1
                     continue
                 if any(sig in str(e) for sig in TRANSIENT_400):
                     last = f"transient 400: {str(e)[:160]}"
@@ -595,8 +640,11 @@ class OpenAIChatSampler(Sampler):
             except openai.APIStatusError as e:
                 if e.status_code == 404:  # the model / pinned endpoint / deployment is gone
                     raise errors.SamplerError(str(e), errors.ENDPOINT_UNAVAILABLE, exc_type=type(e).__name__) from e
-                if e.status_code in (401, 402, 403):  # key / credits: retrying cannot help
-                    raise errors.SamplerError(str(e), exc_type=type(e).__name__) from e
+                if e.status_code in (401, 402, 403):  # key / credits / permission: retrying cannot help
+                    # a 403 can also be a content refusal (OpenRouter moderation): the text decides first
+                    cause = errors.classify_error(str(e))
+                    raise errors.SamplerError(str(e), errors.CONFIG_ERROR if cause == errors.PROVIDER_FAILED else cause,
+                                              exc_type=type(e).__name__) from e
                 if e.status_code == 413 and shrinks < 8:  # provider body limit: shrink the images, not the retry budget
                     api_messages = self._shrink_images(api_messages, 0.8)
                     shrinks += 1
@@ -612,8 +660,15 @@ class OpenAIChatSampler(Sampler):
                 finish = (choices[0].finish_reason or "") if choices else ""
                 if err or not choices or finish == "error":  # OpenRouter reports upstream failures inside a 200
                     last = f"upstream error: {err or finish or 'no choices'}"
-                    if errors.classify_error(str(err)) == errors.ENDPOINT_UNAVAILABLE:  # the provider lost the model
+                    upstream_cause = errors.classify_error(str(err)) if err else None
+                    if upstream_cause == errors.ENDPOINT_UNAVAILABLE:  # the provider lost the model
                         raise errors.SamplerError(last, errors.ENDPOINT_UNAVAILABLE, exc_type="UpstreamError")
+                    native = str(_extra(choices[0], "native_finish_reason") or "") if choices else ""
+                    if native.lower() in errors.GEMINI_CONTENT_STOPS:  # Gemini stopped it (RECITATION, SAFETY, ...)
+                        last = f"upstream error: {finish or 'error'} (native_finish_reason {native})"
+                        upstream_cause = errors.REFUSED
+                    if upstream_cause == errors.REFUSED:  # a content refusal (Gemini "content_policy_violation")
+                        raise errors.SamplerError(last, errors.REFUSED, exc_type="UpstreamError")
                 else:
                     r = self._parse(resp)
                     r.extra = {"sent_images": self._sent_images(api_messages), "max_tokens_sent": body[s.max_tokens_field],
