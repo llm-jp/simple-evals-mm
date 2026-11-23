@@ -323,11 +323,13 @@ table.prov tr.sel td { font-weight: 600; }
   table.lb th.mcell, table.lb td.mcell { position: sticky; left: 34px; z-index: 2; background: var(--bg); white-space: normal; width: 172px; min-width: 172px; max-width: 172px; box-sizing: border-box;
     box-shadow: inset -1px 0 0 var(--border); }
   table.lb thead th.rk, table.lb thead th.mcell { z-index: 3; background: var(--surface-2); }
-  /* the name flows as text (logo, name, effort tag), wrapping inside the narrow sticky column */
-  table.lb td.mcell .mname { display: block; line-height: 1.45; }
-  table.lb td.mcell .mname > * { vertical-align: -2px; margin-right: 5px; }
-  table.lb td.mcell .mname .logo { display: inline-flex; vertical-align: -3px; margin-right: 6px; }
-  table.lb td.mcell .mname .effort-tag { vertical-align: 1px; white-space: nowrap; }
+  /* every row the same two-line shape: logo + name (wraps only if the name itself is very long), the effort tag on
+     its own line under the name; no expand arrow (the whole row is tappable) */
+  table.lb td.mcell .mname { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 7px; line-height: 1.3; }
+  table.lb td.mcell .mname .logo { grid-column: 1; grid-row: 1; align-self: start; margin-top: 1px; }
+  table.lb td.mcell .mname .mn { grid-column: 2; grid-row: 1; overflow-wrap: anywhere; }
+  table.lb td.mcell .mname .effort-tag { grid-column: 2; grid-row: 2; justify-self: start; white-space: nowrap; }
+  table.lb tbody tr.has-settings td.mcell .mname::after, table.lb tbody tr.has-settings.open td.mcell .mname::after { content: none; display: none; }
   .mname .dev { display: none; }
   table.lb tbody tr.settings-row td { padding: 4px 0 14px; }
   table.lb tbody tr.settings-row dl.settings { position: sticky; left: 0; box-sizing: border-box; width: calc(100vw - 50px); padding: 0 12px;
