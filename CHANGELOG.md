@@ -7,6 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
+- Site: the leaderboard's rates read the same everywhere (`0.0%`, `<0.1%`, `12.3%`); a third rate, **Too long**
+  (`context_overflow`: the input exceeded the model's context, counted as 0), after Refused; trials left out of the
+  score (transient failures) are named in the score's hover text; on phones the cost, tokens and rates are a fixed
+  stat grid, so cards no longer shift with the values.
 - `sem datasets check`: a JAMMEval subset's upstream revision is now the head of JAMMEval's main (it showed the last
   commit touching the subset's folder, older than the pin, which looked like a mismatch); when newer commits do
   not touch the subset, a note gives its last data change. The status logic is unchanged.
