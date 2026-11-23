@@ -1,7 +1,8 @@
 # Weekly check of the pinned dataset revisions and the locked unversioned source files (datasets.lock) against
 # upstream (`sem datasets check`), and of the small ungated text datasets against datasets.lock
 # (`sem datasets lock --check`): when something is outdated or differs, open (or update) the issue labelled
-# `dataset-update`. The repository secret HF_TOKEN (a read-only Hugging Face token whose account has access to the
+# `dataset-update` (body: a summary line and Markdown tables from `--markdown`, the raw log collapsed); when nothing
+# needs review, close the open one with a comment. The repository secret HF_TOKEN (a read-only Hugging Face token whose account has access to the
 # gated datasets, e.g. llm-jp/BusinessSlideVQA) lets the check read gated repositories; without it they are reported
 # as "skipped" instead of failing the check. Secrets are not passed to runs from forks; this workflow runs on a
 # schedule or by hand only.
@@ -26,15 +27,50 @@ jobs:
       - id: check
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"  # the log only: no progress bars
+          HF_DATASETS_DISABLE_PROGRESS_BARS: "1"
         run: |
           set +e
-          uv run --frozen sem datasets check > report.txt
+          # --markdown: the report on stdout, the progress / loader lines on stderr (the raw log)
+          uv run --frozen sem datasets check --markdown > check.md 2> check.log
           rc=$?
-          echo "--- sem datasets lock --check (small text datasets)" >> report.txt
-          uv run --frozen sem datasets lock --check -d gpqa,mmlu,math,simpleqa,aime26,ifeval,ifbench,humaneval >> report.txt 2>&1
+          uv run --frozen sem datasets lock --check -d gpqa,mmlu,math,simpleqa,aime26,ifeval,ifbench,humaneval --markdown > lock.md 2> lock.log
           lrc=$?
           if [ "$lrc" != 0 ] && [ "$rc" != 1 ]; then rc=1; fi
+          # MMLU's duplicate question ids are renamed on purpose (dataset.dedupe_ids): left out of the log, counted
+          ndup=$(cat check.log lock.log | grep -c "duplicate task id")
+          {
+            echo "--- sem datasets check (exit $rc)"
+            cat check.md check.log
+            echo "--- sem datasets lock --check (small text datasets; exit $lrc)"
+            cat lock.md
+            grep -v "duplicate task id" lock.log
+            echo "($ndup expected 'duplicate task id ... renamed' lines of dedupe_ids left out)"
+          } > report.txt
           cat report.txt
+          {
+            echo "Weekly \`sem datasets check\` and \`sem datasets lock --check\` ($(date -u +%F), run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            echo
+            echo "### Upstream revisions"
+            echo
+            cat check.md
+            echo
+            echo "### datasets.lock (small text datasets)"
+            echo
+            cat lock.md
+            echo
+            echo "Outdated: review the upstream change, then bump the pin in the dataset code (a new revision changes task ids / results) or add it to \`dataset_admin.HELD\` with the reason; a changed source file or task digest: review it and run \`sem datasets lock -d <dataset>\`. A newer commit that changes only files the dataset does not read (\`dataset_admin.UPSTREAM_PATHS\`) or the card is reported as current."
+            echo
+            echo "<details><summary>Raw log</summary>"
+            echo
+            echo '```'
+            cat check.log lock.log | grep -v "duplicate task id" | head -c 50000
+            echo '```'
+            echo
+            echo "($ndup expected \"duplicate task id ... renamed\" lines from dedupe_ids left out.)"
+            echo
+            echo "</details>"
+          } > body.md
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
       - name: Open or update the dataset-update issue
         if: steps.check.outputs.rc == '1'
@@ -42,20 +78,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh label create dataset-update --color FBCA04 --description "A pinned dataset revision is behind upstream" 2>/dev/null || true
-          {
-            echo "\`sem datasets check\` found pinned dataset revisions behind upstream ($(date -u +%F), run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
-            echo
-            echo '```'
-            cat report.txt
-            echo '```'
-            echo
-            echo "Review the upstream change, then bump the pin in the dataset code (a new revision changes task ids / results) or add it to dataset_admin.HELD with the reason; for a changed source file or task digest, review it and run \`sem datasets lock -d <dataset>\`."
-          } > body.md
           n=$(gh issue list --label dataset-update --state open --json number --jq '.[0].number')
           if [ -n "$n" ]; then
             gh issue edit "$n" --body-file body.md
           else
             gh issue create --title "Dataset revisions behind upstream" --label dataset-update --body-file body.md
+          fi
+      - name: Close the dataset-update issue when nothing needs review
+        if: steps.check.outputs.rc == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh issue list --label dataset-update --state open --json number --jq '.[0].number')
+          if [ -n "$n" ]; then
+            {
+              echo "Nothing to do as of $(date -u +%F) (run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}): every pinned source is current, held or unpinned, and the lock check passes. Closing."
+              echo
+              head -n 1 check.md
+              head -n 1 lock.md
+            } > comment.md
+            gh issue comment "$n" --body-file comment.md
+            gh issue close "$n"
           fi
       - name: Fail on lookup errors
         if: steps.check.outputs.rc != '0' && steps.check.outputs.rc != '1'

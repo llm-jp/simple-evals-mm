@@ -54,7 +54,8 @@ class MyTask(Dataset):
   with `sources.read_csv` (literal text, no NA / dtype guessing).
 
 Register it in `DATASETS` in `src/simple_evals_mm/dataset.py` (`"mytask": "simple_evals_mm.tasks.mytask:MyTask"`) and
-its upstream repo in `HF_REPOS` in `dataset_admin.py` (for `sem datasets check`). Then:
+its upstream repo in `HF_REPOS` in `dataset_admin.py` (for `sem datasets check`; if the repo also holds other
+datasets' configs, the files this one reads in `UPSTREAM_PATHS`). Then:
 
 Its datasets.lock entry (commit the file):
 
