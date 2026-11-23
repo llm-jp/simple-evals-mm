@@ -44,7 +44,34 @@ sem datasets lock -d mathvision --dataset-arg mathvision.split=test
   refuses the job (`--allow-data-mismatch` runs anyway, recorded in the job; the leaderboard refuses such jobs).
   `--dry-run` reports the status without refusing.
 - `sem job regrade` does not use the lock: it checks every trial's task against the reloaded task instead.
-- A weekly workflow runs `sem datasets check`, which also compares the locked files with upstream.
+- A weekly workflow (`.github/workflows/datasets-check.yml`) runs `sem datasets check` (which also compares the
+  locked files with upstream) and `sem datasets lock --check` on the small text datasets, both with `--markdown`.
+  When something needs review it opens or updates the issue labelled `dataset-update`: a summary line ("Nothing to
+  do" or "N dataset(s) need review"), a table of the sources that are not current (status, changed files, the action
+  needed), the current ones collapsed, the unpinned datasets with their reason, the lock check's table and the raw
+  log collapsed. When nothing needs review it closes the open issue with a comment.
+
+The statuses of `sem datasets check`:
+
+| status | meaning | action |
+|---|---|---|
+| ✅ current | the pin is the latest upstream revision, or the newer commits change only the card (README.md, .gitattributes) or files the dataset does not read | none |
+| ⚠️ outdated | a newer commit changes a file the dataset reads, or a locked source file changed | review it; bump `revision` (new tasks / results) or hold it; for a source file, `sem datasets lock -d <name>` |
+| ⏸ held | outdated, kept on purpose (`dataset_admin.HELD`, with the reason) | none |
+| ❔ unpinned | no revision to compare (`revision_note` says why); the data is checked by `sem datasets lock` | none |
+| ⏭ skipped | a gated repository and no `HF_TOKEN` | set the token |
+| ❌ error | the lookup failed | rerun; fix the source if it persists |
+
+The Markdown report alone:
+
+```bash
+sem datasets check --markdown
+```
+
+A dataset that reads only part of a repo shared with other datasets (one config or split) lists its files in
+`dataset_admin.UPSTREAM_PATHS` (fnmatch globs relative to the repo root, from the card's `configs:` data_files):
+`mechaja` reads `data/*`, `mechaja_v2_mini` `v2/testmini-*`, so a change to MECHA-ja v2 does not make `mechaja`
+outdated.
 
 ## Dataset refs (`-d name@ref`)
 

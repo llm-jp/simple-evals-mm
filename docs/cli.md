@@ -102,6 +102,12 @@ Registered datasets, data download, newer upstream revisions:
 sem datasets list | download | check
 ```
 
+The same upstream check as a Markdown report (summary line, tables; the weekly issue's body):
+
+```bash
+sem datasets check --markdown
+```
+
 Datasets changed between two tags (the release notes' table):
 
 ```bash

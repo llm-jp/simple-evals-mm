@@ -746,9 +746,18 @@ def cmd_datasets(args) -> int:
     if args.datasets_cmd == "download":
         out = dataset_admin.download(names or sorted(dataset_mod.DATASETS), _dataset_kv(args.dataset_arg))
         return 1 if any(not v.startswith("ok") for v in out.values()) else 0
+    if getattr(args, "markdown", False) and args.json:
+        raise SystemExit("--markdown and --json exclude each other")
+    import contextlib
+
     if args.datasets_cmd == "lock":
-        rows, code = dataset_admin.lock(names, check=args.check, shared=not names or bool(args.shared),
-                                        dataset_args=_dataset_kv(args.dataset_arg))
+        # --markdown: the progress lines (and the loaders' prints) go to stderr, stdout is the report alone
+        with contextlib.redirect_stdout(sys.stderr) if args.markdown else contextlib.nullcontext():
+            rows, code = dataset_admin.lock(names, check=args.check, shared=not names or bool(args.shared),
+                                            dataset_args=_dataset_kv(args.dataset_arg))
+        if args.markdown:
+            print(dataset_admin.lock_markdown(rows, check=args.check), end="")
+            return code
         if args.json:
             print(json.dumps(rows, indent=2))
         counts: dict = {}
@@ -756,9 +765,12 @@ def cmd_datasets(args) -> int:
             counts[r["status"]] = counts.get(r["status"], 0) + 1
         print(("check: " if args.check else "datasets.lock: ") + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
         return code
-    rows, code = dataset_admin.check(names, sources_check=lambda n: dataset_admin.check_sources(
-        n, max_download_mb=args.max_download_mb))
-    if args.json:
+    with contextlib.redirect_stdout(sys.stderr) if args.markdown else contextlib.nullcontext():
+        rows, code = dataset_admin.check(names, sources_check=lambda n: dataset_admin.check_sources(
+            n, max_download_mb=args.max_download_mb))
+    if args.markdown:
+        print(dataset_admin.check_markdown(rows), end="")
+    elif args.json:
         print(json.dumps(rows, indent=2))
     else:
         for r in rows:
@@ -946,6 +958,9 @@ def make_parser() -> argparse.ArgumentParser:
         if name in ("download", "lock"):
             p.add_argument("--dataset-arg", action="append",
                            help="dataset.k=v: a data arg (mathvision.split=test); the entry is `name[k=v]`")
+        if name in ("lock", "check"):
+            p.add_argument("--markdown", action="store_true",
+                           help="a Markdown report (summary line and table) instead of the text lines")
         if name == "lock":
             p.add_argument("--check", action="store_true", help="compare with the committed lock; exit 1 on a difference")
             p.add_argument("--shared", action="store_true", help="with -d: also the _shared artifacts (nltk, evaluator image)")

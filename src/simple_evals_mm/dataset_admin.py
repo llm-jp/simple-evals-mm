@@ -57,6 +57,19 @@ HF_REPOS = {
     "graphwalks": "openai/graphwalks", "mrcr": "openai/mrcr",
     "zerobench": "jonathan-roberts1/zerobench", "zerobench_sub": "jonathan-roberts1/zerobench",
 }
+# dataset -> the files of its HF repo it reads (fnmatch globs relative to the repo root; `*` also matches "/"), for
+# repos that hold other datasets' configs too (from the card's `configs:` data_files at the pinned revision). A newer
+# upstream commit whose changes are all outside these (or in CARD_FILES) is reported as current. Not listed = every
+# file of the repo. Kept here, not on the Dataset classes: a change to a dataset module counts as a change of the
+# dataset (provenance), and these paths change no task.
+UPSTREAM_PATHS = {
+    "mechaja": ("data/*",),  # config `default`, split test: data/test-* (MECHA-ja.csv is not read)
+    "mechaja_v2_mini": ("v2/testmini-*",),  # config `v2`, split testmini
+    "mmmu_pro": ("standard (10 options)/*",),  # config `standard (10 options)`
+    "mmmu_pro_vision": ("vision/*",),  # config `vision`
+    "zerobench": ("data/zerobench-*",),  # split zerobench
+    "zerobench_sub": ("data/zerobench_subquestions-*",),  # split zerobench_subquestions
+}
 MODEL_REPOS = {"OpenGVLab/InternVL"}  # vqa_data downloads its annotation files from a model repo
 GIT_REPOS = {"ifbench": "allenai/IFBench", "scienceqa": "lupantech/ScienceQA",
              "strongreject": "alexandrasouly/strongreject"}  # revision "git:<sha>" -> GitHub repo
@@ -276,6 +289,26 @@ def hf_changed_files(repo: str, old: str, new: str, repo_type: str = "dataset") 
     return sorted(p for p in set(a) | set(b) if a.get(p) != b.get(p))
 
 
+def split_changes(name: str, changed: list[str]) -> tuple[list[str], list[str]]:
+    """(changed files the dataset reads, the other changed files): card files never count; UPSTREAM_PATHS narrows a
+    dataset to its own files of a shared repo."""
+    import fnmatch
+
+    globs = UPSTREAM_PATHS.get(name)
+    own = [f for f in changed if f not in CARD_FILES and (globs is None or any(fnmatch.fnmatchcase(f, g) for g in globs))]
+    return own, [f for f in changed if f not in own]
+
+
+def short_paths(files: list[str], limit: int = 6) -> str:
+    """"README.md, v2/ (4 files)": top-level files by name, the files of a directory as one entry."""
+    groups: dict[str, int] = {}
+    for f in files:
+        key = f.split("/", 1)[0] + "/" if "/" in f else f
+        groups[key] = groups.get(key, 0) + 1
+    parts = [k if n == 1 and not k.endswith("/") else f"{k} ({n} file{'s' if n > 1 else ''})" for k, n in groups.items()]
+    return ", ".join(parts[:limit]) + (f", ... ({len(parts) - limit} more)" if len(parts) > limit else "")
+
+
 def latest_hf(repo: str, repo_type: str = "dataset") -> str:
     from huggingface_hub import HfApi
 
@@ -355,10 +388,13 @@ def check(names: list[str] | None = None, lookup=None, sources_check=None) -> tu
                 elif p["kind"] == "hf":
                     latest = latest_hf(p["repo"], p.get("repo_type", "dataset"))
                     row.update(latest=latest, status="current" if latest == p["revision"] else "outdated")
-                    if row["status"] == "outdated":  # newer commits that change only the dataset card: still current
+                    if row["status"] == "outdated":  # newer commits that change only the card or other datasets' files
                         changed = hf_changed_files(p["repo"], p["revision"], latest, p.get("repo_type", "dataset"))
-                        if changed and set(changed) <= CARD_FILES:
-                            row.update(status="current", note=f"newer commit(s) change only {', '.join(changed)}")
+                        own, other = split_changes(name, changed)
+                        if changed and not own:
+                            row.update(status="current", note=f"newer commit(s) change only other files ({short_paths(other)})")
+                        elif own:
+                            row["changed_files"] = own
                 elif p["kind"] == "jammeval":
                     latest, newer = latest_jammeval(p["repo"], p["revision"])
                     row.update(latest=latest, status="outdated" if newer else "current")
@@ -383,3 +419,97 @@ def check(names: list[str] | None = None, lookup=None, sources_check=None) -> tu
         failed |= row["status"] == "error"
         rows_out.append(row)
     return rows_out, 1 if outdated else 2 if failed else 0
+
+
+# ---------------------------------------------------------------- Markdown reports (the weekly workflow's issue)
+STATUS_ICONS = {"current": "✅ current", "outdated": "⚠️ outdated", "held": "⏸ held", "unpinned": "❔ unpinned",
+                "error": "❌ error", "skipped": "⏭ skipped", "ok": "✅ ok", "mismatch": "⚠️ mismatch",
+                "missing": "⏸ missing"}
+_ORDER = {"outdated": 0, "mismatch": 0, "error": 1, "held": 2, "skipped": 3, "missing": 3, "current": 4, "ok": 4}
+
+
+def _cell(text) -> str:
+    return str(text or "").replace("|", "\\|").replace("\n", " ")
+
+
+def _source_cell(source: str) -> str:
+    kind, _, repo = source.partition(":")
+    if kind == "hf":
+        return f"[{repo}](https://huggingface.co/datasets/{repo})"
+    if kind == "git":
+        return f"[{repo}](https://github.com/{repo})"
+    if kind == "url":
+        return f"[{repo.rstrip('/').rsplit('/', 1)[-1] or repo}]({repo})"
+    return _cell(source)
+
+
+def _action(r: dict) -> str:
+    st, src = r["status"], r.get("source", "")
+    if st == "outdated":
+        if src.startswith("url:"):
+            return f"review the changed file, then `sem datasets lock -d {r['dataset']}`"
+        return ("review the upstream change, then bump `revision` in the dataset code (new task ids / results) "
+                "or hold it in `dataset_admin.HELD` with the reason")
+    if st == "error":
+        return f"lookup failed ({_cell(r.get('note'))}): rerun; if it persists, fix the source"
+    if st == "skipped":
+        return _cell(r.get("note"))
+    if st == "held":
+        return f"none ({_cell(r.get('note'))})"
+    return f"none ({_cell(r['note'])})" if r.get("note") else "none"
+
+
+def _sha_cell(v) -> str:
+    v = str(v or "")
+    return f"`{v[:12]}`" if v and " " not in v else _cell(v)
+
+
+def check_markdown(rows: list[dict]) -> str:
+    """`sem datasets check --markdown`: a one-line summary, a table of the sources that are not current (needing review
+    first), the current ones in a collapsed table, then the unpinned datasets with their revision_note."""
+    pinned = [r for r in rows if r["status"] != "unpinned"]
+    unpinned = sorted((r for r in rows if r["status"] == "unpinned"), key=lambda r: r["dataset"])
+    review = sorted({r["dataset"] for r in pinned if r["status"] in ("outdated", "error")})
+    counts: dict = {}
+    for r in rows:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    tally = ", ".join(f"{n} {s}" for s, n in sorted(counts.items(), key=lambda kv: (_ORDER.get(kv[0], 5), kv[0])))
+    head = (f"**⚠️ {len(review)} dataset(s) need review: {', '.join(review)}** ({tally})" if review
+            else f"**✅ Nothing to do** ({tally})")
+    def table(rs: list[dict]) -> list[str]:
+        out = ["| Dataset | Source | Pinned | Upstream | Status | Changed files | Action needed |",
+               "|---|---|---|---|---|---|---|"]
+        for r in sorted(rs, key=lambda r: (_ORDER.get(r["status"], 5), r["dataset"], r.get("source", ""))):
+            latest = r.get("latest")
+            out.append("| " + " | ".join([
+                _cell(r["dataset"]), _source_cell(r.get("source", "")), _sha_cell(r.get("pinned")),
+                "same" if latest == r.get("pinned") else _sha_cell(latest),
+                STATUS_ICONS.get(r["status"], r["status"]), _cell(short_paths(r.get("changed_files") or [])),
+                _action(r)]) + " |")
+        return out
+
+    current = [r for r in pinned if r["status"] == "current"]
+    other = [r for r in pinned if r["status"] != "current"]
+    out = [head]
+    if other:
+        out += ["", *table(other)]
+    if current:  # collapsed: nothing to do for these
+        out += ["", f"<details><summary>{len(current)} current source(s)</summary>", "", *table(current), "",
+                "</details>"]
+    if unpinned:
+        out += ["", f"Unpinned ({len(unpinned)}; nothing to compare, the data is checked by `sem datasets lock`):", ""]
+        out += [f"- `{r['dataset']}`: {_cell(r.get('note'))}" for r in unpinned]
+    return "\n".join(out) + "\n"
+
+
+def lock_markdown(rows: list[dict], check: bool = True) -> str:
+    """`sem datasets lock [--check] --markdown`: a one-line summary and one row per dataset / shared artifact."""
+    bad = [r["dataset"] for r in rows if r["status"] in ("mismatch", "error")]
+    what = "datasets.lock check" if check else "datasets.lock"
+    head = (f"**⚠️ {what}: {len(bad)} entr{'y' if len(bad) == 1 else 'ies'} with a difference or error: {', '.join(bad)}**" if bad
+            else f"**✅ {what}: all {len(rows)} entries {'match' if check else 'written'}**")
+    out = [head, "", "| Entry | Status | Tasks | Note |", "|---|---|---|---|"]
+    for r in rows:
+        out.append(f"| {_cell(r['dataset'])} | {STATUS_ICONS.get(r['status'], r['status'])} | "
+                   f"{r.get('n_tasks') if r.get('n_tasks') is not None else ''} | {_cell(r.get('note'))} |")
+    return "\n".join(out) + "\n"
