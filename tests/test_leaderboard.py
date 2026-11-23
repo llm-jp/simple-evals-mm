@@ -74,7 +74,7 @@ def lb(job_env, tmp_path, monkeypatch):
                "categories": ["Text"],
                "tasks": {t: {"label": t.upper(), "category": "Text", "lang": "en", "grading": "exact"} for t in tasks},
                "benchmarks": [{"key": "Overall", "label": "Overall", "overall": True}],
-               "models": [{"key": "m", "name": "Model", "dev": "Dev", "type": "open", "params_b": 7, **row,
+               "models": [{"key": "m", "name": "Model", "dev": "Dev", "type": "open", "params": {"active": "7", "total": "7"}, **row,
                            "settings": settings}]}
         p = path or str(tmp_path / "leaderboard.yaml")
         with open(p, "w") as f:
