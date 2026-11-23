@@ -7,7 +7,10 @@ version does not decide whether two results are comparable: `sem jobs compare` d
 
 ## Unreleased
 
-- Site: the leaderboard's rates read the same everywhere (`0.0%`, `<0.1%`, `12.3%`); a third rate, **Too long**
+- Site: the leaderboard shows each row's rank (by the score shown; equal scores share a rank); the third rate is
+  named **Input too long** (an input over the model's context window), and the rate headers explain themselves on
+  hover; on phones a card's five stats sit on one row.
+- Site: the leaderboard's rates read the same everywhere (`0.0%`, `<0.1%`, `12.3%`); a third rate, **Input too long**
   (`context_overflow`: the input exceeded the model's context, counted as 0), after Refused; trials left out of the
   score (transient failures) are named in the score's hover text; on phones the cost, tokens and rates are a fixed
   stat grid, so cards no longer shift with the values.
