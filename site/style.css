@@ -303,12 +303,11 @@ table.prov tr.sel td { font-weight: 600; }
   .lc-score { font-weight: 700; font-size: 16px; white-space: nowrap; }
   .lc-bar { height: 8px; margin: 8px 0 6px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
   .lc-bar i { display: block; height: 100%; border-radius: 4px; opacity: 0.85; }
-  /* a stat grid: cost and tokens (half width each), then Cut off / Refused / Too long (a third each); label above
-     value, tabular digits, so every card has the same layout whatever its values */
-  .lc-meta { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px 12px; line-height: 1.25; }
-  .lc-stat { grid-column: span 2; min-width: 0; display: flex; flex-direction: column; }
-  .lc-stat.wide { grid-column: span 3; }
-  .lc-stat span { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* a stat grid on one row: Cost / Q, Output tokens / Q, Cut off, Refused, Input too long (equal columns); label above
+     value (a label may wrap to two lines, the same on every card), tabular digits: every card has the same layout */
+  .lc-meta { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0 8px; line-height: 1.2; }
+  .lc-stat { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+  .lc-stat span { font-size: 11px; color: var(--text-muted); min-height: 2.4em; overflow-wrap: anywhere; }
   .lc-stat b { font-size: 13px; color: var(--text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .lc-settings { margin-top: 10px; cursor: auto; }
   .lc-settings dl.settings { grid-template-columns: 1fr; gap: 2px; }
@@ -317,9 +316,11 @@ table.prov tr.sel td { font-weight: 600; }
 
 /* desktop table: score bar column (0-100%) with a +/- std whisker, like DeepSWE */
 table.lb th.barcol { cursor: default; }
-table.lb td.barcol { width: 40%; min-width: 160px; padding-left: 4px; padding-right: 4px; }
-/* the three rate columns: narrow padding, so the table keeps its width with Too long */
+table.lb td.barcol { width: 40%; min-width: 120px; padding-left: 4px; padding-right: 4px; }
+/* the three rate columns: narrow padding, so the table keeps its width with Input too long */
 table.lb th.rate, table.lb td.rate { padding-left: 7px; padding-right: 7px; }
+/* their headers may wrap to two lines ("Input too / long"), so the table fits its container in every view */
+table.lb th.rate { white-space: normal; min-width: 52px; max-width: 76px; line-height: 1.2; vertical-align: bottom; }
 .sbar { position: relative; height: 10px; background: var(--surface-2); border-radius: 3px; }
 .sbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; opacity: 0.85; }
 .sbar .err { position: absolute; top: 50%; height: 0; border-top: 1px solid var(--text-secondary); }
@@ -688,3 +689,7 @@ table.ar td.ar-second .v { background: rgba(255, 206, 82, 0.28); color: var(--te
 table.ar sup.subset { color: inherit; }
 table.ar th.ar-task a { color: inherit; text-decoration: none; }
 table.ar th.ar-task a:hover { text-decoration: underline; }
+
+/* the rank before a model's name (by the score shown): fixed width, so names stay aligned */
+.mname .rank { display: inline-block; min-width: 1.6em; margin-right: 6px; text-align: right; color: var(--text-muted);
+  font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
