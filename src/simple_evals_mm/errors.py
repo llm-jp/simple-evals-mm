@@ -70,13 +70,17 @@ GEMINI_CONTENT_STOPS = frozenset({"safety", "recitation", "blocklist", "prohibit
 # Substrings of an API error (lower-cased) that mean the request itself was refused or cannot fit. "blocked the
 # request": Gemini through OpenRouter (Google AI Studio) answers a blocked prompt with a 403 "Gemini blocked the request:
 # OTHER" that names no policy (it is not a permission problem: config_error would stop the job).
+# "considered high risk": Moonshot's (Kimi) content filter, "The request was rejected because it was considered high
+# risk" (a 400 through OpenRouter).
 REFUSAL_MARKERS = ("data_inspection_failed", "requires moderation", "was flagged", "content_policy", "content policy",
-                   "blocked the request")
+                   "blocked the request", "considered high risk")
+# "exceeded model token limit": Moonshot's (Kimi) "Your request exceeded model token limit: 1048576 (requested:
+# 1066872)", input + max_tokens over the window (refitted when the input fits, see samplers/openai_chat.py).
 # "total text input size exceeds": OpenRouter's 400 for a request over its 8 MB text limit (LongBench v2's
 # multi-million-word contexts), deterministic and far beyond any context window.
 CONTEXT_MARKERS = ("longer than the model", "maximum context length", "context length", "context window",
                    "requested token count exceeds", "prompt is too long", "input is too long",
-                   "total text input size exceeds")
+                   "total text input size exceeds", "exceeded model token limit")
 
 # The endpoint itself is gone (lower-cased substrings): OpenRouter "No endpoints found for <model>." / "No endpoints found
 # matching your data policy" / "No allowed providers are available for the selected model." (404, also with a pinned

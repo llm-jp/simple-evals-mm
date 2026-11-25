@@ -76,6 +76,9 @@ _CTX_RES = (
     re.compile(r"maximum context length is (?P<ctx>\d+) tokens\. However, you requested about \d+ tokens "
                r"\((?P<inp>\d+) of text input"),
 )
+# (context, input + max_tokens) of an overflow error that names the total only: Moonshot (Kimi) "Your request exceeded
+# model token limit: 1048576 (requested: 1066872)"; the input is the total minus the max_tokens sent
+_TOTAL_RES = (re.compile(r"exceeded model token limit: (?P<ctx>\d+) \(requested: (?P<total>\d+)\)"),)
 ESTIMATE_BYTES_PER_TOKEN = 3  # conservative: English ~4.5, Japanese ~3.6, code ~3.5 UTF-8 bytes per token
 ESTIMATE_IMAGE_TOKENS = 4096
 
@@ -100,8 +103,11 @@ def _fit_max_tokens(err: str, max_tokens: int, margin: int = 16, floor: int = 25
     """max_tokens that fits the context given an overflow error text, or None (no room, not an overflow). The input
     length is the one the error names; an overflow error that names none uses `context` and `estimate` (when given)."""
     m = next((m for r in _CTX_RES if (m := r.search(err))), None)
+    t = None if m else next((t for r in _TOTAL_RES if (t := r.search(err))), None)
     if m:
         ctx, inp = int(m["ctx"]), int(m["inp"])
+    elif t:
+        ctx, inp = int(t["ctx"]), int(t["total"]) - max_tokens
     elif context and estimate is not None and errors.classify_error(err) == errors.CONTEXT_OVERFLOW:
         ctx, inp = int(context), estimate
     else:
